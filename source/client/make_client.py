@@ -30,9 +30,13 @@ CLIENT = os.path.join(WORK, 'client')
 VERSION = open(os.path.join(CLIENT, 'VERSION')).read().strip()
 # the extra built-in levels' files come from this game folder (read only) and must not exist in these plain installs
 VAULT_SRC = os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Dev')
-# the game builds the recipes are made against (read only): plain THUG Pro, the newer and the older Kali Mod
+# the game builds the recipes are made against (read only): plain THUG Pro, the newer and the older Kali Mod, and a
+# fresh THUG Pro + the public Kali download with no thugpro_qe.prx (Noah 2026-11-18: players who only dragged in
+# Kali's data folder have no thugpro_qe.prx; made by client/tools/make_recipe_game_kali.py)
+KALI_DOWNLOAD_GAME = os.path.join(WORK, '..', 'recipe_games', 'THUG Pro + Kali download')
 RECIPE_GAMES = [os.path.join(WORK, '..', 'cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL'),
-                os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Original'), r'E:\THUG Pro Kali v2 (use this)']
+                os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Original'), r'E:\THUG Pro Kali v2 (use this)',
+                KALI_DOWNLOAD_GAME]
 RECIPE_SOURCES = [os.path.join('data', 'pre', 'thugpro_qb.prx'), os.path.join('data', 'pre', 'Skateshop_scripts.prx')]
 PLAIN_GAMES = [os.path.join(WORK, '..', d) for d in (os.path.join('cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL'), 'THUG Pro Kali v2 - 1.2 Original')]
 
@@ -134,25 +138,10 @@ def levelthumbs_q(have):
 
 
 def build_casidle(out):
-    """data\\dadmod_casidle.qb: Edit Skater on the menu levels + mix and match (mods/casmod), same steps as the
-    server build. Built from plain THUG Pro's skateshop_cas.q (decompiled_vanilla), so no one else's edits go in."""
-    with tempfile.TemporaryDirectory() as tmp:
-        _build_casidle(out, tmp)
-
-
-def _build_casidle(out, tmp):
-    cas = os.path.join(WORK, 'decompiled_vanilla', 'Skateshop_scripts', 'skateshop_cas.q')
-    if not os.path.isfile(cas):
-        sys.exit('QB BUILD FAILED: needs ' + os.path.relpath(cas, WORK))
-    for gen, name in (('gen_mixmatch.py', 'mixmatch.q'), ('gen_partmenu.py', 'partmenu.q')):
-        r = subprocess.run([sys.executable, '-I', os.path.join(WORK, 'mods', 'casmod', gen), cas, os.path.join(tmp, name)],
-                           capture_output=True, text=True, cwd=WORK)
-        if r.returncode:
-            sys.exit('QB BUILD FAILED: %s\n%s%s' % (gen, r.stdout, r.stderr))
-    parts = [os.path.join(WORK, 'mods', 'mainmenu', 'casidle.q'), os.path.join(tmp, 'mixmatch.q')]
-    parts += [os.path.join(WORK, 'mods', 'casmod', f) for f in ('logo_adjust.q', 'sexchange.q', 'offline.q', 'undress.q')]
-    parts += [os.path.join(tmp, 'partmenu.q')]
-    parts += [os.path.join(WORK, 'mods', 'casmod', f) for f in ('removeitems.q', 'qol.q', 'ownmenus.q')]
+    """data\\dadmod_casidle.qb: Edit Skater on the menu levels + mix and match (mods/casmod), same files as the server
+    build. All our own code (Noah 2026-11-18): no generator reads THUG Pro's scripts any more, so the file ships as it
+    is (no recipe) and works with any skate shop scripts the player has (plain THUG Pro, Kali, CAS mods)."""
+    parts = [os.path.join(WORK, 'mods', *p.split('/')) for p in CASIDLE_PARTS]
     text = ''.join(open(p, encoding='latin1').read().replace('\r\n', '\n').rstrip('\n') + '\n' for p in parts)
     # mid-game Load Skater (mods/midload): Edit Skater changes mark the skater unsaved, same as the server build
     sys.path.insert(0, os.path.join(WORK, 'mods', 'midload'))
@@ -167,6 +156,11 @@ def _build_casidle(out, tmp):
     with open(os.path.join(out, 'data', 'dadmod_casidle.qb'), 'wb') as f:
         f.write(data)
     print(f'dadmod_casidle.qb: Edit Skater scripts ({len(data) // 1024} KB)')
+
+
+# the Edit Skater qb, in load order (build/obsspawn_test_make.sh concatenates the same list)
+CASIDLE_PARTS = ['mainmenu/casidle.q', 'casmod/lists.q', 'casmod/logo_adjust.q', 'casmod/sexchange.q', 'casmod/offline.q',
+                 'casmod/undress.q', 'casmod/menus.q', 'casmod/removeitems.q', 'casmod/qol.q', 'casmod/ownmenus.q']
 
 
 def copy_menulevels(out, rebuild):
@@ -246,6 +240,8 @@ def package(out, release=None):
         rel = row.split()[0]
         dadpatch.OVERLAY[rel.lower()] = os.path.join(VAULT_SRC, rel)
     extra = [r for r in dadpatch.OVERLAY if r.endswith('_scripts.prx')]
+    if not os.path.isfile(os.path.join(KALI_DOWNLOAD_GAME, 'data', 'pre', 'thugpro_qb.prx')):
+        sys.exit('PACKAGE FAILED: %s is missing; run python -I client/tools/make_recipe_game_kali.py first' % KALI_DOWNLOAD_GAME)
     games = [g for g in RECIPE_GAMES if os.path.isfile(os.path.join(g, 'data', 'pre', 'thugpro_qb.prx'))]
     # build reuse (Noah 2026-11-17: "reuse everything from the previous build when the source hasn't changed"): each
     # recipe and audit result is kept in build/recipes/reuse.json under a hash of its inputs (the target file, every
@@ -286,7 +282,8 @@ def package(out, release=None):
         new_cache[key] = hashlib.sha1(open(path, 'rb').read()).hexdigest()
 
     reused = 0
-    for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_casidle.qb')):
+    # dadmod_casidle.qb is all our own code (2026-11-18) and ships as a normal file
+    for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'),):
         want.remove(rel)
         name = os.path.splitext(os.path.basename(rel))[0] + '.dpr'
         key = 'recipe|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())

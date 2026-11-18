@@ -1,3 +1,7 @@
+dadmod_es_dim = [ 90 90 90 90 ]
+dadmod_es_lit = [ 128 128 128 128 ]
+dadmod_es_mid = [ center center ]
+dadmod_es_leftmid = [ left center ]
 dadmod_redo_ready = 0
 dadmod_redo_male = 1
 dadmod_redo_profile = { }
@@ -10,28 +14,28 @@ dadmod_page_size = 10
 dadmod_color_copied = 0
 dadmod_color_copy = { h = 0 s = 0 v = 0 }
 script dadmod_undo_save
-    GetCurrentSkaterProfileIndex
-    GetPlayerAppearance player = <currentSkaterProfileIndex>
-    GetSkaterProfileInfo player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetPlayerAppearance player = <me>
+    GetSkaterProfileInfo player = <me>
     Change dadmod_undo_profile = <profile>
     Change dadmod_undo_male = <is_male>
     Change dadmod_undo_ready = 1
     Change dadmod_redo_ready = 0
 endscript
 script dadmod_undo_apply
-    GetCurrentSkaterProfileIndex
-    SetPlayerAppearance player = <currentSkaterProfileIndex> appearance_structure = <to>
-    SetSkaterProfileProperty player = <currentSkaterProfileIndex> is_male <male>
-    RefreshSkaterModel Skater = 0 profile = <currentSkaterProfileIndex> no_board = no_board
+    dadmod_me
+    SetPlayerAppearance player = <me> appearance_structure = <to>
+    SetSkaterProfileProperty player = <me> is_male <male>
+    RefreshSkaterModel Skater = 0 profile = <me> no_board = no_board
     Skater : TurnOffSpecialItem
 endscript
 script dadmod_undo
     if not IsTrue dadmod_undo_ready
         return
     endif
-    GetCurrentSkaterProfileIndex
-    GetPlayerAppearance player = <currentSkaterProfileIndex>
-    GetSkaterProfileInfo player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetPlayerAppearance player = <me>
+    GetSkaterProfileInfo player = <me>
     Change dadmod_redo_profile = <profile>
     Change dadmod_redo_male = <is_male>
     Change dadmod_redo_ready = 1
@@ -42,9 +46,9 @@ script dadmod_redo
     if not IsTrue dadmod_redo_ready
         return
     endif
-    GetCurrentSkaterProfileIndex
-    GetPlayerAppearance player = <currentSkaterProfileIndex>
-    GetSkaterProfileInfo player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetPlayerAppearance player = <me>
+    GetSkaterProfileInfo player = <me>
     Change dadmod_undo_profile = <profile>
     Change dadmod_undo_male = <is_male>
     Change dadmod_undo_ready = 1
@@ -80,16 +84,16 @@ script dadmod_preview_wait
         return
     endif
     <want> = <desc_id>
-    GetCurrentSkaterProfileIndex
+    dadmod_me
     RemoveParameter desc_id
-    if GetPlayerAppearancePart player = <currentSkaterProfileIndex> part = <part>
+    if GetPlayerAppearancePart player = <me> part = <part>
         if GotParam desc_id
             if ChecksumEquals a = <desc_id> b = <want>
                 return
             endif
         endif
     endif
-    cas_set_part structure = <structure> desc_id = <want> part = <part>
+    dadmod_set_part structure = <structure> desc_id = <want> part = <part>
     Change dadmod_preview_dirty = 1
 endscript
 script dadmod_part_menu_ready
@@ -104,9 +108,9 @@ script dadmod_part_menu_ready
     { pad_r3 dadmod_page_jump params = { } }
     ]
     }
-    GetCurrentSkaterProfileIndex
+    dadmod_me
     RemoveParameter desc_id
-    if GetPlayerAppearancePart player = <currentSkaterProfileIndex> part = <array>
+    if GetPlayerAppearancePart player = <me> part = <array>
         if GotParam desc_id
             if ScreenElementExists id = <desc_id>
                 dadmod_mark_selected id = <desc_id> array = <array>
@@ -119,14 +123,14 @@ script dadmod_page_jump
     if not ScreenElementExists id = current_menu
         return
     endif
-    <n> = ( dadmod_page_size )
+    <dm_n> = ( dadmod_page_size )
     begin
         if GotParam up
             FireEvent Type = pad_up target = current_menu
         else
             FireEvent Type = pad_down target = current_menu
         endif
-    repeat <n>
+    repeat <dm_n>
 endscript
 script dadmod_color_copy_items
     make_thugpro_menu_item text = "Copy Color" pad_choose_script = dadmod_color_copy pad_choose_params = { part = <part> }
@@ -134,7 +138,7 @@ script dadmod_color_copy_items
 endscript
 script dadmod_color_copy
     colormenu_get_hsv part = <part>
-    Change dadmod_color_copy = { h = <h> s = <s> v = <v> }
+    Change dadmod_color_copy = { v = <v> s = <s> h = <h> }
     Change dadmod_color_copied = 1
 endscript
 script dadmod_color_paste
@@ -166,13 +170,13 @@ script dadmod_part_color_item title = "Edit Skater"
     make_thugpro_menu_item {
     text = "\\c6Color"
     pad_choose_script = dadmod_part_color_go
-    pad_choose_params = { parts = <parts> title = <color_title> callback = create_part_cas_menu callback_params = <back> }
+    pad_choose_params = { parts = <parts> title = <color_title> callback = dadmod_es_part_menu callback_params = <back> }
     }
 endscript
 dadmod_undo_hold = 0
 script dadmod_undo_save_color
     if GotParam callback
-        if ChecksumEquals a = <callback> b = create_part_cas_menu
+        if ChecksumEquals a = <callback> b = dadmod_es_part_menu
             Change dadmod_undo_hold = 1
             return
         endif
@@ -193,34 +197,39 @@ dadmod_null_legs = [
 script dadmod_after_set_part
     dadmod_keep_color_apply part = <part>
     dadmod_null_legs_check part = <part> desc_id = <desc_id>
+    if GotParam redo
+        dadmod_me
+        RefreshSkaterModel Skater = 0 no_board = no_board profile = <me>
+        Skater : TurnOffSpecialItem
+    endif
 endscript
 script dadmod_null_legs_check
     if not ChecksumEquals a = <desc_id> b = null
         return
     endif
     GetArraySize dadmod_null_legs
-    <i> = 0
+    <dm_i> = 0
     begin
-        <e> = ( dadmod_null_legs [ <i> ] )
+        <e> = ( dadmod_null_legs [ <dm_i> ] )
         if ChecksumEquals a = <part> b = ( <e> . part )
-            GetCurrentSkaterProfileIndex
-            EditPlayerAppearance profile = <currentSkaterProfileIndex> target = SetPart targetParams = { part = ( <e> . lower ) desc_id = none }
-            return
+            dadmod_me
+            EditPlayerAppearance profile = <me> target = SetPart targetParams = { part = ( <e> . lower ) desc_id = none }
+            return redo = 1
         endif
-        <i> = ( <i> + 1 )
+        <dm_i> = ( <dm_i> + 1 )
     repeat <array_size>
 endscript
 dadmod_preview_dirty = 0
 dadmod_preview_base = { }
 script dadmod_preview_keep
-    GetCurrentSkaterProfileIndex
-    GetPlayerAppearance player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetPlayerAppearance player = <me>
     Change dadmod_preview_base = <profile>
     Change dadmod_preview_dirty = 0
 endscript
 script dadmod_choose_part
     Change dadmod_preview_token = ( dadmod_preview_token + 1 )
-    cas_set_part <...>
+    dadmod_set_part <...>
     dadmod_preview_keep
     if ScreenElementExists id = <desc_id>
         dadmod_mark_selected id = <desc_id> array = <part>
@@ -229,10 +238,10 @@ endscript
 script dadmod_preview_revert
     Change dadmod_preview_token = ( dadmod_preview_token + 1 )
     if IsTrue dadmod_preview_dirty
-        GetCurrentSkaterProfileIndex
+        dadmod_me
         <base> = ( dadmod_preview_base )
-        SetPlayerAppearance player = <currentSkaterProfileIndex> appearance_structure = <base>
-        RefreshSkaterModel Skater = 0 profile = <currentSkaterProfileIndex> no_board = no_board
+        SetPlayerAppearance player = <me> appearance_structure = <base>
+        RefreshSkaterModel Skater = 0 profile = <me> no_board = no_board
         Skater : TurnOffSpecialItem
         Change dadmod_preview_dirty = 0
     endif
@@ -244,13 +253,13 @@ script dadmod_part_menu_back
 endscript
 script dadmod_part_color_go
     dadmod_preview_revert
-    create_part_cas_color_menu <...>
+    dadmod_es_color_menu <...>
 endscript
 script dadmod_mark_selected
     GetArraySize <array>
-    <i> = 0
+    <dm_i> = 0
     begin
-        <e> = ( <array> [ <i> ] )
+        <e> = ( <array> [ <dm_i> ] )
         <eid> = ( <e> . desc_id )
         if ScreenElementExists id = { <eid> child = text }
             if StructureContains structure = <e> frontend_desc
@@ -262,7 +271,7 @@ script dadmod_mark_selected
                 dadmod_mark_set_text item = <eid> text = <shown>
             endif
         endif
-        <i> = ( <i> + 1 )
+        <dm_i> = ( <dm_i> + 1 )
     repeat <array_size>
 endscript
 script dadmod_mark_set_text
@@ -289,8 +298,8 @@ script dadmod_before_set_part
     if not ArrayContains array = dadmod_keep_color_parts contains = <part>
         return
     endif
-    GetCurrentSkaterProfileIndex
-    if not GetPlayerAppearancePart player = <currentSkaterProfileIndex> part = <part>
+    dadmod_me
+    if not GetPlayerAppearancePart player = <me> part = <part>
         return
     endif
     if not GotParam h
@@ -301,7 +310,7 @@ script dadmod_before_set_part
             return
         endif
     endif
-    Change dadmod_keep_color_hsv = { h = <h> s = <s> v = <v> }
+    Change dadmod_keep_color_hsv = { v = <v> s = <s> h = <h> }
     Change dadmod_keep_color_part = <part>
     Change dadmod_keep_color_on = 1
 endscript
@@ -315,8 +324,9 @@ script dadmod_keep_color_apply
         return
     endif
     <c> = ( dadmod_keep_color_hsv )
-    GetCurrentSkaterProfileIndex
-    SetPlayerAppearanceColor player = <currentSkaterProfileIndex> part = <part> h = ( <c> . h ) s = ( <c> . s ) v = ( <c> . v ) use_default_hsv = 0
+    dadmod_me
+    SetPlayerAppearanceColor player = <me> part = <part> h = ( <c> . h ) s = ( <c> . s ) v = ( <c> . v ) use_default_hsv = 0
+    return redo = 1
 endscript
 script dadmod_es_item
     <f> = focusable
@@ -327,7 +337,7 @@ script dadmod_es_item
     <part_params> = ( <item> . pad_choose_params )
     <colorable> = 0
     <is_part_list> = 0
-    if ChecksumEquals a = <part_script> b = create_part_cas_menu
+    if ChecksumEquals a = <part_script> b = dadmod_es_part_menu
         if StructureContains structure = <part_params> parts
             if not StructureContains structure = <part_params> logo_parts
                 <is_part_list> = 1
@@ -378,7 +388,7 @@ script dadmod_es_item
         <title> = ( <part_params> . title )
     endif
     FormatText TextName = color_title "%a Color" a = <title>
-    <color_params> = { parts = ( <part_params> . parts ) title = <color_title> callback = edit_skater_create_options_menu callback_params = <back> }
+    <color_params> = { parts = ( <part_params> . parts ) title = <color_title> callback = dadmod_es_options_menu callback_params = <back> }
     <choose> = { id = <item_id> part_script = <part_script> part_params = <part_params> color_params = <color_params> }
     <tags> = 0
     <label1> = "color"
@@ -423,18 +433,18 @@ script dadmod_es_item
         font = crillee
         scale = 0.13
         Pos = <Pos>
-        just = [ center center ]
-        internal_just = [ center center ]
-        rgba = [ 90 90 90 90 ]
+        just = ( dadmod_es_mid )
+        internal_just = ( dadmod_es_mid )
+        rgba = ( dadmod_es_dim )
         z_priority = 1006
         }
         CreateScreenElement {
         Type = SpriteElement
         local_id = dadmod_tag_arrow
         parent = <item_id>
-        just = [ center , center ]
+        just = ( dadmod_es_mid )
         alpha = 0.0
-        rgba = [ 128 128 128 128 ]
+        rgba = ( dadmod_es_lit )
         texture = right_arrow
         Pos = ( <Pos> - <dx1> )
         scale = 0.3
@@ -451,18 +461,18 @@ script dadmod_es_item
             font = crillee
             scale = 0.13
             Pos = <Pos>
-            just = [ center center ]
-            internal_just = [ center center ]
-            rgba = [ 90 90 90 90 ]
+            just = ( dadmod_es_mid )
+            internal_just = ( dadmod_es_mid )
+            rgba = ( dadmod_es_dim )
             z_priority = 1006
             }
             CreateScreenElement {
             Type = SpriteElement
             local_id = dadmod_tag2_arrow
             parent = <item_id>
-            just = [ center , center ]
+            just = ( dadmod_es_mid )
             alpha = 0.0
-            rgba = [ 128 128 128 128 ]
+            rgba = ( dadmod_es_lit )
             texture = right_arrow
             Pos = ( <Pos> - ( <x> . dx ) )
             scale = 0.3
@@ -529,18 +539,18 @@ script dadmod_es_side
         <id> : GetSingleTag dadmod_label1
         if ( <s> = 1 )
             FormatText TextName = shown "\\c6> %s" s = <dadmod_label1>
-            SetScreenElementProps id = { <id> child = dadmod_tag } text = <shown> rgba = [ 128 128 128 128 ]
+            SetScreenElementProps id = { <id> child = dadmod_tag } text = <shown> rgba = ( dadmod_es_lit )
         else
-            SetScreenElementProps id = { <id> child = dadmod_tag } text = <dadmod_label1> rgba = [ 90 90 90 90 ]
+            SetScreenElementProps id = { <id> child = dadmod_tag } text = <dadmod_label1> rgba = ( dadmod_es_dim )
         endif
     endif
     if ScreenElementExists id = { <id> child = dadmod_tag2 }
         <id> : GetSingleTag dadmod_label2
         if ( <s> = 2 )
             FormatText TextName = shown "\\c6> %s" s = <dadmod_label2>
-            SetScreenElementProps id = { <id> child = dadmod_tag2 } text = <shown> rgba = [ 128 128 128 128 ]
+            SetScreenElementProps id = { <id> child = dadmod_tag2 } text = <shown> rgba = ( dadmod_es_lit )
         else
-            SetScreenElementProps id = { <id> child = dadmod_tag2 } text = <dadmod_label2> rgba = [ 90 90 90 90 ]
+            SetScreenElementProps id = { <id> child = dadmod_tag2 } text = <dadmod_label2> rgba = ( dadmod_es_dim )
         endif
     endif
 endscript
@@ -565,31 +575,11 @@ script dadmod_es_choose
     endif
     dadmod_part_color_go <color_params>
 endscript
-generic_helper_text_cas = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\bq/\\br = Rotate" } { text = "\\be/\\bf = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\bg/\\bh = Rotate" } { text = "\\be/\\bf = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-}
-dadmod_helper_text_cas_part = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\bq/\\br = Rotate" } { text = "\\be/\\bf = Zoom" } { text = "\\bk/\\bl = Skip" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\bg/\\bh = Rotate" } { text = "\\be/\\bf = Zoom" } { text = "\\bk/\\bl = Skip" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-}
-generic_helper_text_cas_z = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\bq/\\br = Rotate" } { text = "\\bq = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\bg/\\bh = Rotate" } { text = "\\b9 = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-}
-dadmod_helper_text_color = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\be/\\bf = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\be/\\bf = Zoom" } { text = "\\b0 = Undo" } { text = "\\b1 = Redo" } ]
-}
-generic_helper_text_color_menu = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\bq/\\br = Rotate" } { text = "\\be/\\bf = Zoom" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\bg/\\bh = Rotate" } { text = "\\be/\\bf = Zoom" } ]
-}
 dadmod_es_hair_parts = [ skater_m_hair skater_f_hair ]
 dadmod_es_hat_hair_parts = [ skater_m_hat_hair skater_f_hat_hair ]
 script dadmod_es_color_in_use
-    GetCurrentSkaterProfileIndex
-    GetSkaterSex player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetSkaterSex player = <me>
     if ( <is_male> )
         <part> = ( <parts> [ 0 ] )
     else
@@ -601,7 +591,7 @@ script dadmod_es_color_in_use
         endif
     endif
     RemoveParameter desc_id
-    if not GetPlayerAppearancePart player = <currentSkaterProfileIndex> part = <part>
+    if not GetPlayerAppearancePart player = <me> part = <part>
         return in_use = 0
     endif
     if not GotParam desc_id
@@ -612,7 +602,7 @@ script dadmod_es_color_in_use
     endif
     <hat> = 0
     RemoveParameter desc_id
-    if GetPlayerAppearancePart player = <currentSkaterProfileIndex> part = hat
+    if GetPlayerAppearancePart player = <me> part = hat
         if GotParam desc_id
             if not ChecksumEquals a = <desc_id> b = none
                 <hat> = 1
@@ -644,9 +634,9 @@ script dadmod_es_section_line
     Type = SpriteElement
     local_id = dadmod_section_line
     parent = <id>
-    just = [ left , center ]
+    just = ( dadmod_es_leftmid )
     texture = white
-    rgba = [ 128 128 128 128 ]
+    rgba = ( dadmod_es_lit )
     alpha = 0.4
     Pos = (-4.0,-11.0)
     scale = (8e+01,0.1)
@@ -686,7 +676,7 @@ script dadmod_es_cam_ctx
         <t> = "Board Type"
     endswitch
     if GotParam options_array
-        if ChecksumEquals a = <options_array> b = edit_skater_tattoo_options
+        if ChecksumEquals a = <options_array> b = dadmod_es_tattoo
             <t> = "Head Tattoo"
         endif
     endif

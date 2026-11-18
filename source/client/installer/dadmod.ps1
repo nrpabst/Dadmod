@@ -74,7 +74,8 @@ function Pick-Folder {
     return $d.SelectedPath
 }
 
-# Kali Mod: it adds data\pre\thugpro_qe.prx (plain THUG Pro has none), and its scripts carry the "Kalimod" name
+# Kali Mod: its scripts carry the "Kalimod" name. Some Kali setups also have data\pre\thugpro_qe.prx (a stock copy
+# that a patched thugpro.dll reads), but the public Kali download has none, so dadmod never needs it
 function Is-Kali($g) {
     if (Test-Path -LiteralPath (Join-Path $g 'data\pre\thugpro_qe.prx')) { return $true }
     try {
@@ -504,6 +505,83 @@ function Other-LevelDat($g, $scene, $ourDat) {
     return $null
 }
 
+# plain-English reasons from a recipe check (Noah 2026-11-18: the installer has to say why it stopped). Reads the
+# "closest is version" part of DadmodRecipes.Diagnose: one reason per game file that is missing or different
+function Explain-Problem($text) {
+    $out = New-Object System.Collections.ArrayList
+    $seen = @{}
+    $after = $false
+    $noThug2 = $text -match 'thug2_path\): \(not set\)'
+    foreach ($l in ($text -split "`r?`n")) {
+        if ($l -like 'closest is version*') { $after = $true; continue }
+        if (-not $after) { continue }
+        if ($l -notmatch '^\s+(MISSING|DIFFERENT|UNREADABLE) (.+?) : ') { continue }
+        $how = $matches[1]; $f = $matches[2]
+        if ($seen.ContainsKey($f.ToLower())) { continue }
+        $seen[$f.ToLower()] = 1
+        $leaf = Split-Path -Leaf ($f -replace '^thug2:', '')
+        if ($f -like 'thug2:*') {
+            if ($noThug2) { $w = "THUG Pro doesn't know where THUG2 is installed, so dadmod can't read THUG2's $leaf. Open the THUG Pro launcher and set your THUG2 folder, then run Setup again." }
+            elseif ($how -eq 'MISSING') { $w = "THUG2's $leaf is missing from your THUG2 folder. Check the THUG2 folder set in the THUG Pro launcher." }
+            else { $w = "THUG2's $leaf isn't the normal THUG2 file (another mod may have changed your THUG2)." }
+        } elseif ($leaf -ieq 'thugpro_qb.prx') {
+            if ($how -eq 'MISSING') { $w = "data\pre\thugpro_qb.prx is missing. Reinstall THUG Pro or Kali Mod." }
+            else { $w = "Your THUG Pro scripts (data\pre\thugpro_qb.prx) are a version dadmod doesn't know yet, for example a newer Kali Mod or another mod." }
+        } elseif ($leaf -ieq 'thugpro_qe.prx') {
+            $w = "data\pre\thugpro_qe.prx is missing or different (it comes with some Kali Mod copies)."
+        } elseif ($leaf -ieq 'Skateshop_scripts.prx') {
+            $w = "Your skate shop scripts (data\pre\Skateshop_scripts.prx) were changed, usually by a Create-a-Skater (CAS) mod."
+        } elseif ($how -eq 'MISSING') {
+            $w = "$f is missing from your game."
+        } else {
+            $w = "$f was changed by another mod."
+        }
+        [void]$out.Add($w)
+    }
+    return ,$out
+}
+
+# a report the player can send when the game files don't match a known version (Noah 2026-11-18). Written next to
+# Setup.bat (or to the Desktop when that folder is read-only); never into the game folder
+function Write-Problem($g, $recipes) {
+    $lines = New-Object System.Collections.ArrayList
+    [void]$lines.Add("dadmod install problem report, " + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
+    $vf = Join-Path $Files 'dadmod\version.txt'
+    if (Test-Path -LiteralPath $vf) { [void]$lines.Add('dadmod ' + (Get-Content -LiteralPath $vf -TotalCount 1).Trim()) }
+    [void]$lines.Add("Game folder: $g")
+    foreach ($f in @('THUGPro.exe', 'thugpro.dll', 'binkw32.dll', 'binkw32_orig.dll', 'data\pre\thugpro_qb.prx', 'data\pre\thugpro_qe.prx', 'data\pre\Skateshop_scripts.prx')) {
+        $fp = Join-Path $g $f
+        if (Test-Path -LiteralPath $fp) { [void]$lines.Add(("  {0}  {1} bytes  md5 {2}" -f $f, (Get-Item -LiteralPath $fp).Length, (Md5 $fp))) }
+        else { [void]$lines.Add("  $f  (missing)") }
+    }
+    if (-not ('DadmodRecipes' -as [type])) { Add-Type -Path (Join-Path $Here 'recipes.cs') }
+    $why = New-Object System.Collections.ArrayList
+    foreach ($r in $recipes) {
+        [void]$lines.Add('')
+        try {
+            $d = [DadmodRecipes]::Diagnose($r, $g)
+            [void]$lines.Add($d)
+            foreach ($w in (Explain-Problem $d)) { if (-not $why.Contains($w)) { [void]$why.Add($w) } }
+        } catch { [void]$lines.Add("couldn't check $r : $($_.Exception.Message)") }
+    }
+    Say ''
+    Say 'Why it stopped:'
+    if ($why.Count -eq 0) { [void]$why.Add("dadmod couldn't work out which file is different (see the report below).") }
+    foreach ($w in $why) { Write-Host "  - $w" -ForegroundColor Yellow }
+    $name = 'dadmod-install-problem.txt'
+    foreach ($dir in @($Pkg, [Environment]::GetFolderPath('Desktop'), $env:TEMP)) {
+        if (-not $dir) { continue }
+        $out = Join-Path $dir $name
+        try {
+            [IO.File]::WriteAllLines($out, [string[]]$lines)
+            Say ''
+            Say "Wrote a report of what didn't match: $out"
+            Say 'Please send that file to Noah.'
+            return
+        } catch { }
+    }
+}
+
 function Install($g, [bool]$repair = $false) {
     if (-not (Test-Path -LiteralPath (Join-Path $Files 'binkw32.dll'))) { Fail "the package is missing files\binkw32.dll (unzip the whole package first)" }
     $dadmod = Join-Path $g 'dadmod'
@@ -518,6 +596,7 @@ function Install($g, [bool]$repair = $false) {
         if (-not ('DadmodRecipes' -as [type])) { Add-Type -Path (Join-Path $Here 'recipes.cs') }
         $tp0 = $null
         if ([DadmodRecipes]::Apply($qbr, $g, [ref]$tp0) -eq $null) {
+            Write-Problem $g @($qbr)
             Fail 'this THUG Pro install has script files dadmod does not know (not plain THUG Pro or a known Kali Mod version). Nothing was changed.'
         }
     }
@@ -608,10 +687,11 @@ function Install($g, [bool]$repair = $false) {
         if (-not ('DadmodRecipes' -as [type])) { Add-Type -Path (Join-Path $Here 'recipes.cs') }
         $built = 0
         $failed = New-Object System.Collections.ArrayList
+        $failedRecipes = New-Object System.Collections.ArrayList
         foreach ($r in Get-ChildItem -LiteralPath $rdir -Filter '*.dpr' -File -Recurse) {
             $tp = $null
             $bytes = [DadmodRecipes]::Apply($r.FullName, $g, [ref]$tp)
-            if ($bytes -eq $null) { [void]$failed.Add($tp); continue }
+            if ($bytes -eq $null) { [void]$failed.Add($tp); [void]$failedRecipes.Add($r.FullName); continue }
             $dst = Join-Path $g $tp
             if (-not (Test-Path -LiteralPath $dst) -and $before[$tp.ToLower()]) { [void]$restored.Add($tp) }
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
@@ -620,6 +700,7 @@ function Install($g, [bool]$repair = $false) {
             $built++
         }
         if ($failed.Count) {
+            Write-Problem $g @($failedRecipes)
             Say "Couldn't build $($failed.Count) files from your game files (your THUG Pro version isn't one dadmod knows):"
             foreach ($t in $failed) { Say "  $t" }
             if ($failed | Where-Object { $_ -match 'dadmod_qb\.prx$' }) { Fail 'dadmod needs its script file. Please report your THUG Pro version.' }

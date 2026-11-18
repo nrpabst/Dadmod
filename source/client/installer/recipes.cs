@@ -136,4 +136,45 @@ public static class DadmodRecipes {
         }
         return null;
     }
+
+    // why a recipe doesn't rebuild here (Noah 2026-11-18: a log the player can send): for the closest known game
+    // version, every source that is missing or differs, with the player's own md5
+    public static string Diagnose(string recipe, string game) {
+        byte[] b = File.ReadAllBytes(recipe);
+        var sb = new StringBuilder();
+        int p = 24;
+        Func<string> S = () => { int ln = BitConverter.ToUInt16(b, p); p += 2; string v = Encoding.UTF8.GetString(b, p, ln); p += ln; return v; };
+        string targetPath = S();
+        int nv = BitConverter.ToUInt16(b, p); p += 2;
+        MD5 hasher = MD5.Create();
+        sb.AppendLine("recipe " + Path.GetFileName(recipe) + " (" + targetPath + "), " + nv + " known versions");
+        int best = -1; List<string> bestBad = null; int bestTotal = 0;
+        for (int v = 0; v < nv; v++) {
+            int ns = BitConverter.ToUInt16(b, p); p += 2;
+            var bad = new List<string>();
+            for (int s = 0; s < ns; s++) {
+                string path = S(), entry = S();
+                byte[] m = new byte[16]; Buffer.BlockCopy(b, p, m, 0, 16); p += 16;
+                byte[] d = null;
+                try { d = Source(game, path, entry); } catch (Exception e) { bad.Add("  UNREADABLE " + path + " : " + entry + " (" + e.Message + ")"); continue; }
+                if (d == null) bad.Add("  MISSING " + path + " : " + entry);
+                else {
+                    byte[] h = hasher.ComputeHash(d);
+                    if (!Same(h, m)) bad.Add("  DIFFERENT " + path + " : " + entry + " (yours " + BitConverter.ToString(h).Replace("-", "").ToLowerInvariant() + ", known " + BitConverter.ToString(m).Replace("-", "").ToLowerInvariant() + ")");
+                }
+            }
+            int no = BitConverter.ToInt32(b, p); p += 4;
+            for (int o = 0; o < no; o++) {
+                if (b[p] == 1) p += 11; else p += 5 + BitConverter.ToInt32(b, p + 1);
+            }
+            sb.AppendLine("version " + (v + 1) + ": " + bad.Count + " of " + ns + " sources do not match");
+            if (best < 0 || bad.Count < bestBad.Count) { best = v; bestBad = bad; bestTotal = ns; }
+        }
+        if (best >= 0) {
+            sb.AppendLine("closest is version " + (best + 1) + ":");
+            foreach (string l in bestBad) sb.AppendLine(l);
+        }
+        sb.AppendLine("THUG2 folder (thug2_path): " + (Thug2Root() ?? "(not set)"));
+        return sb.ToString();
+    }
 }

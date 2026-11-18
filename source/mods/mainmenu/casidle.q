@@ -1,141 +1,115 @@
-script SkateshopCasIdle
-    select_skater_get_current_skater_name
-    if not ( <current_skater> = custom )
-        ResetLastSkaterBehaviorStuff
-        load_pro_skater { profile = 0 Skater = 0 Name = custom }
-        Change LAST_SELECTED_SKATER_MENU_ID = custom
-        Change LAST_SELECTED_SKATER_LIST_INDEX = 0
-        Change LAST_SELECTED_SKATER_SKIN_INDEX = 0
-    endif
-    Skater : TurnOffSpecialItem
-    SkaterInit NoEndRun ReturnControl NoAnims
-    THUGRECOMP_MenuOpt key = "frozen" step = 0
-    if (<on> = 1)
-        PausePhysics
-    endif
-    TurnOffSpecialItem
-    SwitchOffBoard
-    ClearExceptions
-    speed = 1.0
+dadmod_idle_hold_anims = [ FrontEnd_CAS_HoldBoard_Bot FrontEnd_CAS_HoldBoard_Top ]
+dadmod_idle_skate_cycle = [ Ped_M_SkateIdleB Ped_M_SkateIdleA Ped_M_SkateIdleC Ped_M_SkateIdleD ]
+script dadmod_idle_shot
+    <shot> = { rate = 0.8 aim = (0.0,6e+01,5e+01) eye = (-5e+01,3e+01,5e+01) }
     switch <cam_pos>
     case head
-        <trans_anim> = Ped_M_ScratchChin
-        targetOffset = (0.0,6e+01,3e+01)
-        positionOffset = (-5e+01,1e+01,3e+01)
-        <speed> = 0.8
-        BlendPeriodOut 0.2
+        <shot> = { rate = 0.8 aim = (0.0,6e+01,3e+01) eye = (-5e+01,1e+01,3e+01) main = Ped_M_ScratchChin }
     case torso
-        <trans_anim> = FrontEnd_CAS_LookArms
-        targetOffset = (0.0,6e+01,5e+01)
-        positionOffset = (-5e+01,1e+01,5e+01)
-        <speed> = 0.95
-        BlendPeriodOut 0.2
+        <shot> = { rate = 0.95 aim = (0.0,6e+01,5e+01) eye = (-5e+01,1e+01,5e+01) main = FrontEnd_CAS_LookArms }
     case Legs
-        <trans_anim> = FrontEnd_CAS_LookFeet
-        targetOffset = (0.0,1e+01,3e+01)
-        positionOffset = (-5e+01,1e+01,3e+01)
-        <speed> = 0.95
-        BlendPeriodOut 0.2
+        <shot> = { rate = 0.95 aim = (0.0,1e+01,3e+01) eye = (-5e+01,1e+01,3e+01) main = FrontEnd_CAS_LookFeet }
     case board
-        SwitchOnBoard
-        <trans_anim> = FrontEnd_CAS_HoldBoard_Bot
-        <idle_anim> = FrontEnd_CAS_HoldBoard_Bot
-        targetOffset = (0.0,1e+01,3e+01)
-        positionOffset = (-5e+01,1e+01,3e+01)
-        <show_board> = show_board
-        BlendPeriodOut 0.2
+        <shot> = { rate = 1.0 aim = (0.0,1e+01,3e+01) eye = (-5e+01,1e+01,3e+01) main = FrontEnd_CAS_HoldBoard_Bot idle_loop = FrontEnd_CAS_HoldBoard_Bot deck }
     case board_griptape
-        SwitchOnBoard
-        <trans_anim> = FrontEnd_CAS_HoldBoard_Top
-        <idle_anim> = FrontEnd_CAS_HoldBoard_Top
-        targetOffset = (0.0,1e+01,3e+01)
-        positionOffset = (-5e+01,1e+01,3e+01)
-        <show_board> = show_board
-        BlendPeriodOut 0.2
+        <shot> = { rate = 1.0 aim = (0.0,1e+01,3e+01) eye = (-5e+01,1e+01,3e+01) main = FrontEnd_CAS_HoldBoard_Top idle_loop = FrontEnd_CAS_HoldBoard_Top deck }
     case graffiti
-        <in_anim> = Ped_Graffiti_ShakeCan
-        <trans_anim> = Ped_Graffiti_Step2BigTag
-        <trans_anim2> = Ped_Graffiti_BigTag01
-        <Out_Anim> = Ped_Graffiti_BigTagStepBack
-        BlendPeriodOut 0.2
-        targetOffset = (0.0,6e+01,5e+01)
-        positionOffset = (-5e+01,3e+01,5e+01)
-        speed = 0.8
-        show_spraycan = 1
+        <shot> = { rate = 0.8 aim = (0.0,6e+01,5e+01) eye = (-5e+01,3e+01,5e+01) intro = Ped_Graffiti_ShakeCan main = Ped_Graffiti_Step2BigTag tag2 = Ped_Graffiti_BigTag01 outro = Ped_Graffiti_BigTagStepBack spray }
     default
-        <trans_anim> = <trans_anim_generic>
-        targetOffset = (0.0,6e+01,5e+01)
-        positionOffset = (-5e+01,3e+01,5e+01)
-        <speed> = 0.8
-        BlendPeriodOut 0.2
+        if GotParam trans_anim_generic
+            <shot> = { <shot> main = <trans_anim_generic> }
+        endif
     endswitch
-    KillSkaterCamAnim All
-    Skater : Obj_GetId
-    PlaySkaterCamAnim {
-    Skater = 0
-    Name = SkateShopCas_CAM
-    targetid = TRG_DummySkater
-    targetOffset = <targetOffset>
-    positionOffset = <positionOffset>
-    play_hold
-    frames = 1
-    virtual_cam
-    }
-    SetActiveCamera id = SkateShopCas_CAM move
-    if not Obj_HasModelLights
-        script_assert "No skater lighting!"
-    endif
-    CancelRotateDisplay
-    SetRollingFriction 10000
+    return shot = <shot>
+endscript
+script dadmod_idle_play
+    PlayAnim NoRestart speed = <rate> anim = <anim>
+    Obj_WaitAnimFinished
+endscript
+script dadmod_idle_frozen_check
     THUGRECOMP_MenuOpt key = "frozen" step = 0
-    if (<on> = 1)
+    if ( <on> = 1 )
         PausePhysics
-    else
+        return
+    endif
+    if GotParam wake
         UnpausePhysics
     endif
-    if GotParam show_spraycan
+endscript
+script dadmod_idle_custom_skater
+    select_skater_get_current_skater_name
+    if ( <current_skater> = custom )
+        return
+    endif
+    ResetLastSkaterBehaviorStuff
+    Change LAST_SELECTED_SKATER_SKIN_INDEX = 0
+    Change LAST_SELECTED_SKATER_LIST_INDEX = 0
+    Change LAST_SELECTED_SKATER_MENU_ID = custom
+    load_pro_skater { Name = custom Skater = 0 profile = 0 }
+endscript
+script SkateshopCasIdle
+    dadmod_idle_custom_skater
+    Skater : TurnOffSpecialItem
+    SkaterInit ReturnControl NoAnims NoEndRun
+    dadmod_idle_frozen_check
+    ClearExceptions
+    SwitchOffBoard
+    TurnOffSpecialItem
+    dadmod_idle_shot <...>
+    if StructureContains structure = <shot> deck
+        SwitchOnBoard
+    endif
+    BlendPeriodOut 0.2
+    KillSkaterCamAnim All
+    PlaySkaterCamAnim {
+    virtual_cam
+    frames = 1
+    play_hold
+    positionOffset = ( <shot> . eye )
+    targetOffset = ( <shot> . aim )
+    targetid = TRG_DummySkater
+    Name = SkateShopCas_CAM
+    Skater = 0
+    }
+    SetActiveCamera move id = SkateShopCas_CAM
+    CancelRotateDisplay
+    SetRollingFriction 10000
+    dadmod_idle_frozen_check wake
+    if StructureContains structure = <shot> spray
         TurnOnSpecialItem specialitem_details = spraycan_cas_details
     endif
-    if GotParam in_anim
-        PlayAnim anim = <in_anim> speed = <speed> NoRestart
-        Obj_WaitAnimFinished
+    <rate> = ( <shot> . rate )
+    if StructureContains structure = <shot> intro
+        dadmod_idle_play rate = <rate> anim = ( <shot> . intro )
     endif
-    if GotParam trans_anim
-        PlayAnim anim = <trans_anim> speed = <speed> NoRestart
-        Obj_WaitAnimFinished
+    if StructureContains structure = <shot> main
+        dadmod_idle_play rate = <rate> anim = ( <shot> . main )
     endif
-    if GotParam trans_anim2
-        PlayAnim anim = <trans_anim2> speed = <speed> NoRestart
-        Obj_WaitAnimFinished
+    if StructureContains structure = <shot> tag2
+        dadmod_idle_play rate = <rate> anim = ( <shot> . tag2 )
     endif
-    if GotParam Out_Anim
-        PlayAnim anim = <Out_Anim> speed = <speed> NoRestart
-        Obj_WaitAnimFinished
+    if StructureContains structure = <shot> outro
+        dadmod_idle_play rate = <rate> anim = ( <shot> . outro )
     endif
-    if GotParam show_spraycan
+    if StructureContains structure = <shot> spray
         TurnOffSpecialItem
     endif
-    Animations = [
-    FrontEnd_CAS_HoldBoard_Bot
-    FrontEnd_CAS_HoldBoard_Top
-    Ped_M_SkateIdleA
-    ]
-    if ArrayContains array = <Animations> contains = <trans_anim>
-        if ( <trans_anim> = Ped_M_SkateIdleA )
+    if StructureContains structure = <shot> main
+        <ended> = ( <shot> . main )
+        if ChecksumEquals a = <ended> b = Ped_M_SkateIdleA
             begin
-                PlayAnim anim = Ped_M_SkateIdleB speed = 0.9
-                Obj_WaitAnimFinished
-                PlayAnim anim = Ped_M_SkateIdleA speed = 0.9
-                Obj_WaitAnimFinished
-                PlayAnim anim = Ped_M_SkateIdleC speed = 0.9
-                Obj_WaitAnimFinished
-                PlayAnim anim = Ped_M_SkateIdleD speed = 0.9
-                Obj_WaitAnimFinished
-            repeat
-        else
-            if GotParam idle_anim
+                <dm_k> = 0
                 begin
-                    PlayAnim anim = <idle_anim> speed = 0.9
+                    PlayAnim speed = 0.9 anim = ( dadmod_idle_skate_cycle [ <dm_k> ] )
+                    Obj_WaitAnimFinished
+                    <dm_k> = ( <dm_k> + 1 )
+                repeat 4
+            repeat
+        endif
+        if ArrayContains array = dadmod_idle_hold_anims contains = <ended>
+            if StructureContains structure = <shot> idle_loop
+                begin
+                    PlayAnim speed = 0.9 anim = ( <shot> . idle_loop )
                     Obj_WaitAnimFinished
                 repeat
             endif
@@ -143,7 +117,7 @@ script SkateshopCasIdle
         endif
     endif
     begin
-        PlayAnim anim = Ped_M_Idle1 speed = 0.9
+        PlayAnim speed = 0.9 anim = Ped_M_Idle1
         Obj_WaitAnimFinished
     repeat
 endscript

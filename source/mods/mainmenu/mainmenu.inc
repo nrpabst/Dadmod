@@ -282,7 +282,9 @@ static int SeqIndex(const std::string& f);
 static bool g_poseLive;            // the menu skater is looping one of our animations (changes can blend)
 static bool g_ambientReady;        // CF_MenuLevel ran in this DLL: the loaded scene has the ambient people nodes
 static DWORD g_lastTick;           // last CF_MenuTick (0 after a scene load): the menu scene is up and driven
-static bool g_frozen;              // the skater's physics are paused on this menu scene (they fell at the spot)
+static bool g_frozen;              // the skater's physics are paused on this menu scene (they fell at the spot, or Match slope is off)
+static DWORD g_frozenAt;           // when they were paused (Match slope on: try letting them land again)
+static int g_slopeTries;           // Match slope on: times the paused skater was let go to land on the spot
 static bool g_levelSet;            // CF_MenuLevel ran (a live helper loaded mid-menu sets itself up in MenuTick)
 static Vec g_mainPos;              // where the skater stood on the main list (Edit Skater screens put them back there)
 static bool g_mainPosValid;
@@ -339,6 +341,7 @@ struct Config {
     float blendSec;                // blend_seconds: glide between cameras instead of cutting
     bool useHome;                  // use_home = on: a level's [home <level>] (Set Main Menu Here) wins over the picks
     bool ctxCams;                  // context_cams = on: close-ups on the Edit Skater screens
+    bool matchSlope;               // match_slope = on: the skater leans with the ground; off: stands straight up
     CtxCam ctx[CTX_COUNT];
     std::map<std::string, ItemCam> items;  // [item <option text>] look / radius / tilt overrides
     std::map<std::string, std::string> customSel;  // custom_cam_<level> = the section of the custom camera in use there
@@ -555,6 +558,7 @@ static const char kDefaultIni[] =
 "blend_seconds = 1.5          ; glide time between camera shots (0 = cut)\r\n"
 "use_home = on                ; on = a level's saved spot and camera ([home <level>]) win over the picks\r\n"
 "context_cams = on            ; on = close-ups on the Edit Skater screens ([context ...] below)\r\n"
+"match_slope = off            ; on = the skater leans with the slope under them; off = stands straight up\r\n"
 "orbit_start = front          ; orbit start angles count from the skater's front (don't change)\r\n"
 "framing = left               ; left | center | right: the skater stands in that part of the screen\r\n"
 "\r\n"
@@ -841,6 +845,7 @@ static void LoadConfig() {
     if (c.blendSec > 10) c.blendSec = 10;
     c.useHome = Lower(Trim(m["use_home"])) != "off";
     c.ctxCams = Lower(Trim(m["context_cams"])) != "off";
+    c.matchSlope = Lower(Trim(m["match_slope"])) == "on";
     for (auto& n : order) {
         if (n.compare(0, 5, "item ")) continue;
         auto& x = sec[n];
@@ -1127,7 +1132,7 @@ static bool __cdecl CF_MenuLevel(void*, void* script) {
     g_outValid = false; g_bDur = 0; g_faceValid = false; g_edit = false; g_ctx = CTX_MAIN;  // new scene: cut, no blend
     g_poseLive = false; g_levelSet = true; g_mainPosValid = false; g_backTurned = false; g_userTurned = false; g_lastTick = 0;
     g_ambientReady = true;
-    g_frozen = false;
+    g_frozen = false; g_slopeTries = 0;
     if (g_spot >= 0) Log("menu level %s, spot %d (%s)", LevelName(), g_spot + 1, g_cfg.spotList[g_spot].name.c_str());
     else Log("menu level %s, no spot (stock placement)", LevelName());
     RetInt(script, "level", g_level);
@@ -1361,17 +1366,33 @@ static bool __cdecl CF_MenuTick(void* params, void* script) {
         // falling through the spot (Skate Heaven, 2026-10-25: the menu map has no floor there): pause the skater's
         // physics so they stay planted; load_level unpauses them in any real level
         bool falling = d.y < -4 && fabsf(d.x) < 15 && fabsf(d.z) < 15;
-        if (falling) {  // every time: a pose change re-inits the skater (SkaterInit), which unpauses them
-            RetInt(script, "freeze", 1);
-            if (!g_frozen) { g_frozen = true; Log("the skater fell at the spot: physics paused on the menu"); }
+        // Match slope (Noah 2026-11-18). Off: on a spot the skater is always paused standing straight up, the way
+        // the first boot shows them (there the floor isn't ready yet and they drop, so they get paused). On: their
+        // physics run so they lean with the ground; after a first-boot drop they're let go again every 2 seconds
+        // (5 tries) until the floor is there to land on.
+        bool upright = haveSpot && !g_cfg.matchSlope && !g_frozen;
+        if (haveSpot && g_cfg.matchSlope && g_frozen && !falling && g_slopeTries < 5 && now - g_frozenAt > 2000) {
+            g_frozen = false; ++g_slopeTries;
+            RetInt(script, "unfreeze", 1);
+            RetVec(script, "keep_pos", g_mainPos);
+            Log("match slope: skater let go to land on the spot (try %d)", g_slopeTries);
         }
-        if (d.x * d.x + d.y * d.y + d.z * d.z > 15 * 15 || falling) {
+        if (!g_cfg.matchSlope) g_slopeTries = 0;
+        if (falling || upright) {  // every time: a pose change re-inits the skater (SkaterInit), which unpauses them
+            RetInt(script, "freeze", 1);
+            if (!g_frozen) {
+                g_frozen = true; g_frozenAt = now;
+                Log(falling ? "the skater fell at the spot: physics paused on the menu" : "match slope off: skater paused standing straight up");
+            }
+        }
+        if (d.x * d.x + d.y * d.y + d.z * d.z > 15 * 15 || falling || upright) {
             Vec f = haveSpot && g_cfg.spotList[g_spot].hasDir ? g_cfg.spotList[g_spot].dir : g_face;
             if (g_backTurned || g_userTurned || g_faceNow.x != g_face.x || g_faceNow.z != g_face.z) f = g_faceNow;  // mid-spin, turned round or turned by the player
+            float fl = sqrtf(f.x * f.x + f.z * f.z);  // level facing: Obj_SetOrientation then stands them straight up
             RetVec(script, "keep_pos", g_mainPos);
-            RetVec(script, "keep_dir", f);
+            if (fl > 0.01f) RetVec(script, "keep_dir", V(f.x / fl, 0, f.z / fl));
             static DWORD s_movedLogAt;
-            if (now - s_movedLogAt > 2000) { s_movedLogAt = now; Log("the skater was moved (%s); put back at %.1f %.1f %.1f", kCtxNames[ctx], g_mainPos.x, g_mainPos.y, g_mainPos.z); }
+            if ((falling || d.x * d.x + d.y * d.y + d.z * d.z > 15 * 15) && now - s_movedLogAt > 2000) { s_movedLogAt = now; Log("the skater was moved (%s); put back at %.1f %.1f %.1f", kCtxNames[ctx], g_mainPos.x, g_mainPos.y, g_mainPos.z); }
             skater = g_mainPos;
         }
     }
@@ -2316,8 +2337,8 @@ static bool __cdecl CF_MenuOpt(void* params, void* script) {
         float v = g_cfg.blendSec;
         if (step) { v += step * 0.25f; v = v < 0 ? 0 : v > 5 ? 5 : v; SetMenuValue(key, Num(v, 2)); }
         if (v < 0.01f) text = "Cut"; else { sprintf(buf, "%.2f sec", v); text = buf; }
-    } else if (k == "use_home" || k == "context_cams") {
-        bool on = k == "use_home" ? g_cfg.useHome : g_cfg.ctxCams;
+    } else if (k == "use_home" || k == "context_cams" || k == "match_slope") {
+        bool on = k == "use_home" ? g_cfg.useHome : k == "context_cams" ? g_cfg.ctxCams : g_cfg.matchSlope;
         if (step) { on = !on; SetMenuValue(key, on ? "on" : "off"); }
         text = on ? "On" : "Off";
         respot = step && k == "use_home";
@@ -3180,6 +3201,7 @@ static const char kLayoutDefault[] =
 "    item|mmopt_pmode|||\n"
 "    item|mmopt_anims|||\n"
 "    item|mmopt_ptime|||\n"
+"    item|mmopt_slope|||\n"
 "menu||Menu UI||Where the main menu sits, its size, and every text color: color scan, rainbow, themes and effects\n"
 "  menu||Main menu||Position and size of the main screen menu\n"
 "    item|mui_side|||\n"

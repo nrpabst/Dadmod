@@ -178,6 +178,31 @@
 ==========================================================================
 
   NEW
+    + Edit Skater scaling has no limits: Scale Options go from 0 to
+      1,000,000, and each press moves about 5% of the number, so big
+      sizes come fast.
+    + Logo and tattoo Scale has no limits either and shows a plain
+      number (100 is normal size).
+    + Main menu > Match slope: your skater leans with the ground they
+      stand on (On), or stands straight up (Off).
+
+  CHANGED
+    ~ Edit Skater is now all dadmod's own code. It looks and works the
+      same as before.
+    ~ Long menu titles shrink to fit on the screen.
+    ~ When Setup stops, it says why in plain words (for example a CAS
+      mod changed your skate shop scripts) and writes a report you can
+      send to Noah.
+
+  FIXED
+    x Setup no longer stops on Kali Mod installs that don't have a CAS
+      mod or the extra Kali file.
+
+
+  0.9.11
+  ------
+
+  NEW
     + In-game updates: when a new dadmod is out, "Update available"
       shows under the dadmod text on the main menu. Main menu > Dadmod >
       "Download newest update" downloads it while you play, then

@@ -1,0 +1,83 @@
+## STOCK: Dev has these, this install does not (used by)
+#"0x4c606620"  [qb/thugpro/procrastination.q]  <- thugpro_main_item
+#"0xc46e26a0"  [qb/thugpro/procrastination.q]  <- thugpro_main_item
+aksequence1  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence2  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence3  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence4  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence5  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence6  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence7  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+aksequence8  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim78wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim79wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim80wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim81wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim82wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim83wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim84wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+anim85wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+thugpro_hostasobserver  [qb/game/net/net.q]  <- dadmod_noclip_allowed
+thugpro_mapvote_active  [qb/game/net/net.q]  <- level_select_change_level
+thugpro_say_to  [qb/game/net/net.q]  <- thugpro_bankdrops_chat, thugpro_bankdrops_confirm
+
+## STOCK: differ from Dev (used by)
+chosen_host_game  [qb/game/net/net.q, server change]  <- autoserver_break_timer, create_network_game_options_menu, create_network_host_options_menu, do_backend_retry
+clientlaunchprojectilereal  [qb/thugpro/procrastination.q, kali]  <- clientlaunchprojectile
+create_console_message  [qb/thugpro/procrastination.q, server change]  <- fliptrick, give_skater_ammo, walk_maybe_throw_projectile2
+create_display_options_menu  [qb/thugpro/procrastination.q, kali]  <- create_panel_message_options_menu, create_predisplay_options_menu
+create_game_modifiers_menu  [qb/thugpro/thugpro_server.q, kali]  <- create_pre_network_host_options_menu
+create_net_panel_message  [qb/game/net/net.q, server change]  <- eliminatedyou, endofrun, goal_endofrun, level_select_change_level
+create_network_host_options_menu  [qb/game/net/net.q, server change]  <- create_pre_network_host_options_menu, host_options_back_from_keyboard, launch_network_host_options_menu, set_host_option_preference
+create_object_label_update  [qb/thugpro/procrastination.q, kali]  <- update_all_player_names
+create_observe_menu  [qb/thugpro/procrastination.q, kali]  <- eliminatedyou, endofrun
+create_options_menu  [qb/game/menu/gamemenu_options.q, kali]  <- back_from_boolean_menus, back_to_pause_menu, choose_boolean_option, create_music_options_menu
+create_panel_stuff  [qb/thugpro/procrastination.q, kali]  <- screenelementsystemcleanup, thugpro_change_theme_reset_end, toggle_display_special_text
+create_score_menu  [qb/thugpro/procrastination.q, kali]  <- create_panel_stuff
+do_backend_retry  [qb/thugpro/procrastination.q, kali]  <- force_close_rankings
+do_screen_freeze  [qb/thugpro/procrastination.q, kali]  <- do_backend_retry
+forkliftsetup  [qb/thugpro/procrastination.q, kali]  <- vehiclesetupmapping
+groundgone  [qb/thugpro/procrastination.q, kali]  <- bailgroundgone, dadmod_noclip_state, flailexceptions, generalbail
+hide_net_player_names  [qb/thugpro/procrastination.q, kali]  <- create_network_game_options_menu
+horse_allowed_characters  [qb/game/net/net.q, server change]  <- create_mp_game_options_horse_word_menu
+level_select_change_level_quit  [qb/thugpro/procrastination.q, kali]  <- menu_confirm_quit
+manual  [qb/thugpro/procrastination.q, kali]  <- dadmod_anim_list, manuallink, ped_skater_manual, special_trick_types
+quit_network_game  [qb/game/net/net.q, server change]  <- cat_exit_cleanup
+reset_trick_text_appearance  [qb/thugpro/procrastination.q, kali]  <- create_panel_stuff
+run_global_command  [kmod/k_parser.q, kali]  <- check_command_exist
+set_custom_restart  [qb/thugpro/procrastination.q, kali]  <- create_options_menu, run_global_command
+set_theme_thugpro_special_meter_sprites  [qb/thugpro/procrastination.q, kali]  <- edit_theme_set_special_meter_type, set_theme_thugpro
+setskaterairtricks  [qb/thugpro/procrastination.q, kali]  <- air_wallplant, fliptrick, groundgone, inairexceptions
+setskatergroundtricks  [qb/thugpro/procrastination.q, kali]  <- ongroundexceptions, toggleswitchregular
+shoes  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male, skater_m_legs, skater_m_torso
+skater_f_legs  [qb/thugpro/procrastination.q, kali]  <- cas_temp_disq_set_lower_legs, skater_m_torso
+skater_f_lower_legs  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male, cas_temp_disq_set_lower_legs
+skater_m_head  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male
+skater_m_legs  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male, cas_temp_disq_set_lower_legs, skater_m_torso
+skater_m_torso  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male
+skip_to_custom_restart  [qb/thugpro/procrastination.q, kali]  <- create_options_menu, run_global_command
+spawned_chosen_host_game  [qb/game/net/net.q, server change]  <- chosen_host_game
+thugpro_clearallobservevalues  [qb/thugpro/procrastination.q, kali]  <- create_observe_menu, quit_network_game, thugpro_observemode
+thugpro_menu_create_count_text  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create
+thugpro_menu_create_helper_text  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create
+thugpro_menu_get_style_params  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create, thugpro_menu_update_scrollbar
+thugpro_menu_item_update_extra_text  [qb/thugpro/thugpro_menu.q, kali]  <- autoservermenu_toggle_auto_game_mode, autoservermenu_toggle_auto_level, autoservermenu_toggle_auto_server, autoservermenu_toggle_auto_server_breaktime
+trick_wallplant  [qb/thugpro/procrastination.q, kali]  <- wallridetricks_doubletap, wallridetricks_singletap
+walkingruntoskating  [qb/thugpro/procrastination.q, kali]  <- walkgroundtricks
+wallride  [qb/thugpro/procrastination.q, kali]  <- default_playrevertsound, inairexceptiontable, offrail
+
+## KALI: Dev has these, this install does not (used by)
+thugpro_hostasobserver  [qb/game/net/net.q]  <- dadmod_noclip_allowed
+thugpro_mapvote_active  [qb/game/net/net.q]  <- level_select_change_level
+thugpro_say_to  [qb/game/net/net.q]  <- thugpro_bankdrops_chat, thugpro_bankdrops_confirm
+
+## KALI: differ from Dev (used by)
+#"0xd70bd595"  [qb/thugpro/procrastination.q, server change]  <- #"0x30ceabe0", #"0x53c910cd", #"0xdc729110"
+chosen_host_game  [qb/game/net/net.q, server change]  <- autoserver_break_timer, create_network_game_options_menu, create_network_host_options_menu, do_backend_retry
+create_console_message  [qb/thugpro/procrastination.q, server change]  <- #"0x30ceabe0", #"0x3cd54653", #"0x40146cf6", #"0x40df22ad"
+create_net_panel_message  [qb/game/net/net.q, server change]  <- eliminatedyou, endofrun, goal_endofrun, level_select_change_level
+create_network_host_options_menu  [qb/game/net/net.q, server change]  <- create_pre_network_host_options_menu, host_options_back_from_keyboard, launch_network_host_options_menu, set_host_option_preference
+horse_allowed_characters  [qb/game/net/net.q, server change]  <- create_mp_game_options_horse_word_menu
+quit_network_game  [qb/game/net/net.q, server change]  <- cat_exit_cleanup
+spawned_chosen_host_game  [qb/game/net/net.q, server change]  <- chosen_host_game
+

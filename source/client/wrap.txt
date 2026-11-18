@@ -1,0 +1,33 @@
+# Stock scripts the client build wraps (one per line). The loader renames each one to <name>_orig
+# before our scripts load, so our version of <name> can call <name>_orig <...>.
+# Only wrap what a ported mod needs; empty is fine.
+# menus (qb/dadmod/menus.q): Kali changed these from stock, so ours runs the installed version and adds to it
+create_pause_menu
+thugpro_show_quick_menu
+exit_pause_menu
+thugpro_update_tod
+thugpro_menu_create_title
+load_level
+# generated from menuui: Kali-only item styles (two flags Kali added) still go to the installed version
+make_thugpro_menu_item
+ClientLaunchProjectile
+# client_boot.q: the boot-time settings load skips its "Checking hard disk" / "Loading" dialogs and 3 s holds, like Kali and Dev
+mem_card_message_pause
+mcmess_CheckingCard
+mcmess_LoadingData
+# client_boot.q: the level select also loads dadmod_levelselect.prx (pictures of the extra levels, client/levelthumbs)
+load_update_level_select_textures_to_main_memory
+# midload (qb/dadmod/midload.q): Edit Skater stats/tricks changes mark the skater unsaved, a skater save or load clears it
+stat_menu_change_stat
+edit_tricks_menu_bind_trick
+edit_tricks_menu_unassign_trick
+special_tricks_menu_select_trick
+special_tricks_menu_select_key_combo
+special_tricks_menu_unassign_trick
+bind_boneless_trick
+Toggle_boneless_anim_type
+post_load_from_memory_card
+mcmess_SaveSuccessful
+mcmess_OverwriteSuccessful
+# update.q: the Update dadmod row goes on the main menu Dadmod page (layout root) just before the menu finds its last item
+thugpro_menu_find_last_item

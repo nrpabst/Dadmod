@@ -1,0 +1,60 @@
+# One line per mod folder. Columns (tab separated):
+# mod	side	client	files	notes
+#   side:   server = host only, client = runs on your own game, both = has a host part and a local part
+#   client: yes = goes in the client build,
+#           no = server build only, later = client build once its stock-script edits are ported to wraps
+#   files:  what it touches. prx:<file> = a script in thugpro_qb.prx (server build) / dadmod_qb.prx (client build),
+#           dll:<inc> = included in binkw32.dll, data:<path> = a file in the game's data folder, dadmod:<file> = <game>\dadmod\
+anims	both	later	prx:Levels.q prx:skateshop.q prx:ButtonScripts.q dadmod:anim_list.txt	Pause > dadmod > Animations is client; ?anims chat menu (qanims.q) is host-answered
+anybinds	client	later	prx:walking_control.q	Square whack / Circle sit for the local player
+balance	client	yes	dll:balancelock.inc	DLL part is in the client loader (gfx.inc needs it), off until a script turns it on; client menu must keep it offline only. Infinite balance; in the client build it turns off in online games, the server build (Noah's own install) keeps it online (Noah 2026-11-05)
+bankdrop	both	yes	dll:bankdrop.inc prx:ButtonScripts.q	Local bank drops; !bankdrops chat command is the host part; fine online (Noah 2026-11-05)
+bootspeed	client	yes	dll:bootspeed.inc dadmod:bootspeed.ini	Skips the ContentManager rescan and the 2 s boot sleep
+cars	server	no	prx:net.q	Online traffic re-created by the host
+casfix	client	later	prx:cas_ped_m.q prx:cas_ped_f.q data:models/THUGPRO_Peds	Ped crash fix; installer extracts the peds from the player's own level files
+casmod	client	yes	data:dadmod_casidle.qb prx:(flags)	Edit Skater mods (our own code, see casmod/README.txt)
+chaos	server	no	prx:net.q	?chaos server-wide
+chatart	client	no	prx:ButtonScripts.q	Alt+F12 chat pictures (sends chat lines in any server)
+chatkeep	client	later	prx:ButtonScripts.q prx:net.q	Keeps typed chat when a game starts (hooks StartingNewNetGame)
+chatstick	server	no	dadmod:tools	Manager chat tab helpers
+cheats	server	no	prx:net.q dll:pcheats.inc	?cheats menu, host-answered
+controller	client	yes	dll:padhub.inc dadmod:padhub.log	Controller hotplug for player 1
+crashlog	client	yes	dll:crashlog.inc dadmod:crash.log	Crash breadcrumbs
+dadbot	server	no	prx:net.q dll:dadbot.inc dadmod:discord-bot	Ollama chat bridge
+dedicated	server	no	dll:dedicated.inc prx:net.q dadmod:dedicated.*	Dedicated server / Host and Play
+freeskate_menu	client	later	prx:(handle_start_pressed, exit_pause_menu)	Free skate keeps running in the pause menu
+gfx	client	yes	dll:gfx.inc prx:Levels.q dadmod:gfx.ini	Graphics: post effects, sky, local weather, lamps, fireworks
+host_observer	both	no	prx:ButtonScripts.q prx:consolemessage.q prx:Levels.q prx:gamemenu_levelselect.q prx:skateshop.q prx:net.q prx:control_setup.q prx:procrastination.q	Full copies of stock/Kali scripts with our edits; the client build never uses these copies
+hotpotato	server	no	dll:hotpotato.inc	!hp mode
+kalichaos	client	no	prx:net.q	Port of Kali Mod 2.8 Chaos Mode; left out of the client build (other people's mod)
+lagswitch	server	no	dll:lagswitch.inc prx:ButtonScripts.q	?lag
+mainmenu	client	yes	dll:mainmenu.inc prx:Levels.q prx:skateshop.q data:pre/mainmenu_*_scripts.prx dadmod:mainmenu.ini	Custom main menu scenes, cameras, poses, ambient people
+mainmenu_el	client	later	data:(level files)	East LA menu level (level data not in the repo)
+members	server	no	dll:members.inc prx:ButtonScripts.q members.txt	Members list
+menuui	client	later	prx:procrastination.q prx:skateshop.q dadmod:panel_settings.txt dadmod:dadmod_layout.txt	Menu UI colors/effects/layout; userslots.q (extra level slots) only for levels found installed
+modes_batch	server	no	dll:modes.inc prx:net.q	Custom modes and stats; its helper functions move to a shared common.inc for the client DLL
+namematch	server	no	dll:namematch.inc prx:ButtonScripts.q	Partial names in commands
+news	server	no	dll:news.inc dadmod:news.txt	Join announcement
+noclip	client	later	prx:ButtonScripts.q prx:groundtricks.q	F6 noclip + Triangle replay; fine online (Noah 2026-11-05)
+objects	server	no	prx:ButtonScripts.q	?objects
+pauserow	server	no	prx:ButtonScripts.q dll:startmsg.inc	Server Menu row for unmodded players, start banner
+poll	server	no	prx:net.q	?poll
+pw	server	no	dll:pw.inc	?pw join check
+qcmd_batch	server	no	dll:qcmd_batch.inc prx:net.q	?kick ?ban ?teams
+qmenu	server	no	dll:qmenu.inc prx:net.q	?menu Server Menus
+quitreset	server	no	prx:ButtonScripts.q	Resets pushed values for unmodded players on Quit
+records	server	no	dll:mode_record.inc	!record
+slap	server	no	prx:ButtonScripts.q	Host pushes the slap tables
+sonic	server	no	dll:sonic.inc prx:ButtonScripts.q	!sonic
+soundboard	server	no	prx:ButtonScripts.q dll:whitelist_remove.inc	Soundboard, whitelist remove
+speed	client	later	prx:ButtonScripts.q	Player Speed; fine online (Noah 2026-11-05)
+squaregetup	client	later	prx:ButtonScripts.q prx:(GeneralBail)	Bail Cancel
+stuckfix	server	no	prx:ButtonScripts.q prx:net.q	Stuck after a game
+tawhore	server	no	dll:tawhore.inc prx:net.q	Trick Attack anti-whoring
+themelabels	client	later	prx:themes.q	Edit Theme color names
+throw	both	yes	prx:ButtonScripts.q	Pause > Dadmod > Throwables is client (everyone sees stock ammo as a COMBO O, cars only dadmod players; Noah 2026-11-06); !ammo chat is host-answered
+todfade	server	no	prx:net.q	Server time-of-day fade
+vehicles	both	later	prx:ButtonScripts.q	Drive = client, Park = host
+weather	server	no	prx:net.q	Server weather
+thpg	client	yes	prx:Levels.q	Tony Hawk's Proving Ground level select tab (Larxian cities + our Training), work/thpg/tools/build_thpg.py --userslots
+midload	client	yes	prx:ButtonScripts.q prx:(stats/tricks/memcard scripts) data:dadmod_casidle.qb	Quick Menu > Load Skater mid-level (offline only for now); unsaved-changes warning (mods/midload/apply.py hooks, client wraps)

@@ -1,0 +1,10 @@
+# thpsX Vault preview images for the level select pictures (downloaded 2026-11-15 with Noah's OK).
+# key | Vault title | Vault author | Vault page | image URL | saved as | bytes | md5
+streets | Streets | tyler | https://thpsx.com/creation-details/?obj=980 | https://i.imgur.com/JibEPxL.jpg | streets.jpg | 128465 | 2695fee5015617796b46612e99c791c4
+suburbsp8 | Suburbs - Project 8 | Brohnson | https://thpsx.com/creation-details/?obj=1352 | https://i.imgur.com/5yxQKip.jpg | suburbsp8.jpg | 337800 | 774e40155a3a22f1a2030fe7ae99a6b2
+thps2ny | THPS2 New York | letmynutzgo | https://thpsx.com/creation-details/?obj=1011 | https://i.imgur.com/ysYnJDw.png | thps2ny.png | 700064 | 4ed48bd36dbce4e725ef5dff7b0ee1e2
+thps2ss | THPS2 Skate Street Ventura | letmynutzgo | https://thpsx.com/creation-details/?obj=1028 | https://i.imgur.com/CpO725i.png | thps2ss.png | 708363 | 4468bbcba3f61e602721d506f4851a92
+thps2bullring | THPS2 Bullring | letmynutzgo | https://thpsx.com/creation-details/?obj=970 | https://i.imgur.com/Bv1CNWZ.png | thps2bullring.png | 810927 | 7eaeb45508dd672b572d5df8415c9804
+thps2_sh | THPS2 Skate Heaven | rodafy | https://thpsx.com/creation-details/?obj=1048 | screenshot from InstallTest Stock, 2026-11-15 (the Vault image is a dead Discord link; Noah set up the shot; square crop x 470-1470) | thps2_sh.png | 2004326 | 340b548b44e784df4d49c9571651655f
+thps2chopperdrop | THPS2 Chopper Drop | letmynutzgo | https://thpsx.com/creation-details/?obj=1017 | https://i.imgur.com/dJ9frvm.png | thps2chopperdrop.png | 489015 | 7033ea181a99746d8e59142b9d504b67
+thpg* thumbs: area select pictures from Noah's THPG PS2 disc (levelselect.pak.ps2, work/thpg); thpglogo.img.xbx: our own text logo (work/thpg/art/logo_thpg.png)

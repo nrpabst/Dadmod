@@ -1,0 +1,26 @@
+# Level select pictures for the extra levels (mods/menuui/userslots.q). make_client.py turns client/levelthumbs/<key>.png
+# into images\dadmod\levelselect\dadmod_thumb_<key>.img.xbx inside data\pre\dadmod_levelselect.prx (tools/img_xbx.py:
+# square centre crop, 512x512, 256 colours, like the stock thumbs). A level with no PNG keeps the stock thumb_default.
+# Where each picture came from: client/levelthumbs/source/sources.txt.
+# <key> <level slot checksum (its load script)>
+streets #"0x001202e3"
+thps2ny #"0x341caf9f"
+thps2ss #"0x6552c592"
+thps2bullring #"0xe0d4e51a"
+thps2_sh #"0xf06d95da"
+thps2chopperdrop #"0x73babdd0"
+# Tony Hawk's Proving Ground levels (work/thpg, area select pictures from the THPG PS2 disc) + the THPG tab logo
+thpglogo dadmod_thpg_logo
+thpgfdr Load_dadmod_THPGFDR
+thpglove Load_dadmod_THPGLove
+thpgslums Load_dadmod_THPGSlums
+thpgbcity Load_dadmod_THPGBCity
+thpgharbor Load_dadmod_THPGHarbor
+thpglansdowne Load_dadmod_THPGLansdowne
+thpgmonuments Load_dadmod_THPGMonuments
+thpgmuseums Load_dadmod_THPGMuseums
+thpgmuseumint Load_dadmod_THPGMuseumInt
+thpgphilly Load_dadmod_THPGLarxPhilly
+thpgbaltimore Load_dadmod_THPGLarxBaltimore
+thpgwashington Load_dadmod_THPGLarxWashington
+thpgtraining Load_dadmod_THPGTraining

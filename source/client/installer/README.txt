@@ -178,6 +178,30 @@
 ==========================================================================
 
   NEW
+    + In-game updates: when a new dadmod is out, "Update available"
+      shows under the dadmod text on the main menu. Main menu > Dadmod >
+      "Download newest update" downloads it while you play, then
+      "Restart to install update" installs it and restarts the game.
+    + 12 of the extra maps can be hosted online: pick them in the online
+      level select, or type their ! command (like !STREETS, !NYC,
+      !SUBURBS).
+    + Time of day follows Kali Mod's Time Of Day menu and the other way
+      round (Morning, Day/Afternoon, Sunset/Evening, Night).
+
+  CHANGED
+    ~ Time of day works online: your pick shows on your screen only and
+      stays when the server changes the time. "Level / server" follows
+      the server.
+    ~ INSTALL.txt is now README.txt.
+
+  FIXED
+    x Hosting on a THPG tab level no longer crashes the game.
+
+
+  0.9.8 - 0.9.10
+  --------------
+
+  NEW
     + Graphics > Display: Windowed mode and Resolution (THUG Pro's own
       display settings; shows after a restart). A size your monitor
       can't show is fixed at startup.

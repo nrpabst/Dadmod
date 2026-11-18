@@ -3809,6 +3809,151 @@ script dadmod_ui_title_match
     return e = 0
 endscript
 
+script dadmod_tod_client_allowed
+    return allowed = 1
+endscript
+
+dadmod_tod_kali_seen = 0
+
+dadmod_tod_kali_saved = 0
+
+dadmod_tod_kali_m = { none = 0 }
+
+dadmod_tod_kali_a = { none = 0 }
+
+dadmod_tod_kali_e = { none = 0 }
+
+dadmod_tod_kali_n = { none = 0 }
+
+script dadmod_tod_kali_state
+    if not StructureContains structure = ( tod_manager_default_morning ) sun_phi
+        return kali = 0
+    endif
+    if not StructureContains structure = ( tod_manager_default_afternoon ) sun_phi
+        return kali = 0
+    endif
+    if not StructureContains structure = ( tod_manager_default_evening ) sun_phi
+        return kali = 0
+    endif
+    if not StructureContains structure = ( tod_manager_default_night ) sun_phi
+        return kali = 0
+    endif
+    pm = ( ( tod_manager_default_morning ) . sun_phi )
+    pa = ( ( tod_manager_default_afternoon ) . sun_phi )
+    pe = ( ( tod_manager_default_evening ) . sun_phi )
+    pn = ( ( tod_manager_default_night ) . sun_phi )
+    if not (<pm> = <pa>)
+        return kali = 0
+    endif
+    if not (<pm> = <pe>)
+        return kali = 0
+    endif
+    if not (<pm> = <pn>)
+        return kali = 0
+    endif
+    k = 4
+    if (<pm> < 190)
+        k = 3
+    endif
+    if (<pm> < 100)
+        k = 2
+    endif
+    if (<pm> < 0)
+        k = 1
+    endif
+    return kali = <k>
+endscript
+
+script dadmod_tod_kali_snapshot
+    if (dadmod_tod_kali_saved = 1)
+        return
+    endif
+    dadmod_tod_kali_state
+    if (<kali> > 0)
+        return
+    endif
+    if not StructureContains structure = ( tod_manager_default_morning ) sun_phi
+        return
+    endif
+    Change dadmod_tod_kali_m = ( tod_manager_default_morning )
+    Change dadmod_tod_kali_a = ( tod_manager_default_afternoon )
+    Change dadmod_tod_kali_e = ( tod_manager_default_evening )
+    Change dadmod_tod_kali_n = ( tod_manager_default_night )
+    Change dadmod_tod_kali_saved = 1
+endscript
+
+script dadmod_tod_kali_watch
+    dadmod_tod_kali_snapshot
+    dadmod_tod_kali_state
+    dadmod_tod_client_allowed
+    if (<allowed> = 0)
+        if (<kali> > 0)
+            dadmod_tod_kali_follow tod = 0
+        endif
+        return
+    endif
+    if (<kali> = dadmod_tod_kali_seen)
+        return
+    endif
+    Change dadmod_tod_kali_seen = <kali>
+    if (<kali> = 0)
+        return
+    endif
+    THUGRECOMP_SettingSave key = "gfx_tod" value = <kali>
+    FormatText TextName = msg "tod: Kali time of day picked, dadmod Time of day = %a" a = <kali>
+    THUGRECOMP_Log text = <msg>
+endscript
+
+script dadmod_tod_kali_follow
+    dadmod_tod_client_allowed
+    if (<allowed> = 0)
+        tod = 0
+    endif
+    dadmod_tod_kali_state
+    if (<kali> = 0)
+        return
+    endif
+    if (<tod> = 1)
+        if ScriptExists #"0x1343061c"
+            Change dadmod_tod_kali_seen = 1
+            #"0x1343061c"
+            return
+        endif
+    endif
+    if (<tod> = 2)
+        if ScriptExists #"0xa4ea632e"
+            Change dadmod_tod_kali_seen = 2
+            #"0xa4ea632e"
+            return
+        endif
+    endif
+    if (<tod> = 3)
+        if ScriptExists #"0xd6b550ba"
+            Change dadmod_tod_kali_seen = 3
+            #"0xd6b550ba"
+            return
+        endif
+    endif
+    if (<tod> = 4)
+        if ScriptExists #"0xbc4c779a"
+            Change dadmod_tod_kali_seen = 4
+            #"0xbc4c779a"
+            return
+        endif
+    endif
+    if not (dadmod_tod_kali_saved = 1)
+        return
+    endif
+    Change tod_manager_default_morning = ( dadmod_tod_kali_m )
+    Change tod_manager_default_afternoon = ( dadmod_tod_kali_a )
+    Change tod_manager_default_evening = ( dadmod_tod_kali_e )
+    Change tod_manager_default_night = ( dadmod_tod_kali_n )
+    Change dadmod_tod_kali_seen = 0
+    tod_manager_set_default_params
+    Change dadmod_tod_custom = 0
+    THUGRECOMP_Log text = "tod: Kali time of day override taken off"
+endscript
+
 script dadmod_pad_popup
     SpawnScript dadmod_pad_popup_show params = { text = <text> } NotSessionSpecific = 1
 endscript
@@ -4051,7 +4196,7 @@ dadmod_item_catalog = [
 { name = "gfx_chroma" b = 1 p = { id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens." } }
 { name = "gfx_vignette" b = 1 p = { id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away." } }
 { name = "gfx_galaxy" b = 1 p = { id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more." } }
-{ name = "gfx_tod" b = 1 p = { id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen) until the next server fade." } }
+{ name = "gfx_tod" b = 1 p = { id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen), even when the server changes it." } }
 { name = "gfx_skypop" b = 1 p = { id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 5 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off." } }
 { name = "gfx_lamps" b = 1 p = { id = gfx_lamps key = "gfx_lamps" label = "Street lights" kind = num min = 0 max = 10 def = 6 desc = "Lamps glow and light up around them in the evening and at night. 0 turns them off." } }
 { name = "gfx_lampadd" b = 1 p = { id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp." } }
@@ -5607,7 +5752,7 @@ endscript
 script dadmod_pause_skywx_menu
     dadmod_pause_sub_create name = dadmod_skywx title = "sky & weather" back_id = dadmod_pause_skywx
     dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap the sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
-    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen) until the next server fade."
+    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen), even when the server changes it."
     dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 5 desc = "Richer sky colors to match the time of day, with stars at night."
     dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Back to the level's own sky and time of day, sky boost 5."
     make_thugpro_menu_item {
@@ -9306,36 +9451,6 @@ level_qb = "levels\\skateshop\\skateshop_scripts.qb"
 more_level_qbs = [
 "levels\\P8CretePark\\P8CretePark_scripts.qb"
 "levels\\P8CretePark\\P8CretePark_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thpgtraining = {
-structure_name = level_Mainmenu_thpgtraining
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPG
-loading_time = 8.5
-level = "THPGTraining"
-sky = "default_sky"
-pre = "THPGTraining_scripts.pre"
-scnpre = "THPGTrainingscn.pre"
-colpre = "THPGTrainingcol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thpgtraining_scripts.pre"
-qb = "levels\\mainmenu_thpgtraining\\THPGTraining.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPGTraining\\THPGTraining_scripts.qb"
-"levels\\THPGTraining\\THPGTraining_thugpro.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

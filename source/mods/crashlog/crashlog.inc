@@ -106,11 +106,92 @@ static void PatchFireEventNullTarget() {
     FlushInstructionCache(GetCurrentProcess(), at, 2);
 }
 
+// Level name lookup (0x5369A0, thiscall(skate mod, bool), ret 4): matches the current level (this+0x34) against
+// level_select_menu_level_info and returns its text, or NULL. Our level-select tab scripts (THPG tab:
+// Load_dadmod_THPGLarxBaltimore etc.) aren't in that list, so it returned NULL and hosting crashed in the
+// server-list report (0x53F960 -> 0x5FA010 strlen(NULL), 2026-11-18). The hook keeps the stock answer and, when there
+// is none, looks the level up in every level_select_tabs list. The report call site also gets "" instead of NULL.
+typedef const char* (__fastcall* LevelNameFn)(void* self, void* edx, int flag);
+static BYTE g_lnTramp[16];
+static const DWORD kGlobalArray = 0x479070;   // CArray* cdecl(DWORD name, int) or NULL
+static const DWORD kArrayAt     = 0x46CC30;   // void* __thiscall CArray::At(int)
+static const DWORD kStrChecksum = 0x476950;   // bool __thiscall CStruct::GetChecksum(DWORD, DWORD*, bool)
+static const DWORD kStrString   = 0x476C60;   // bool __thiscall CStruct::GetString(DWORD, const char**, bool)
+
+static void* GlobalArray(DWORD name) { return ((void*(__cdecl*)(DWORD, int))kGlobalArray)(name, 0); }
+static void* ArrayAt(void* a, int i) { return ((void*(__thiscall*)(void*, int))kArrayAt)(a, i); }
+static bool StructChecksum(void* s, DWORD k, DWORD* out) {
+    return ((bool(__thiscall*)(void*, DWORD, DWORD*, bool))kStrChecksum)(s, k, out, false);
+}
+static bool StructString(void* s, DWORD k, const char** out) {
+    return ((bool(__thiscall*)(void*, DWORD, const char**, bool))kStrString)(s, k, out, false);
+}
+
+static const char* TabLevelName(DWORD level) {
+    const DWORD kTabs = 0xB4F8F12D, kLevels = 0x60D59BE6, kLevel = 0x651533EC, kText = 0xC4745838;
+    void* tabs = GlobalArray(kTabs);
+    if (!tabs) return nullptr;
+    int nt = *(int*)((BYTE*)tabs + 4);
+    for (int t = 0; t < nt; t++) {
+        void* tab = ArrayAt(tabs, t);
+        DWORD listName = 0;
+        if (!tab || !StructChecksum(tab, kLevels, &listName)) continue;
+        void* list = GlobalArray(listName);
+        if (!list) continue;
+        int n = *(int*)((BYTE*)list + 4);
+        for (int i = 0; i < n; i++) {
+            void* e = ArrayAt(list, i);
+            DWORD lv = 0;
+            const char* text = nullptr;
+            if (e && StructChecksum(e, kLevel, &lv) && lv == level && StructString(e, kText, &text) && text)
+                return text;
+        }
+    }
+    return nullptr;
+}
+
+static const char* __fastcall LevelNameHook(void* self, void* edx, int flag) {
+    const char* s = ((LevelNameFn)(void*)g_lnTramp)(self, edx, flag);
+    if (!s && self) s = TabLevelName(*(DWORD*)((BYTE*)self + 0x34));
+    return s;
+}
+
+static const char* __fastcall LevelNameReport(void* self, void* edx, int flag) {
+    const char* s = LevelNameHook(self, edx, flag);
+    return s ? s : "";
+}
+
+static void PatchLevelNameLookup() {
+    BYTE* fn = (BYTE*)0x5369A0;
+    BYTE* site = (BYTE*)0x53F960;
+    static const BYTE origFn[5] = { 0x51, 0x53, 0x55, 0x56, 0x57 };   // push ecx/ebx/ebp/esi/edi
+    static const BYTE origSite[5] = { 0xE8, 0x3B, 0x70, 0xFF, 0xFF }; // call 0x5369A0
+    if (memcmp(fn, origFn, 5) != 0 || memcmp(site, origSite, 5) != 0) {
+        DebugLog("crashlog: level name patch skipped, bytes at 0x5369A0/0x53F960 differ");
+        return;
+    }
+    DWORD old;
+    if (!VirtualProtect(g_lnTramp, sizeof g_lnTramp, PAGE_EXECUTE_READWRITE, &old)) return;
+    memcpy(g_lnTramp, origFn, 5);
+    g_lnTramp[5] = 0xE9;
+    *(DWORD*)(g_lnTramp + 6) = (DWORD)(fn + 5) - (DWORD)(g_lnTramp + 10);
+    if (!VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+    *(DWORD*)(site + 1) = (DWORD)&LevelNameReport - (DWORD)(site + 5);
+    VirtualProtect(site, 5, old, &old);
+    if (!VirtualProtect(fn, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+    fn[0] = 0xE9;
+    *(DWORD*)(fn + 1) = (DWORD)&LevelNameHook - (DWORD)(fn + 5);
+    VirtualProtect(fn, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, 5);
+    FlushInstructionCache(GetCurrentProcess(), site, 5);
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
     SetUnhandledExceptionFilter(Handler);
     PatchFireEventNullTarget();
+    PatchLevelNameLookup();
 }
 
 }  // namespace crashlog

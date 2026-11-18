@@ -1,3 +1,33 @@
+level_Mainmenu_thpgtraining = {
+structure_name = level_Mainmenu_thpgtraining
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPG
+loading_time = 8.5
+level = "THPGTraining"
+sky = "default_sky"
+pre = "THPGTraining_scripts.pre"
+scnpre = "THPGTrainingscn.pre"
+colpre = "THPGTrainingcol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thpgtraining_scripts.pre"
+qb = "levels\\mainmenu_thpgtraining\\THPGTraining.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPGTraining\\THPGTraining_scripts.qb"
+"levels\\THPGTraining\\THPGTraining_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
 dadmod_menu_level_list = [
 { i = 67 name = "Burnside" game = "THPS1" }
 { i = 18 name = "Downhill Jam" game = "THPS1" }
@@ -6587,7 +6617,7 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens."
     dadmod_ui_item id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away."
     dadmod_ui_item id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
-    dadmod_ui_item id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen) until the next server fade."
+    dadmod_ui_item id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen), even when the server changes it."
     dadmod_ui_item id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 5 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
     dadmod_ui_item id = gfx_lamps key = "gfx_lamps" label = "Street lights" kind = num min = 0 max = 10 def = 6 desc = "Lamps glow and light up around them in the evening and at night. 0 turns them off."
     dadmod_ui_item id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp."
@@ -6919,6 +6949,7 @@ script dadmod_ui_change
     endif
     Change dadmod_dirty = 1
     if (<key> = "gfx_tod")
+        dadmod_tod_kali_follow tod = <value>
         Change dadmod_tod_last = <value>
         dadmod_tod_refresh
     endif
@@ -6972,6 +7003,7 @@ script dadmod_sky_default
     THUGRECOMP_SettingSave key = "gfx_galaxy" value = 0
     THUGRECOMP_SettingSave key = "gfx_tod" value = 0
     THUGRECOMP_SettingSave key = "gfx_skypop" value = 5
+    dadmod_tod_kali_follow tod = 0
     Change dadmod_tod_last = 0
     dadmod_tod_refresh
     Change dadmod_dirty = 1
@@ -8611,7 +8643,8 @@ script dadmod_tod_value
     value = 0
     if THUGRECOMP_SettingLoad key = "gfx_todnow"
     endif
-    if InNetGame
+    dadmod_tod_client_allowed
+    if (<allowed> = 0)
         value = 0
     endif
     if (<value> < 0)
@@ -8626,18 +8659,6 @@ endscript
 script thugpro_change_time_of_day
     if (dadmod_tod_upd = 1)
         <from_update> = 1
-    endif
-    if InNetGame
-        if not GotParam from_local
-            if not GotParam from_update
-                if THUGRECOMP_SettingLoad key = "gfx_tod"
-                    if ( <value> > 0 )
-                        THUGRECOMP_SettingSave key = "gfx_tod" value = 0
-                        Change dadmod_tod_last = 0
-                    endif
-                endif
-            endif
-        endif
     endif
     Change dadmod_tod_requested = <tod_state>
     dadmod_tod_value
@@ -8867,6 +8888,7 @@ script dadmod_tod_watch
         endif
         if not LevelIs Load_MainMenu
             if ObjectExists id = skater
+                dadmod_tod_kali_watch
                 dadmod_tod_value
                 if not (<tod> = ( dadmod_tod_last ))
                     from = ( dadmod_tod_last )

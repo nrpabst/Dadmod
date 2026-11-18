@@ -1,5 +1,5 @@
 client script generator report (gen_client_qb.py)
-generated blocks: 637   left out (server): 724   hand-written: 37
+generated blocks: 648   left out (server): 724   hand-written: 48
 
 ## unclassified: changed in the server build, no rule says client or server (4)
 global thugpro_joins_loading  (qb/game/net/net.q, new)
@@ -24,7 +24,7 @@ THUGRECOMP_IsLocalPlayerName  (2 blocks, e.g. thugpro_bankdrops_chat)
 THUGRECOMP_KeyPressed  (5 blocks, e.g. dadmod_mm_fav_tick)
 THUGRECOMP_LayoutChild  (1 blocks, e.g. dadmod_layout_open)
 THUGRECOMP_LayoutInfo  (1 blocks, e.g. dadmod_layout_open)
-THUGRECOMP_Log  (7 blocks, e.g. dadmod_menu_ambient_spawn)
+THUGRECOMP_Log  (9 blocks, e.g. dadmod_menu_ambient_spawn)
 THUGRECOMP_MenuCamEdit  (2 blocks, e.g. dadmod_mm_cam_edit_begin)
 THUGRECOMP_MenuDelete  (1 blocks, e.g. dadmod_mm_delete_press)
 THUGRECOMP_MenuFav  (1 blocks, e.g. dadmod_mm_fav_tick)
@@ -50,7 +50,7 @@ THUGRECOMP_PadHeld  (3 blocks, e.g. dadmod_layout_back)
 THUGRECOMP_PadPressed  (3 blocks, e.g. dadmod_mm_fav_tick)
 THUGRECOMP_PlayerSkaterId  (1 blocks, e.g. dadmod_veh_park_for)
 THUGRECOMP_ScanText  (4 blocks, e.g. dadmod_noclip_msg_show)
-THUGRECOMP_SettingLoad  (21 blocks, e.g. dadmod_anim_go)
+THUGRECOMP_SettingLoad  (20 blocks, e.g. dadmod_anim_go)
 THUGRECOMP_SettingSave  (23 blocks, e.g. dadmod_anim_loop)
 THUGRECOMP_TextClip  (3 blocks, e.g. dadmod_ui_hl_plain)
 THUGRECOMP_TextHas  (1 blocks, e.g. dadmod_anims_cat)
@@ -68,7 +68,7 @@ script thugpro_bankdrops_chat -> thugpro_say_to
 script thugpro_bankdrops_confirm -> thugpro_say_to
 script walk_maybe_throw_projectile2 -> create_console_message
 
-## generated (637)
+## generated (648)
 script #"0x001202e3"  [qb/thugpro/procrastination.q]
 script #"0x16a10a9a"  [qb/thugpro/procrastination.q]
 script #"0x1a69989e"  [qb/thugpro/procrastination.q]
@@ -367,10 +367,21 @@ script dadmod_throw_menu  [qb/engine/ButtonScripts.q]
 script dadmod_throw_msg_clear  [qb/engine/ButtonScripts.q]
 script dadmod_throw_pick  [qb/engine/ButtonScripts.q]
 global dadmod_titlefx_block  [qb/engine/ButtonScripts.q]
+script dadmod_tod_client_allowed  [qb/engine/ButtonScripts.q]
 global dadmod_tod_custom  [qb/thugpro/procrastination.q]
 global dadmod_tod_evening_lights  [qb/thugpro/procrastination.q]
 script dadmod_tod_fade  [qb/thugpro/procrastination.q]
 global dadmod_tod_fading  [qb/thugpro/procrastination.q]
+global dadmod_tod_kali_a  [qb/engine/ButtonScripts.q]
+global dadmod_tod_kali_e  [qb/engine/ButtonScripts.q]
+script dadmod_tod_kali_follow  [qb/engine/ButtonScripts.q]
+global dadmod_tod_kali_m  [qb/engine/ButtonScripts.q]
+global dadmod_tod_kali_n  [qb/engine/ButtonScripts.q]
+global dadmod_tod_kali_saved  [qb/engine/ButtonScripts.q]
+global dadmod_tod_kali_seen  [qb/engine/ButtonScripts.q]
+script dadmod_tod_kali_snapshot  [qb/engine/ButtonScripts.q]
+script dadmod_tod_kali_state  [qb/engine/ButtonScripts.q]
+script dadmod_tod_kali_watch  [qb/engine/ButtonScripts.q]
 global dadmod_tod_last  [qb/thugpro/procrastination.q]
 script dadmod_tod_lerp  [qb/thugpro/procrastination.q]
 script dadmod_tod_lights_settle  [qb/thugpro/procrastination.q]

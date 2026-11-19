@@ -128,6 +128,9 @@ script Land2 {
         ClearException GroundGone
         ClearException WallPush
         SetQueueTricks NoTricks
+        if GotParam bhra_keepz
+            OnExceptionRun dadmod_bhra_land2_out
+        endif
     endif
     if GotParam NoReverts
     else

@@ -177,6 +177,15 @@
  6. WHAT'S NEW IN @DADMOD_VERSION@
 ==========================================================================
 
+  FIXED
+    x BHRA keeps combo now also works after zero (the timer running
+      out in Trick Attack, Graffiti and other timed modes). Before,
+      the hop and revert worked but the combo still ended.
+
+
+  0.9.13
+  ------
+
   NEW
     + Pause > dadmod > Gameplay > BHRA keeps combo (default Off): a
       Bunny Hop Revert (hop out of a revert window, revert in the air)

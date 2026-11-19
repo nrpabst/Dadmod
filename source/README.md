@@ -1,6 +1,6 @@
 # dadmod source
 
-Source of dadmod 0.9.13 (the code in this release's dadmod.zip).
+Source of dadmod 0.9.14 (the code in this release's dadmod.zip).
 
 The source code of the dadmod installer and everything it installs: every piece of code we wrote or edited for the
 player package. Paths match our working tree, so `#include "../../mods/..."` and the build scripts' relative paths

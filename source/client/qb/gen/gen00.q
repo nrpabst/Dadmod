@@ -3125,7 +3125,7 @@ script dadmod_veh_menu
             FormatText TextName = t "Drive: %s  (online)" s = ( <e> . t )
             make_thugpro_menu_item {
             text = <t>
-            description_text = "Drive it (Triangle to get out). Stock car: other DadMod players see it"
+            description_text = "Drive it (\\b0 to get out). Stock car: other DadMod players see it"
             pad_choose_script = dadmod_veh_drive
             pad_choose_params = { i = <i> }
             }
@@ -3144,7 +3144,7 @@ script dadmod_veh_menu
             FormatText TextName = t "Drive: %s  (just you)" s = ( <e> . t )
             make_thugpro_menu_item {
             text = <t>
-            description_text = "Drive it (Triangle to get out). Only you see it. Handles like the pickup truck"
+            description_text = "Drive it (\\b0 to get out). Only you see it. Handles like the pickup truck"
             pad_choose_script = dadmod_veh_drive_more
             pad_choose_params = { i = <i> }
             }
@@ -3187,7 +3187,7 @@ script dadmod_veh_more_menu
             FormatText TextName = t "Drive: %s" s = ( <e> . t )
             make_thugpro_menu_item {
             text = <t>
-            description_text = "Drive it (Triangle to get out). Handles like the pickup truck"
+            description_text = "Drive it (\\b0 to get out). Handles like the pickup truck"
             pad_choose_script = dadmod_veh_drive_more
             pad_choose_params = { i = <i> }
             }
@@ -3548,7 +3548,7 @@ script dadmod_throw_menu
     text = "Everyone sees these"
     not_focusable
     }
-    dadmod_throw_item t = "COMBO letter O" a = none d = "The COMBO O. Square throws it, it works in any server and everyone sees it"
+    dadmod_throw_item t = "COMBO letter O" a = none d = "The COMBO O. \\b1 throws it, it works in any server and everyone sees it"
     dadmod_throw_item t = "Tomatoes" a = tomato d = "Story mode tomatoes. No tomato model in THUG Pro, so they look like a COMBO O"
     dadmod_throw_item t = "Apples" a = apple d = "Story mode apples. They look like a COMBO O, everyone sees it"
     dadmod_throw_item t = "Beads" a = beads d = "Story mode beads. They look like a COMBO O, everyone sees it"
@@ -3585,25 +3585,6 @@ script dadmod_throw_pick
     exit_pause_menu
     KillSpawnedScript Name = dadmod_throw_go
     SpawnScript dadmod_throw_go params = { <...> } NotSessionSpecific = 1
-endscript
-
-script dadmod_throw_go
-    wait 5 gameframes
-    if not ObjectExists id = skater
-        return
-    endif
-    if GotParam dadmod_tstop
-        skater : SetAmmo 0
-        create_panel_message id = dadmod_throw_msg text = "No more ammo: Square is back to normal" time = 2500
-        dadmod_throw_msg_clear
-        return
-    endif
-    skater : SetAmmo 0
-    skater : give_skater_ammo Type = <a> num = 99
-    FormatText TextName = msg "%t: Square throws them (99)" t = <t>
-    create_panel_message id = dadmod_throw_msg text = <msg> time = 3000
-    dadmod_ammo_hud_start
-    dadmod_throw_msg_clear
 endscript
 
 script dadmod_throw_msg_clear
@@ -4092,7 +4073,7 @@ endscript
 
 dadmod_item_catalog = [
 { name = "mmopt_scene" b = 0 p = { id = mmopt_scene key = "menu_scene" label = "Menu scene" desc = "The stock Skate Shop (normal or Halloween), your custom menu, or Starred: each start shows one of the menus you starred in Custom menus. Loads right away" } }
-{ name = "mmopt_saved" b = 0 p = { id = mmopt_saved key = "saved_menu" label = "Custom menus" desc = "Main menus you saved while skating (Quick Menu > Set Main Menu Here). Pick one to load it. Right stars menus for Menu scene Starred. Square/F8 twice deletes one" } }
+{ name = "mmopt_saved" b = 0 p = { id = mmopt_saved key = "saved_menu" label = "Custom menus" desc = "Main menus you saved while skating (Quick Menu > Set Main Menu Here). Pick one to load it. Right stars menus for Menu scene Starred. F8 (or X / Square on a controller) twice deletes one" } }
 { name = "mmopt_camctl" b = 0 p = { id = mmopt_camctl key = "camera_control" label = "Camera control" desc = "Menu: the cameras below move by themselves. You: the stick turns the camera around your skater" } }
 { name = "mmopt_theme" b = 0 p = { id = mmopt_theme key = "shop_theme" label = "Skate shop theme" desc = "Halloween or normal look for the Skate Shop scene. Auto turns Halloween on in October" } }
 { name = "mmopt_deck" b = 0 p = { id = mmopt_deck key = "deck" label = "Deck graphic" desc = "The big deck picture behind the menu. Off shows the whole scene" } }
@@ -4171,6 +4152,7 @@ dadmod_item_catalog = [
 { name = "mui_itemfx7" b = 1 p = { id = mui_itemfx7 key = "ui_item7_fx" label = "Quit Game" kind = fx min = 0 max = 5 def = 0 desc = "Effect for Quit Game on the main screen when it is not highlighted: fade, flash, scan or matrix" } }
 { name = "gfx_windowed" b = 1 p = { id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen. THUG Pro's own setting, the same one its launcher changes. Shows after you restart the game." pdesc = "Window or fullscreen. Shows after you restart the game." } }
 { name = "gfx_res" b = 1 p = { id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The game's size: the sizes your monitor supports (in a window, the ones that fit the screen). Sets the window and fullscreen size together. Shows after you restart the game." pdesc = "The game's size. Shows after you restart the game." } }
+{ name = "gfx_postfx" b = 1 p = { id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show." } }
 { name = "gfx_aniso" b = 1 p = { id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little." } }
 { name = "gfx_lodbias" b = 1 p = { id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer." } }
 { name = "gfx_uismooth" b = 1 p = { id = gfx_uismooth key = "gfx_uismooth" label = "Smooth menu graphics" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_uismooth desc = "Smooths blocky scaled-up menu and HUD graphics. Changes show right away." } }
@@ -4219,8 +4201,8 @@ dadmod_item_catalog = [
 { name = "gfx_shothud" b = 1 p = { id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture." } }
 { name = "gfx_vsync" b = 1 p = { id = gfx_vsync key = "gfx_vsync" label = "V-sync (restart)" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_vsync desc = "Locks frames to your monitor to stop tearing. Needs a restart of the game." } }
 { name = "gfx_mirror" b = 1 p = { id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal. Only on your screen." pdesc = "Flips the 3D view left to right and swaps steering to match. Only your screen." } }
-{ name = "gfx_levelsfx" b = 1 p = { id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_levelsfx desc = "Water, crowds, machines and other sounds that come from spots in a map. Off silences them from the next map load." } }
-{ name = "gfx_tricksfx" b = 1 p = { id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_tricksfx desc = "The sound clips some special tricks play, like the guitar grind. Off keeps them quiet." } }
+{ name = "gfx_levelsfx" b = 1 p = { id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away." } }
+{ name = "gfx_tricksfx" b = 1 p = { id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing." } }
 { name = "gfx_bginput" b = 1 p = { id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away." } }
 { name = "gfx_deadzone" b = 1 p = { id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away." } }
 { name = "gfx_abswap" b = 1 p = { id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away." } }
@@ -4358,6 +4340,52 @@ script dadmod_sqget_unlock
     endif
 endscript
 
+script dadmod_tsfx_get
+    on = 1
+    if THUGRECOMP_SettingLoad key = "screen_fx"
+        if ( <value> = 0 )
+            on = 0
+        endif
+    endif
+    return tsfx_on = <on>
+endscript
+
+script dadmod_tsfx_text
+    dadmod_tsfx_get
+    if ( <tsfx_on> = 1 )
+        return tsfx_text = "On"
+    endif
+    return tsfx_text = "Off"
+endscript
+
+script dadmod_tsfx_toggle
+    if ScreenElementExists id = dadmod_tsfx_item
+        if dadmod_tsfx_item : GetSingleTag tsfx_lock
+            if ( <tsfx_lock> = 1 )
+                return
+            endif
+        endif
+        dadmod_tsfx_item : SetTags tsfx_lock = 1
+        SpawnScript dadmod_tsfx_unlock
+    endif
+    dadmod_tsfx_get
+    if ( <tsfx_on> = 1 )
+        on = 0
+    else
+        on = 1
+    endif
+    THUGRECOMP_SettingSave key = "screen_fx" value = <on>
+    dadmod_tsfx_text
+    thugpro_menu_item_update_extra_text id = dadmod_tsfx_item text = <tsfx_text>
+endscript
+
+script dadmod_tsfx_unlock
+    wait 6 gameframes
+    if ScreenElementExists id = dadmod_tsfx_item
+        dadmod_tsfx_item : SetTags tsfx_lock = 0
+    endif
+endscript
+
 dadmod_skater_unsaved = 0
 
 dadmod_midload_paused = 0
@@ -4380,12 +4408,6 @@ script dadmod_midload_io
 endscript
 
 script dadmod_midload_can_show
-    if InNetGame
-        return show = 0
-    endif
-    if GameModeEquals is_net
-        return show = 0
-    endif
     if IsObserving
         return show = 0
     endif
@@ -4409,7 +4431,7 @@ script dadmod_midload_quick_item
     make_thugpro_menu_item {
     text = "Load Skater"
     id = dadmod_midload_item
-    description_text = "Load a saved skater without leaving this level"
+    description_text = "Load a saved skater without leaving this level. Online, dadmod players see it right away"
     pad_choose_script = dadmod_midload_open
     }
 endscript
@@ -4422,9 +4444,11 @@ script dadmod_midload_open
     thugpro_menu_destroy
     kill_start_key_binding
     if ( dadmod_midload_paused = 0 )
-        PauseGame
-        GoalManager_PauseAllGoals
-        Change dadmod_midload_paused = 1
+        if not InNetGame
+            PauseGame
+            GoalManager_PauseAllGoals
+            Change dadmod_midload_paused = 1
+        endif
     endif
     dadmod_midload_files
 endscript
@@ -4509,9 +4533,13 @@ script dadmod_midload_go
     endif
     Change SavingOrLoading = Loading
     SetSectionsToApplyWhenLoading ApplyCustomSkater
+    if InNetGame
+        THUGRECOMP_SkinLocalZero on = 1
+    endif
     if LoadFromMemoryCard Name = <filename> Type = optionsandpros
         if ( load_successful = 0 )
             Change load_successful = 1
+            THUGRECOMP_SkinLocalZero on = 0
             dadmod_midload_message text = "That skater could not be loaded."
             return
         endif
@@ -4520,9 +4548,14 @@ script dadmod_midload_go
         RefreshSkaterScale profile = <currentSkaterProfileIndex> Skater = 0
         RefreshSkaterVisibility profile = <currentSkaterProfileIndex> Skater = 0
         UpdateTrickMappings Skater = 0
+        THUGRECOMP_SkinLocalZero on = 0
         dadmod_midload_close
         dadmod_midload_settle
+        if InNetGame
+            dadmod_midload_online_note
+        endif
     else
+        THUGRECOMP_SkinLocalZero on = 0
         dadmod_midload_message text = "That skater could not be loaded."
     endif
 endscript
@@ -4595,6 +4628,342 @@ script dadmod_midload_settle
         if not skater : InAir
             MakeSkaterGoto OnGroundAi
         endif
+    endif
+endscript
+
+script dadmod_midload_online_note
+    note = "Skater loaded. Other players see your new skater after you rejoin."
+    if THUGRECOMP_SkinSend
+        note = "Skater loaded. Players with dadmod see your new skater now, everyone else after you rejoin."
+    endif
+    create_snazzy_dialog_box {
+    title = "Load Skater"
+    text = <note>
+    text_dims = (3.2e+02,0.0)
+    pad_back_script = dadmod_midload_close
+    buttons = [
+    { font = small text = "OK" pad_choose_script = dadmod_midload_close }
+    ]
+    }
+endscript
+
+dadmod_bhra_keep = 0
+
+dadmod_bhra_easy = 0
+
+dadmod_bhra_loaded = 0
+
+script dadmod_bhra_load
+    keep = 0
+    easy = 0
+    if THUGRECOMP_SettingLoad key = "bhra_keep"
+        if ( <value> = 1 )
+            keep = 1
+        endif
+    endif
+    if THUGRECOMP_SettingLoad key = "bhra_easy"
+        if ( <value> = 1 )
+            easy = 1
+        endif
+    endif
+    Change dadmod_bhra_keep = <keep>
+    Change dadmod_bhra_easy = <easy>
+    Change dadmod_bhra_loaded = 1
+endscript
+
+script dadmod_bhra_dbg
+    GetSingleTag dadmod_bhra_probe
+    if GotParam dadmod_bhra_probe
+        if InAir
+            bhra_a = 1
+        else
+            bhra_a = 0
+        endif
+        GetStartTime
+        FormatText TextName = bhra_t "bhra t=%t %w air=%a" t = <StartTime> w = <what> a = <bhra_a>
+        THUGRECOMP_Log text = <bhra_t>
+    endif
+endscript
+
+script dadmod_bhra_easy_time RevertTime = 5
+    if not IsTrue dadmod_bhra_loaded
+        dadmod_bhra_load
+    endif
+    if IsTrue dadmod_bhra_easy
+        if ( <RevertTime> < 10 )
+            return RevertTime = 10
+        endif
+    endif
+endscript
+
+script dadmod_bhra_poll frames = 12
+    SetTags bhra_x = 0
+    begin
+        if Held x
+            SetTags bhra_x = 3
+        else
+            GetSingleTag bhra_x
+            if GotParam bhra_x
+                if ( <bhra_x> > 0 )
+                    SetTags bhra_x = ( <bhra_x> - 1 )
+                endif
+            endif
+        endif
+        wait 1 gameframe
+    repeat <frames>
+    SetTags bhra_x = 0
+endscript
+
+script dadmod_bhra_land2_arm RevertTime = 5
+    if not IsTrue dadmod_bhra_loaded
+        dadmod_bhra_load
+    endif
+    if IsTrue dadmod_bhra_keep
+    else
+        if IsTrue dadmod_bhra_easy
+        else
+            return
+        endif
+    endif
+    Obj_KillSpawnedScript Name = dadmod_bhra_poll
+    pf = ( <RevertTime> + 4 )
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> }
+    dadmod_bhra_dbg what = "land2 vert window armed"
+    return bhra_arm = 1
+endscript
+
+script dadmod_bhra_dd_arm
+    if IsSkaterOnVehicle
+        return
+    endif
+    if not IsTrue dadmod_bhra_loaded
+        dadmod_bhra_load
+    endif
+    if IsTrue dadmod_bhra_keep
+    else
+        if IsTrue dadmod_bhra_easy
+        else
+            return
+        endif
+    endif
+    Obj_KillSpawnedScript Name = dadmod_bhra_poll
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 }
+    dadmod_bhra_dbg what = "skate-in window armed"
+    return bhra_arm = 1
+endscript
+
+script dadmod_bhra_dd_easy_wait
+    if IsTrue dadmod_bhra_easy
+        SetExtraTricks_Reverts duration = 20
+        dadmod_bhra_dbg what = "easy: skate-in window held 15 more frames"
+        wait 15 gameframes
+    endif
+endscript
+
+script dadmod_bhra_cand
+    GetSingleTag bhra_x
+    if GotParam bhra_x
+        if ( <bhra_x> > 0 )
+            return bhra_cand = 1
+        endif
+    endif
+endscript
+
+script dadmod_bhra_interrupt src = 1
+    dadmod_bhra_cand
+    if GotParam bhra_cand
+        SetTags bhra_wait = <src> bhra_hopped = 0
+        Obj_KillSpawnedScript Name = dadmod_bhra_watch
+        if IsTrue dadmod_bhra_keep
+            SetTags bhra_pending = 1
+            dadmod_bhra_dbg what = "interrupted with the ollie button down: bank deferred"
+            Obj_SpawnScript dadmod_bhra_watch params = { src = <src> }
+            return deferred = 1
+        endif
+        Obj_SpawnScript dadmod_bhra_watch params = { src = <src> nobank = 1 }
+    endif
+endscript
+
+script dadmod_bhra_land2_out
+    dadmod_bhra_interrupt src = 1
+    if GotParam deferred
+        return
+    endif
+    dadmod_bhra_dbg what = "land2 interrupted: banked"
+    LandSkaterTricks
+endscript
+
+script dadmod_bhra_skatein_out
+    if not InAir
+        dadmod_bhra_interrupt src = 2
+        if not GotParam deferred
+            dadmod_bhra_dbg what = "skate-in interrupted: banked"
+            LandSkaterTricks
+        endif
+    endif
+    ResetLandedFromVert
+    ResetLandingFromBankDrop
+endscript
+
+script dadmod_bhra_skatein_exc
+    OnGroundExceptions_NoOllieAfterEndofRun
+    if IsTrue dadmod_bhra_keep
+        if GoalManager_GoalShouldExpire
+            SetException ex = Ollied scr = Ollie
+        endif
+    endif
+endscript
+
+script dadmod_bhra_ollie_mark
+    GetSingleTag bhra_wait
+    if GotParam bhra_wait
+        if ( <bhra_wait> > 0 )
+            SetTags bhra_wait = 0 bhra_hopped = <bhra_wait>
+            if IsTrue dadmod_bhra_easy
+                if ( <bhra_wait> = 2 )
+                    SetExtraTricks_Reverts duration = 50
+                else
+                    SetExtraTricks_Reverts duration = 20
+                endif
+            endif
+            dadmod_bhra_dbg what = "ollie: it was a hop"
+        endif
+    endif
+endscript
+
+script dadmod_bhra_watch src = 1
+    wait 1 gameframe
+    GetSingleTag bhra_hopped
+    SetTags bhra_wait = 0
+    hop = 0
+    if GotParam bhra_hopped
+        hop = <bhra_hopped>
+    endif
+    SetTags bhra_hopped = 0
+    if GotParam nobank
+        return
+    endif
+    if ( <hop> = 0 )
+        dadmod_bhra_dbg what = "no ollie followed: banking"
+        dadmod_bhra_flush
+        return
+    endif
+    frames = 7
+    if ( <src> = 2 )
+        frames = 51
+    else
+        if IsTrue dadmod_bhra_easy
+            frames = 21
+        endif
+    endif
+    begin
+        GetSingleTag bhra_pending
+        if not GotParam bhra_pending
+            return
+        endif
+        if ( <bhra_pending> = 0 )
+            return
+        endif
+        if BailIsOn
+            dadmod_bhra_dbg what = "flip or grab during the hop: banking"
+            break
+        endif
+        wait 1 gameframe
+    repeat <frames>
+    dadmod_bhra_dbg what = "no revert in the window: banking"
+    dadmod_bhra_flush
+endscript
+
+script dadmod_bhra_flush
+    GetSingleTag bhra_pending
+    if GotParam bhra_pending
+        if ( <bhra_pending> = 1 )
+            SetTags bhra_pending = 0
+            dadmod_bhra_dbg what = "pending combo banked"
+            LandSkaterTricks
+        endif
+    endif
+endscript
+
+script dadmod_bhra_revert_check
+    GetSingleTag bhra_pending
+    if GotParam bhra_pending
+        if ( <bhra_pending> = 1 )
+            SetTags bhra_pending = 0
+            Obj_KillSpawnedScript Name = dadmod_bhra_watch
+            if InAir
+                if IsTrue dadmod_bhra_keep
+                    dadmod_bhra_dbg what = "air revert after a hop: combo kept"
+                    return bhra_air = 1
+                endif
+            endif
+            dadmod_bhra_dbg what = "revert after a hop on the ground: banked"
+            LandSkaterTricks
+        endif
+    endif
+endscript
+
+script dadmod_bhra_toggle_get
+    dadmod_bhra_load
+    if ( <which> = easy )
+        return bhra_on = ( dadmod_bhra_easy )
+    endif
+    return bhra_on = ( dadmod_bhra_keep )
+endscript
+
+script dadmod_bhra_text
+    dadmod_bhra_toggle_get which = keep
+    if ( <bhra_on> = 1 )
+        bhra_keep_text = "On"
+    else
+        bhra_keep_text = "Off"
+    endif
+    dadmod_bhra_toggle_get which = easy
+    if ( <bhra_on> = 1 )
+        bhra_easy_text = "On"
+    else
+        bhra_easy_text = "Off"
+    endif
+    return bhra_keep_text = <bhra_keep_text> bhra_easy_text = <bhra_easy_text>
+endscript
+
+script dadmod_bhra_keep_toggle
+    dadmod_bhra_toggle id = dadmod_bhra_keep_item which = keep key = "bhra_keep"
+endscript
+
+script dadmod_bhra_easy_toggle
+    dadmod_bhra_toggle id = dadmod_bhra_easy_item which = easy key = "bhra_easy"
+endscript
+
+script dadmod_bhra_toggle
+    if ScreenElementExists id = <id>
+        if <id> : GetSingleTag bhra_lock
+            if ( <bhra_lock> = 1 )
+                return
+            endif
+        endif
+        <id> : SetTags bhra_lock = 1
+        SpawnScript dadmod_bhra_unlock params = { id = <id> }
+    endif
+    dadmod_bhra_toggle_get which = <which>
+    if ( <bhra_on> = 1 )
+        on = 0
+        bhra_t = "Off"
+    else
+        on = 1
+        bhra_t = "On"
+    endif
+    THUGRECOMP_SettingSave key = <key> value = <on>
+    dadmod_bhra_load
+    if ScreenElementExists id = <id>
+        thugpro_menu_item_update_extra_text id = <id> text = <bhra_t>
+    endif
+endscript
+
+script dadmod_bhra_unlock
+    wait 6 gameframes
+    if ScreenElementExists id = <id>
+        <id> : SetTags bhra_lock = 0
     endif
 endscript
 
@@ -4892,6 +5261,16 @@ script thugpro_menu_driver
             if THUGRECOMP_KeyPressed key = "F12"
                 SpawnScript thugpro_main_order_reset
             endif
+            dadmod_pad_chord
+            if (<chord> = 1)
+                SpawnScript thugpro_main_reorder_toggle
+            endif
+            if (<chord> = 2)
+                SpawnScript thugpro_main_order_undo
+            endif
+            if (<chord> = 3)
+                SpawnScript thugpro_main_order_reset
+            endif
         endif
         if (<menu_now> = 0)
             last_menu = 0
@@ -5033,9 +5412,13 @@ endscript
 script dadmod_mm_cam_edit_text
     dadmod_mm_cam_edit_text_off
     dadmod_mm_cam_edit_line id = dadmod_camedit_text1 y = 360 text = "REPOSITION CAMERA"
-    dadmod_mm_cam_edit_line id = dadmod_camedit_text2 y = 380 text = "Left stick: move   Right stick: look   LB/RB: down/up   Hold Square: faster"
-    dadmod_mm_cam_edit_line id = dadmod_camedit_text3 y = 400 text = "Cross or Start: save this camera   Circle or Triangle: cancel"
-    dadmod_mm_cam_edit_line id = dadmod_camedit_text4 y = 420 text = "Keys: WASD move, arrows look, Q/E down/up, Enter save, Esc cancel"
+    if dadmod_on_pad
+        dadmod_mm_cam_edit_line id = dadmod_camedit_text2 y = 380 text = "Left stick: move   Right stick: look   \\bg/\\bh or \\be/\\bf: down/up   Hold \\b1: faster"
+        dadmod_mm_cam_edit_line id = dadmod_camedit_text3 y = 400 text = "\\b3 or \\b8: save this camera   \\b2 or \\b0: cancel"
+    else
+        dadmod_mm_cam_edit_line id = dadmod_camedit_text2 y = 380 text = "WASD: move   Arrows: look   Q/E or PgUp/PgDn: down/up   Hold Shift: faster"
+        dadmod_mm_cam_edit_line id = dadmod_camedit_text3 y = 400 text = "Enter: save this camera   Esc or Backspace: cancel"
+    endif
 endscript
 
 script dadmod_mm_cam_edit_line
@@ -5099,8 +5482,8 @@ script dadmod_saved_menu_menu
     menu_title = "Custom menus"
     menu_style = MENU_STYLE_LEFT
     helper_text = {
-    helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\b5 = Star" } { text = "Square/F8 = Delete" } ]
-    helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\b5 = Star" } { text = "Square/F8 = Delete" } ]
+    helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "\\b5 = Star" } { text = "F8 = Delete" } ]
+    helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\b5 = Star" } { text = "\\b1 = Delete" } ]
     }
     pad_back_script = dadmod_menu_level_back
     show_description_panel
@@ -5126,7 +5509,8 @@ script dadmod_saved_menu_menu
         FormatText ChecksumName = item_id "dadmod_saved_%i" i = <pick>
         if (( dadmod_mm_armed ) = <item_id>)
             FormatText TextName = t "Delete %s?" s = <name>
-            d = "Press Square/F8 again to delete it. A copy is kept in the dadmod backups folder"
+            dadmod_btn pad = x key = "F8"
+            FormatText TextName = d "Press %b again to delete it. A copy is kept in the dadmod backups folder" b = <btn>
         endif
         make_thugpro_menu_item {
         id = <item_id>
@@ -5736,6 +6120,35 @@ script dadmod_pause_gameplay_menu
     option_arrows
     pad_choose
     }
+    dadmod_bhra_text
+    make_thugpro_menu_item {
+    id = dadmod_bhra_keep_item
+    text = "BHRA keeps combo"
+    extra_text = <bhra_keep_text>
+    description_text = "Bunny Hop Revert (BHRA): a hop then a revert in the air keeps your combo going. Only you."
+    option_arrows_callback = dadmod_bhra_keep_toggle
+    option_arrows
+    pad_choose
+    }
+    make_thugpro_menu_item {
+    id = dadmod_bhra_easy_item
+    text = "Easy BHRA"
+    extra_text = <bhra_easy_text>
+    description_text = "Longer revert window around the hop, so Bunny Hop Reverts are easier to land. Only you."
+    option_arrows_callback = dadmod_bhra_easy_toggle
+    option_arrows
+    pad_choose
+    }
+    dadmod_tsfx_text
+    make_thugpro_menu_item {
+    id = dadmod_tsfx_item
+    text = "Trick Screen Effects"
+    extra_text = <tsfx_text>
+    description_text = "The full-screen effects of special tricks, like the 3D Scary Grind film look. Only your screen."
+    option_arrows_callback = dadmod_tsfx_toggle
+    option_arrows
+    pad_choose
+    }
     if THUGRECOMP_BankDropsOn
         bankdrop_text = "On"
     else
@@ -5846,6 +6259,7 @@ script dadmod_pause_graphics
     show_gradient
     boxed
     }
+    dadmod_layout_item name = "gfx_postfx" label = "" grey = 0 dadmod_pause = 1
     GetArraySize dadmod_pause_gfx_groups
     i = 0
     begin
@@ -5931,6 +6345,11 @@ endscript
 
 script dadmod_free_cam_on
     wait 2 gameframes
+    if IsTrue view_mode
+        if InNetGame
+            ToggleViewMode
+        endif
+    endif
     if not IsTrue view_mode
         ToggleViewMode
     endif
@@ -8994,434 +9413,6 @@ qb = "levels\\mainmenu_z_dn\\z_dn.qb"
 level_qb = "levels\\skateshop\\skateshop_scripts.qb"
 more_level_qbs = [
 "levels\\z_dn\\z_dn_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_burn = {
-structure_name = level_Mainmenu_burn
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableGoalEditor
-DisableGoalAttack
-wallride_hack
-nosun
-DisableBackfacePatch
-level = "burn"
-sky = "burn_Sky"
-default_level_stuff
-pre = "burn_scripts.pre"
-scnpre = "burnscn.pre"
-colpre = "burncol.pre"
-overview_cam_angle = 90
-overview_cam_zoom = (-8e+02,7e+03,4e+02)
-thugpro_prx = "mainmenu_burn_scripts.pre"
-qb = "levels\\mainmenu_burn\\burn.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ros = {
-structure_name = level_Mainmenu_ros
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableGoalEditor
-DisableGoalAttack
-indoor
-level = "ros"
-sky = "ros_Sky"
-nosun
-default_level_stuff
-pre = "ros_scripts.pre"
-scnpre = "rosscn.pre"
-colpre = "roscol.pre"
-overview_cam_zoom = (0.0,2e+03,-1e+03)
-overview_cam_hide_objects = [ garage_ceiling surrounding_ground01 ]
-thugpro_prx = "mainmenu_ros_scripts.pre"
-qb = "levels\\mainmenu_ros\\ros.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_ms = {
-structure_name = level_Mainmenu_z_ms
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-level = "z_ms"
-sky = "steamboat_sky"
-indoor
-default_level_stuff
-pre = "z_ms_scripts.pre"
-scnpre = "z_msscn.pre"
-colpre = "z_mscol.pre"
-overview_cam_angle = 0
-overview_cam_zoom = (-7e+03,1.65e+04,-5e+02)
-thugpro_prx = "mainmenu_z_ms_scripts.pre"
-qb = "levels\\mainmenu_z_ms\\z_ms.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_ms\\z_ms_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_streets = {
-structure_name = level_Mainmenu_streets
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-loading_time = 8.5
-level = "Streets"
-sky = "Streets_Sky"
-wallride_hack
-pre = "Streets_scripts.pre"
-scnpre = "Streetsscn.pre"
-colpre = "Streetscol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_streets_scripts.pre"
-qb = "levels\\mainmenu_streets\\Streets.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\Streets\\Streets_scripts.qb"
-"levels\\Streets\\Streets_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thps2ny = {
-structure_name = level_Mainmenu_thps2ny
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 8.5
-level = "THPS2NY"
-sky = "THPS2NY_Sky"
-nosun
-wallride_hack
-pre = "THPS2NY_scripts.pre"
-scnpre = "THPS2NYscn.pre"
-colpre = "THPS2NYcol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thps2ny_scripts.pre"
-qb = "levels\\mainmenu_thps2ny\\THPS2NY.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPS2NY\\THPS2NY_scripts.qb"
-"levels\\THPS2NY\\THPS2NY_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thps2ss = {
-structure_name = level_Mainmenu_thps2ss
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 8.5
-level = "THPS2SS"
-sky = "default_sky"
-indoor
-nosun
-wallride_hack
-pre = "THPS2SS_scripts.pre"
-scnpre = "THPS2SSscn.pre"
-colpre = "THPS2SScol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thps2ss_scripts.pre"
-qb = "levels\\mainmenu_thps2ss\\THPS2SS.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPS2SS\\THPS2SS_scripts.qb"
-"levels\\THPS2SS\\THPS2SS_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thps2bullring = {
-structure_name = level_Mainmenu_thps2bullring
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 8.5
-level = "THPS2Bullring"
-sky = "THPS2Bullring_Sky"
-nosun
-wallride_hack
-pre = "THPS2Bullring_scripts.pre"
-scnpre = "THPS2Bullringscn.pre"
-colpre = "THPS2Bullringcol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thps2bullring_scripts.pre"
-qb = "levels\\mainmenu_thps2bullring\\THPS2Bullring.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPS2Bullring\\THPS2Bullring_scripts.qb"
-"levels\\THPS2Bullring\\THPS2Bullring_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thps2_sh = {
-structure_name = level_Mainmenu_thps2_sh
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 8.5
-level = "THPS2_SH"
-sky = "default_sky"
-nosun
-pre = "THPS2_SH_scripts.pre"
-scnpre = "THPS2_SHscn.pre"
-colpre = "THPS2_SHcol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thps2_sh_scripts.pre"
-qb = "levels\\mainmenu_thps2_sh\\THPS2_SH.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPS2_SH\\THPS2_SH_scripts.qb"
-"levels\\THPS2_SH\\THPS2_SH_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_thps2chopperdrop = {
-structure_name = level_Mainmenu_thps2chopperdrop
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 8.5
-level = "THPS2ChopperDrop"
-sky = "THPS2ChopperDrop_Sky"
-nosun
-wallride_hack
-pre = "THPS2ChopperDrop_scripts.pre"
-scnpre = "THPS2ChopperDropscn.pre"
-colpre = "THPS2ChopperDropcol.pre"
-default_level_stuff
-thugpro_prx = "mainmenu_thps2chopperdrop_scripts.pre"
-qb = "levels\\mainmenu_thps2chopperdrop\\THPS2ChopperDrop.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\THPS2ChopperDrop\\THPS2ChopperDrop_scripts.qb"
-"levels\\THPS2ChopperDrop\\THPS2ChopperDrop_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_p8training = {
-structure_name = level_Mainmenu_p8training
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-loading_time = 8.5
-level = "P8Training"
-sky = "P8Training_Sky"
-pre = "P8Training_scripts.pre"
-scnpre = "P8Trainingscn.pre"
-colpre = "P8Trainingcol.pre"
-default_level_stuff
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_pos = (-698.3,4416.4,795.5)
-overview_cam_angle = 0
-thugpro_prx = "mainmenu_p8training_scripts.pre"
-qb = "levels\\mainmenu_p8training\\P8Training.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\P8Training\\P8Training_scripts.qb"
-"levels\\P8Training\\P8Training_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_p8suburbs = {
-structure_name = level_Mainmenu_p8suburbs
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-loading_time = 8.5
-level = "P8Suburbs"
-sky = "P8Suburbs_Sky"
-pre = "P8Suburbs_scripts.pre"
-scnpre = "P8Suburbsscn.pre"
-colpre = "P8Suburbscol.pre"
-default_level_stuff
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_pos = (-2032.6,4565.6,-2302.5)
-overview_cam_angle = 0
-thugpro_prx = "mainmenu_p8suburbs_scripts.pre"
-qb = "levels\\mainmenu_p8suburbs\\P8Suburbs.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\P8Suburbs\\P8Suburbs_scripts.qb"
-"levels\\P8Suburbs\\P8Suburbs_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_p8downtown = {
-structure_name = level_Mainmenu_p8downtown
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-loading_time = 8.5
-level = "P8Downtown"
-sky = "P8Downtown_Sky"
-pre = "P8Downtown_scripts.pre"
-scnpre = "P8Downtownscn.pre"
-colpre = "P8Downtowncol.pre"
-default_level_stuff
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_pos = (2920.1,5821.6,-1341.0)
-overview_cam_angle = 0
-thugpro_prx = "mainmenu_p8downtown_scripts.pre"
-qb = "levels\\mainmenu_p8downtown\\P8Downtown.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\P8Downtown\\P8Downtown_scripts.qb"
-"levels\\P8Downtown\\P8Downtown_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_p8carfactory = {
-structure_name = level_Mainmenu_p8carfactory
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-loading_time = 8.5
-level = "P8CarFactory"
-sky = "P8CarFactory_Sky"
-pre = "P8CarFactory_scripts.pre"
-scnpre = "P8CarFactoryscn.pre"
-colpre = "P8CarFactorycol.pre"
-default_level_stuff
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_pos = (-2428.3,6098.0,3137.1)
-overview_cam_angle = 0
-thugpro_prx = "mainmenu_p8carfactory_scripts.pre"
-qb = "levels\\mainmenu_p8carfactory\\P8CarFactory.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\P8CarFactory\\P8CarFactory_scripts.qb"
-"levels\\P8CarFactory\\P8CarFactory_thugpro.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

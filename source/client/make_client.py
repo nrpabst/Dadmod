@@ -549,6 +549,10 @@ def main(argv):
         if r.returncode:
             sys.exit('QB BUILD FAILED: gen_client_qb.py')
     check_menu_boot_calls()
+    sys.path.insert(0, os.path.join(CLIENT, 'tools'))
+    import check_cfuncs
+    if check_cfuncs.main():
+        sys.exit('QB BUILD FAILED: client scripts call functions the client DLL does not have (client/tools/check_cfuncs.py)')
     build_prx(out)
     build_casidle(out)
     copy_menulevels(out, menulevels)

@@ -57,10 +57,35 @@ static bool NewerUnder(const char* dir, int depth) {
 }
 
 static bool g_skip_scan;
+static bool g_user_empty;   // no manifest and no files under User: the scan has nothing to do, so no splash
+
+// true if any file (not folder) sits under dir, the two manifests aside
+static bool FilesUnder(const char* dir, int depth) {
+    char pat[MAX_PATH];
+    if (_snprintf(pat, sizeof(pat), "%s\\*", dir) < 0) return true;
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    bool any = false;
+    do {
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
+        if (depth == 0 && (!_stricmp(fd.cFileName, "manifest_levels.dat") || !_stricmp(fd.cFileName, "manifest_soundtracks.dat"))) continue;
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) { any = true; break; }
+        char sub[MAX_PATH];
+        _snprintf(sub, sizeof(sub), "%s\\%s", dir, fd.cFileName); sub[MAX_PATH - 1] = 0;
+        if (depth >= 12 || FilesUnder(sub, depth + 1)) { any = true; break; }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    return any;
+}
 
 static bool ScanNeeded() {
     WIN32_FILE_ATTRIBUTE_DATA m;
-    if (!GetFileAttributesExA("User\\manifest_levels.dat", GetFileExInfoStandard, &m)) { Note("scan: no User\\manifest_levels.dat yet"); return true; }
+    if (!GetFileAttributesExA("User\\manifest_levels.dat", GetFileExInfoStandard, &m)) {
+        g_user_empty = !FilesUnder("User", 0);
+        Note(g_user_empty ? "scan: no User\\manifest_levels.dat yet and no files under User, no splash" : "scan: no User\\manifest_levels.dat yet");
+        return true;
+    }
     g_cutoff = FtU(m.ftLastWriteTime) + 2ull * 10000000ull;   // 2 s slack: the scan writes it last
     DWORD t0 = GetTickCount();
     bool newer = NewerUnder("User", 0);
@@ -456,7 +481,7 @@ static void Install() {
     } else Note("file open share mode not found, left alone");
 
     if (!skip_scan) { Note("scan forced on (bootspeed.ini)"); return; }
-    if (ScanNeeded()) { StartSplash(); return; }
+    if (ScanNeeded()) { if (!g_user_empty) StartSplash(); return; }
     g_skip_scan = true;
     HMODULE m = GetModuleHandleA("ContentManagerWrapper.dll");
     if (m) { PatchWrapper(m); return; }

@@ -9,6 +9,7 @@ anims	both	later	prx:Levels.q prx:skateshop.q prx:ButtonScripts.q dadmod:anim_li
 anybinds	client	later	prx:walking_control.q	Square whack / Circle sit for the local player
 balance	client	yes	dll:balancelock.inc	DLL part is in the client loader (gfx.inc needs it), off until a script turns it on; client menu must keep it offline only. Infinite balance; in the client build it turns off in online games, the server build (Noah's own install) keeps it online (Noah 2026-11-05)
 bankdrop	both	yes	dll:bankdrop.inc prx:ButtonScripts.q	Local bank drops; !bankdrops chat command is the host part; fine online (Noah 2026-11-05)
+bhra	client	yes	prx:tricks.q prx:grindscripts.q prx:groundtricks.q prx:procrastination.q prx:Levels.q	BHRA keeps combo + Easy BHRA (Pause > dadmod > Gameplay); client: full Land2/SkateIn_Right/Left + wraps (client/qb/dadmod/bhra.q)
 bootspeed	client	yes	dll:bootspeed.inc dadmod:bootspeed.ini	Skips the ContentManager rescan and the 2 s boot sleep
 cars	server	no	prx:net.q	Online traffic re-created by the host
 casfix	client	later	prx:cas_ped_m.q prx:cas_ped_f.q data:models/THUGPRO_Peds	Ped crash fix; installer extracts the peds from the player's own level files
@@ -59,3 +60,4 @@ weather	server	no	prx:net.q	Server weather
 thpg	client	yes	prx:Levels.q	Tony Hawk's Proving Ground level select tab (Larxian cities + our Training), work/thpg/tools/build_thpg.py --userslots
 midload	client	yes	prx:ButtonScripts.q prx:(stats/tricks/memcard scripts) data:dadmod_casidle.qb	Quick Menu > Load Skater mid-level (offline only for now); unsaved-changes warning (mods/midload/apply.py hooks, client wraps)
 onlinemaps	both	yes	prx:skateshop.q prx:net.q prx:userslots.q	Our extra maps hostable online (greyed-slot check); ! level commands are host-answered (server only)
+screenfx	client	yes	prx:ButtonScripts.q prx:grindscripts.q(CreatureScaryGrindEffect) prx:Levels.q	Trick Screen Effects On/Off (Pause > dadmod > Gameplay, player shibe); client: wrap CreatureScaryGrindEffect (client/qb/dadmod/screenfx.q)

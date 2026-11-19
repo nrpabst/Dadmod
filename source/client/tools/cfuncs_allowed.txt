@@ -1,0 +1,4 @@
+# THUGRECOMP_ functions the client scripts mention but can never reach (see check_cfuncs.py)
+THUGRECOMP_PlayerSkaterId       # dadmod_veh_park_for: the client always passes local = 1, which skips this line
+THUGRECOMP_AllPlayersScript     # dadmod_veh_park_at / dadmod_veh_remove: only inside InNetGame, vehicles are offline only in the client
+THUGRECOMP_IsLocalPlayerName    # thugpro_bankdrops_local / _chat: host chat command parts, nothing in the client calls them

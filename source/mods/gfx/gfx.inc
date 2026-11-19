@@ -15,6 +15,7 @@
 // Stages: galaxy (at the sky pass) -> scene effects (at the HUD boundary, or at Present if nothing 2D was drawn)
 //         -> screen effects (Present; these cover the HUD too: CRT, grain, chromatic aberration, vignette).
 #include <d3d9.h>
+#include <tlhelp32.h>
 namespace gfx {
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -68,11 +69,13 @@ static const Setting kSettings[] = {
     {"gfx_bginput", 1, 0, 1, "background input: 0 controller only works while the game window is in front, 1 it keeps working when another program has focus"},
     {"gfx_deadzone", 0, 0, 10, "stick dead zone: 0 off, 1..10 ignores small stick movements (3%..30% of the stick range) so a worn stick stops drifting"},
     {"gfx_abswap", 0, 0, 1, "swap A/B and X/Y: 0 off, 1 on (for Nintendo-style controllers)"},
-    {"gfx_tricksfx", 1, 0, 1, "special trick sounds: 0 off, 1 on (the sound clips some special tricks play, like the guitar grind)"},
-    {"gfx_levelsfx", 1, 0, 1, "level sounds: 0 off, 1 on (water, crowds, machines and other sounds that come from spots in a map; applies on the next map load)"},
+    {"gfx_tricksfx", 100, 0, 100, "special trick sounds volume: 0 off .. 100 full (the sound clips some special tricks play, like the guitar grind; 1 from older files means full)"},
+    {"gfx_levelsfx", 100, 0, 100, "level sounds volume: 0 off .. 100 full (water, crowds, machines, cars and other sounds that come from things in a map; skaters' own sounds are not changed; 1 from older files means full)"},
     {"gfx_padpopup", 1, 0, 1, "controller popups: 0 off, 1 a short on-screen message when a controller is plugged in or unplugged"},
     {"gfx_launchbinds", 0, 0, 1, "use launcher button layout: 0 dadmod standard Xbox-style layout, 1 the bindings set in the THUG Pro launcher"},
     {"gfx_debug", 0, 0, 2, "developer view: 0 off, 1 depth, 2 raw depth"},
+    {"gfx_postfx", 0, 0, 1, "graphics effects when ReShade is installed: 0 dadmod's own effects, 1 ReShade's (dadmod skips its screen effects; sky, weather, mirror, FPS counter and screenshots keep working)"},
+    {"gfx_postfxset", 0, 0, 1, "set by dadmod once the Graphics effects row is used: from then on dadmod also switches ReShade's own effects with that row (0 = leave ReShade's effects alone)"},
 };
 static const int kCount = sizeof kSettings / sizeof kSettings[0];
 static int g_val[kCount];
@@ -83,21 +86,148 @@ static int Index(const char* key) {
     for (int i = 0; i < kCount; ++i) if (!_stricmp(kSettings[i].key, key)) return i;
     return -1;
 }
-static int V(const char* key) { int i = Index(key); return i < 0 ? 0 : g_val[i]; }
-// Level sounds off (Noah 2026-11-17): the engine's SpawnSound starts the sound scripts maps run from spots in the level
-// (water, crowds, machines...); while gfx_levelsfx = 0 it starts none. Installed on the engine's own CFunc table just
-// before the engine registers it (RegisterCFuncsHook in thugrecomp.cpp and the client loader).
+// ReShade (Noah 2026-11-19): with gfx_postfx = 1 ("ReShade") every screen effect below reads as off, so dadmod draws none
+// of them (and needs no depth swap for them) and only ReShade's effects show. Sky, time of day, weather, fireworks,
+// street lights, texture filtering, MSAA, v-sync, FPS counter, screenshots and mirror mode are not screen effects and
+// keep working. The menus read the stored values (GetKey), so a player's settings are untouched and come back with 0.
+static const char* const kScreenFx[] = { "gfx_fxaa", "gfx_sharpen", "gfx_bloom", "gfx_ssao", "gfx_fog", "gfx_dof",
+    "gfx_outline", "gfx_mblur", "gfx_pixelate", "gfx_vignette", "gfx_grain", "gfx_chroma", "gfx_crt", "gfx_preset",
+    "gfx_bright", "gfx_contrast", "gfx_sat", "gfx_vibrance", "gfx_gamma", "gfx_temp", "gfx_tint", "gfx_debug" };
+static bool IsScreenFx(int i) {
+    static signed char fx[kCount];
+    static bool init = false;
+    if (!init) {
+        for (int k = 0; k < kCount; ++k) {
+            fx[k] = 0;
+            for (const char* n : kScreenFx) if (!_stricmp(kSettings[k].key, n)) fx[k] = 1;
+        }
+        init = true;
+    }
+    return fx[i] != 0;
+}
+static bool g_reshadeLoaded = false;   // set once after the device exists (SyncReShadeEffects -> DetectReShade)
+static int V(const char* key) {
+    int i = Index(key);
+    if (i < 0) return 0;
+    static const int postfx = Index("gfx_postfx");
+    // only while ReShade is loaded: if a player removes ReShade, dadmod's own effects come back without the (hidden) row
+    if (postfx >= 0 && g_val[postfx] && g_reshadeLoaded && IsScreenFx(i)) return 0;
+    return g_val[i];
+}
+// Level sounds (Noah 2026-11-17 on/off, 2026-11-19 "a volume slider that turns all the way off"): the engine's SpawnSound
+// starts the sound scripts maps run from spots in the level; their loops then live as positional sounds on objects.
+// SpawnSound is no longer gated (so sounds come back at once when the slider goes up from 0); the volume is applied
+// where the engine sets each positional sound's volume every frame (InstallLevelSoundHooks below). The gate stays
+// installed as a pass-through on the engine's own CFunc table (RegisterCFuncsHook in thugrecomp.cpp and the client loader).
 static bool (__cdecl* g_spawnSoundOrig)(void*, void*) = nullptr;
 static bool __cdecl CF_SpawnSoundGate(void* params, void* script) {
-    if (!V("gfx_levelsfx")) return true;
     return g_spawnSoundOrig ? g_spawnSoundOrig(params, script) : true;
+}
+// Every frame the engine works out each positional sound's left/right volume from the listener distance (0x47BE10) and
+// hands it on: object sounds (Obj_PlaySound) at 0x47C545 (thiscall 0x47B7C0(handle, vol*, pitch), ESI = the sound
+// component) and object streams (Obj_PlayStream) at 0x450D31 (cdecl 0x453DF0(vol*, handle), EBX = the stream's
+// component). Both calls are routed through ScaleLevelSound, which multiplies volL/volR by the slider unless the
+// component's object (component+0xC) is a skater (object id at +0x14 is 0..15 for skaters, a node checksum otherwise),
+// so every skater's own sounds, local and online, keep their volume.
+static DWORD g_levelApplyObj = 0x47B7C0, g_levelApplyStream = 0x453DF0;
+static void __cdecl ScaleLevelSound(float* vol, BYTE* comp) {
+    int pct = V("gfx_levelsfx");
+    if (pct >= 100 || !vol || !comp) return;
+    BYTE* obj = *(BYTE**)(comp + 0xC);
+    DWORD id = obj ? *(DWORD*)(obj + 0x14) : 0xFFFFFFFF;
+    {   // log each sound owner once (up to 32), so a log shows what the slider touches and what it leaves alone
+        static DWORD seen[32]; static int n;
+        bool known = false;
+        for (int i = 0; i < n; ++i) if (seen[i] == id) known = true;
+        if (!known && n < 32) { seen[n++] = id; mmenu::Log("gfx: level sounds at %d%%: %s sound from object id %08lX", pct, id < 16 ? "kept (skater)" : "scaled", id); }
+    }
+    if (id < 16) return;   // a skater's own sound
+    float f = pct / 100.0f;
+    vol[0] *= f; vol[1] *= f;
+}
+static __declspec(naked) void LevelObjSoundStub() {
+    __asm {
+        push ecx
+        mov eax, [esp + 12]
+        push esi
+        push eax
+        call ScaleLevelSound
+        add esp, 8
+        pop ecx
+        jmp dword ptr [g_levelApplyObj]
+    }
+}
+static __declspec(naked) void LevelStreamStub() {
+    __asm {
+        mov eax, [esp + 4]
+        push ebx
+        push eax
+        call ScaleLevelSound
+        add esp, 8
+        jmp dword ptr [g_levelApplyStream]
+    }
+}
+static void PatchLevelCall(DWORD at, DWORD target, void* stub, const char* what) {
+    BYTE* p = (BYTE*)at;
+    if (p[0] != 0xE8 || (DWORD)(at + 5 + *(int*)(p + 1)) != target) { mmenu::Log("gfx: level sound volume: %s call not found, left alone", what); return; }
+    DWORD old;
+    if (!VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+    *(int*)(p + 1) = (int)((DWORD)stub - (at + 5));
+    VirtualProtect(p, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), p, 5);
+    mmenu::Log("gfx: level sound volume hooked (%s)", what);
+}
+static void InstallLevelSoundHooks() {
+    PatchLevelCall(0x47C545, g_levelApplyObj, (void*)&LevelObjSoundStub, "object sounds");
+    PatchLevelCall(0x450D31, g_levelApplyStream, (void*)&LevelStreamStub, "object streams");
 }
 // Special trick sounds off (Noah 2026-11-17): air, grind and manual special tricks play their clip with
 // PlayStream ... id = SFXSpecialStream (airtricks/grindscripts/manualtricks); while gfx_tricksfx = 0 those are skipped
 static bool (__cdecl* g_playStreamOrig)(void*, void*) = nullptr;
+// Volume slider (Noah 2026-11-19: "a volume slider that turns all the way off"): the clip starts as the trick asked, then
+// the engine's own SetStreamParams sets its volume to the trick's vol x slider%; moving the slider re-applies it live.
+static bool (__cdecl* g_setStreamParamsOrig)(void*, void*) = nullptr;
+static float g_trickBaseVol = 100.0f;   // vol the last special trick clip asked for
+static void SetSpecialStreamVolume(float vol) {
+    if (!g_setStreamParamsOrig) return;
+    BYTE st[16] = {0};
+    typedef void (__thiscall* CtorFn)(void*);
+    typedef void (__thiscall* AddSumFn)(void*, DWORD, DWORD);
+    typedef void (__thiscall* AddFloatFn)(void*, DWORD, float);
+    ((CtorFn)0x476410)(st);                                                     // CStruct::CStruct
+    ((AddSumFn)mmenu::kAddChecksum)(st, 0, QbKey("SFXSpecialStream"));         // unnamed: the stream id
+    ((AddFloatFn)mmenu::kAddFloat)(st, QbKey("vol"), vol);
+    bool ok = g_setStreamParamsOrig(st, nullptr);
+    mmenu::Log("gfx: special trick clip volume -> %.0f (%s)", vol, ok ? "set" : "no clip playing");
+    ((CtorFn)0x477130)(st);                                                     // CStruct::~CStruct
+}
 static bool __cdecl CF_PlayStreamGate(void* params, void* script) {
-    if (!V("gfx_tricksfx") && params && mmenu::ChecksumParam(params, "id") == QbKey("SFXSpecialStream")) return true;
-    return g_playStreamOrig ? g_playStreamOrig(params, script) : true;
+    bool special = params && mmenu::ChecksumParam(params, "id") == QbKey("SFXSpecialStream");
+    int pct = V("gfx_tricksfx");
+    if (special && !pct) return true;
+    bool r = g_playStreamOrig ? g_playStreamOrig(params, script) : true;
+    if (special) {
+        float vol = mmenu::FloatParam(params, "vol", -1.0f);
+        if (vol < 0) vol = (float)::IntParam(params, "vol", 100);
+        g_trickBaseVol = vol;
+        if (pct < 100) SetSpecialStreamVolume(vol * pct / 100.0f);
+    }
+    return r;
+}
+// Noah 2026-11-19: switching special trick sounds off also stops the clip playing right now. Runs the stock script
+// HandleStoppingAStream with Name = SFXSpecialStream (game thread only: called from SetKey, which a script calls, or
+// from the next frame after THUGPro Manager changed gfx.ini).
+static volatile LONG g_trickStopPending, g_trickVolPending;
+static void StopSpecialStream(const char* why) {
+    BYTE st[16] = {0};
+    typedef void (__thiscall* CtorFn)(void*);
+    typedef void (__thiscall* AddSumFn)(void*, DWORD, DWORD);
+    typedef int (__cdecl* RunFn)(DWORD, void*, int, int, int);
+    ((CtorFn)0x476410)(st);                                                       // CStruct::CStruct
+    ((AddSumFn)mmenu::kAddChecksum)(st, QbKey("Name"), QbKey("SFXSpecialStream")); // CStruct::AddChecksum
+    ((RunFn)0x475790)(QbKey("HandleStoppingAStream"), st, 0, 0, 0);              // RunScript
+    ((CtorFn)0x477130)(st);                                                       // CStruct::~CStruct
+    mmenu::Log("gfx: special trick sounds off (%s): stopped the special trick clip", why);
 }
 static void PatchEngineCFuncs(void* table, unsigned count) {
     struct E { const char* n; bool (__cdecl* f)(void*, void*); };
@@ -108,6 +238,7 @@ static void PatchEngineCFuncs(void* table, unsigned count) {
             g_spawnSoundOrig = e[i].f; e[i].f = CF_SpawnSoundGate;
             VirtualProtect(&e[i].f, sizeof(e[i].f), old, &old);
         }
+        if (e[i].n && !strcmp(e[i].n, "SetStreamParams")) g_setStreamParamsOrig = e[i].f;
         if (e[i].n && !strcmp(e[i].n, "PlayStream") && e[i].f != CF_PlayStreamGate) {
             DWORD old; VirtualProtect(&e[i].f, sizeof(e[i].f), PAGE_READWRITE, &old);
             g_playStreamOrig = e[i].f; e[i].f = CF_PlayStreamGate;
@@ -162,6 +293,10 @@ static void Load() {
     }
     // Noah 2026-10-26: mirror mode starts off every time the game starts (later gfx.ini reloads keep it)
     static bool first = true;
+    for (const char* k : { "gfx_tricksfx", "gfx_levelsfx" }) {   // were On/Off (0/1) before they became 0..100 volumes: 1 = full
+        int t = Index(k);
+        if (t >= 0 && g_val[t] == 1) g_val[t] = 100;
+    }
     if (first) {
         first = false;
         int m = Index("gfx_mirror");
@@ -197,6 +332,9 @@ static void SetLevel(const char* name);
 static void LampMark(bool add);
 // THUGRECOMP_SettingSave/Load redirect for gfx_ keys (declared in modes.inc)
 bool SetKey(const char* key, int value) {
+#ifdef DADMOD_PADINJECT
+    if (!_stricmp(key, "gfx_padinject_go")) { if (padhub::g_injGo) SetEvent(padhub::g_injGo); return true; }  // test builds only
+#endif
     if (!_stricmp(key, "gfx_fwnow")) { FireworksShow(12, "menu"); return true; }
     if (!_strnicmp(key, "gfx_level_", 10)) { SetLevel(key + 10); return true; }
     if (!_stricmp(key, "gfx_lampadd")) { LampMark(true); return true; }
@@ -213,7 +351,15 @@ bool SetKey(const char* key, int value) {
     }
     int i = Index(key);
     if (i < 0) return false;
+    int was = g_val[i];
     g_val[i] = value < kSettings[i].lo ? kSettings[i].lo : value > kSettings[i].hi ? kSettings[i].hi : value;
+    if (!_stricmp(key, "gfx_tricksfx") && was && !g_val[i]) StopSpecialStream("menu");
+    if (!_stricmp(key, "gfx_tricksfx") && g_val[i] && was != g_val[i]) SetSpecialStreamVolume(g_trickBaseVol * g_val[i] / 100.0f);
+    if (!_stricmp(key, "gfx_postfx")) {
+        int set = Index("gfx_postfxset");
+        if (set >= 0) g_val[set] = 1;   // the row was used: dadmod now switches ReShade's own effects with it
+        if (was != g_val[i]) mmenu::Log("gfx: graphics effects -> %s (menu)", g_val[i] ? "ReShade (dadmod's screen effects skipped)" : "dadmod");
+    }
     Save();
     SyncInput();
     InterlockedExchange(&g_dirtyPost, 1);
@@ -236,6 +382,101 @@ static bool __cdecl CF_GfxReset(void*, void*) {
     }
     Save();
     InterlockedExchange(&g_dirtyPost, 1);
+    return true;
+}
+
+// ---- ReShade detection (Noah 2026-11-19: "if someone has reshade installed there should be a toggle for it in dadmod")
+// ReShade can sit in the game as d3d9.dll, dxgi.dll, an .asi loaded by an ASI loader (dinput8.dll), or any other name,
+// so loaded modules are checked by their version resource (ProductName "ReShade", every version) and, for 5.x and later,
+// by the exports of its add-on API. Nothing is read from or written to ReShade's files except its ReShade.ini [INPUT]
+// KeyEffects (read only), to name the key that switches ReShade's own effects on and off.
+struct ReShadeFound { bool found; int major, minor, patch; bool addonApi; char module[MAX_PATH]; char key[64]; int vk, ctrl, shift, alt; };
+static ReShadeFound g_reshade;
+static bool ResHasUtf16(const BYTE* p, DWORD n, const wchar_t* w) {
+    size_t len = wcslen(w) * 2;
+    for (DWORD i = 0; i + len <= n; i += 2) if (!memcmp(p + i, w, len)) return true;
+    return false;
+}
+static bool ModuleIsReShade(HMODULE m, int* major, int* minor, int* patch) {
+    HRSRC r = FindResourceW(m, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(16));  // VS_VERSION_INFO, RT_VERSION
+    if (!r) return false;
+    HGLOBAL g = LoadResource(m, r);
+    const BYTE* p = g ? (const BYTE*)LockResource(g) : nullptr;
+    DWORD n = SizeofResource(m, r);
+    if (!p || n < 64 || !ResHasUtf16(p, n, L"ReShade")) return false;
+    for (DWORD i = 0; i + 52 <= n; i += 4) {
+        if (*(const DWORD*)(p + i) != 0xFEEF04BD) continue;   // VS_FIXEDFILEINFO
+        DWORD ms = *(const DWORD*)(p + i + 16), ls = *(const DWORD*)(p + i + 20);  // dwProductVersionMS / LS
+        *major = HIWORD(ms); *minor = LOWORD(ms); *patch = HIWORD(ls);
+        return true;
+    }
+    *major = *minor = *patch = 0;
+    return true;
+}
+static int g_rsVk, g_rsCtrl, g_rsShift, g_rsAlt;   // the effects key read by the last ReShadeKeyName that found one
+static void ReShadeKeyName(const char* iniDir, char* out, size_t outLen) {
+    char ini[MAX_PATH], val[64] = "";
+    _snprintf(ini, sizeof ini, "%sReShade.ini", iniDir); ini[sizeof ini - 1] = 0;
+    GetPrivateProfileStringA("INPUT", "KeyEffects", "", val, sizeof val, ini);
+    int vk = 0, ctrl = 0, shift = 0, alt = 0;
+    if (!val[0] || sscanf(val, "%d,%d,%d,%d", &vk, &ctrl, &shift, &alt) < 1 || vk <= 0 || vk > 255) { out[0] = 0; return; }
+    g_rsVk = vk; g_rsCtrl = ctrl; g_rsShift = shift; g_rsAlt = alt;
+    char name[48] = "";
+    UINT sc = MapVirtualKeyA((UINT)vk, 0);  // MAPVK_VK_TO_VSC
+    LONG lp = (LONG)(sc << 16);
+    if ((vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_INSERT || vk == VK_DELETE || vk == VK_DIVIDE || vk == VK_NUMLOCK) lp |= 1 << 24;
+    if (!GetKeyNameTextA(lp, name, sizeof name)) _snprintf(name, sizeof name, "key %d", vk);
+    _snprintf(out, outLen, "%s%s%s%s", ctrl ? "Ctrl+" : "", shift ? "Shift+" : "", alt ? "Alt+" : "", name);
+    out[outLen - 1] = 0;
+}
+static const ReShadeFound& DetectReShade() {
+    if (g_reshade.found) return g_reshade;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, GetCurrentProcessId());
+    if (snap == INVALID_HANDLE_VALUE) return g_reshade;
+    MODULEENTRY32 me; me.dwSize = sizeof me;
+    for (BOOL ok = Module32First(snap, &me); ok; ok = Module32Next(snap, &me)) {
+        int a, b, c;
+        bool api = GetProcAddress(me.hModule, "ReShadeRegisterAddon") != nullptr;
+        if (!ModuleIsReShade(me.hModule, &a, &b, &c) && !api) continue;
+        g_reshade.found = true; g_reshade.major = a; g_reshade.minor = b; g_reshade.patch = c; g_reshade.addonApi = api;
+        if (api && !a) g_reshade.major = 5;   // has the add-on API but no readable version: 5.0 or later
+        GetModuleFileNameA(me.hModule, g_reshade.module, MAX_PATH);
+        char dir[MAX_PATH]; strcpy(dir, g_reshade.module);
+        char* sl = strrchr(dir, '\\'); if (sl) sl[1] = 0; else dir[0] = 0;
+        ReShadeKeyName(dir, g_reshade.key, sizeof g_reshade.key);
+        if (!g_reshade.key[0]) {   // ReShade 5/6 keep ReShade.ini next to the game exe
+            GetModuleFileNameA(nullptr, dir, MAX_PATH);
+            sl = strrchr(dir, '\\'); if (sl) sl[1] = 0;
+            ReShadeKeyName(dir, g_reshade.key, sizeof g_reshade.key);
+        }
+        if (g_reshade.key[0]) { g_reshade.vk = g_rsVk; g_reshade.ctrl = g_rsCtrl; g_reshade.shift = g_rsShift; g_reshade.alt = g_rsAlt; }
+        mmenu::Log("gfx: ReShade %d.%d.%d found (%s)%s; effects key: %s", g_reshade.major, g_reshade.minor, g_reshade.patch,
+                   g_reshade.module, api ? ", add-on API present" : "", g_reshade.key[0] ? g_reshade.key : "not set in ReShade.ini");
+        break;
+    }
+    CloseHandle(snap);
+    return g_reshade;
+}
+// THUGRECOMP_ReShadeInfo -> false when no ReShade is loaded; else true with version = "4.2.1", major (int),
+// addon_api (int), effects_key = the effects key from ReShade.ini ("" if none), desc = the text for the menu row.
+static bool __cdecl CF_ReShadeInfo(void*, void* script) {
+    const ReShadeFound& r = DetectReShade();
+    if (!r.found) return false;
+    char ver[32], desc[400];
+    _snprintf(ver, sizeof ver, "%d.%d.%d", r.major, r.minor, r.patch); ver[sizeof ver - 1] = 0;
+    char keyPart[120];
+    if (r.key[0]) _snprintf(keyPart, sizeof keyPart, "This row also switches ReShade's own effects (its key: %s).", r.key);
+    else _snprintf(keyPart, sizeof keyPart, "ReShade's own effects go on and off with its effects key (none set in ReShade.ini).");
+    keyPart[sizeof keyPart - 1] = 0;
+    _snprintf(desc, sizeof desc, "ReShade %s is installed. dadmod: dadmod's graphics effects. ReShade: only ReShade's; dadmod skips "
+              "its screen effects (color, bloom, FXAA, CRT and the rest); sky, weather, mirror mode, FPS and screenshots keep "
+              "working. %s", ver, keyPart);
+    desc[sizeof desc - 1] = 0;
+    ::RetStr(script, "version", ver);
+    ::RetInt(script, "major", r.major);
+    ::RetInt(script, "addon_api", r.addonApi ? 1 : 0);
+    ::RetStr(script, "effects_key", r.key);
+    ::RetStr(script, "desc", desc);
     return true;
 }
 
@@ -328,6 +569,7 @@ static HRESULT STDMETHODCALLTYPE HookSSS(IDirect3DDevice9* dev, DWORD s, D3DSAMP
 
 // ---- MSAA / v-sync at device creation ----------------------------------------------------------
 static IDirect3D9* g_d3d = nullptr;
+static HWND g_devWnd = nullptr;   // the game's device window (ReShade reads its keys from this window's messages)
 static UINT g_adapter = 0;
 static D3DDEVTYPE g_devType = D3DDEVTYPE_HAL;
 static bool g_msaaOn = false;
@@ -357,6 +599,7 @@ static HRESULT STDMETHODCALLTYPE HookCreate(IDirect3D9* d3d, UINT adapter, D3DDE
                                             D3DPRESENT_PARAMETERS* pp, IDirect3DDevice9** out) {
     D3DPRESENT_PARAMETERS orig = *pp;
     g_d3d = d3d; g_adapter = adapter; g_devType = type;
+    g_devWnd = pp->hDeviceWindow ? pp->hDeviceWindow : w;
     AdjustPP(d3d, adapter, type, pp);
     HRESULT hr = g_origCreate(d3d, adapter, type, w, flags, pp, out);
     if (FAILED(hr) && memcmp(&orig, pp, sizeof orig)) {
@@ -376,7 +619,7 @@ static HRESULT STDMETHODCALLTYPE HookCreate(IDirect3D9* d3d, UINT adapter, D3DDE
 // ---- shaders ------------------------------------------------------------------------------------
 struct XBuf : IUnknown { virtual void* STDMETHODCALLTYPE GetBufferPointer() = 0; virtual DWORD STDMETHODCALLTYPE GetBufferSize() = 0; };
 typedef HRESULT(WINAPI* CompileShader_t)(LPCSTR, UINT, const void*, void*, LPCSTR, LPCSTR, DWORD, XBuf**, XBuf**, void**);
-typedef HRESULT(WINAPI* SaveSurface_t)(LPCSTR, DWORD, IDirect3DSurface9*, const PALETTEENTRY*, const RECT*);
+typedef HRESULT(WINAPI* SaveSurface_t)(LPCWSTR, DWORD, IDirect3DSurface9*, const PALETTEENTRY*, const RECT*);   // the wide one (2026-11-19: a PC where ANSI full-path file opens fail)
 
 static const char kShaders[] = R"HLSL(
 sampler2D s0 : register(s0);
@@ -1227,7 +1470,7 @@ static char g_shotMsg[160] = "";
 static void SaveShot(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
     g_shotPending = false;
     if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
-    auto save = g_dx ? (SaveSurface_t)GetProcAddress(g_dx, "D3DXSaveSurfaceToFileA") : nullptr;
+    auto save = g_dx ? (SaveSurface_t)GetProcAddress(g_dx, "D3DXSaveSurfaceToFileW") : nullptr;
     if (!save) return;
     D3DSURFACE_DESC d;
     bb->GetDesc(&d);
@@ -1246,7 +1489,8 @@ static void SaveShot(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
         char name[64];
         snprintf(name, sizeof name, "\\thugpro_%04d%02d%02d_%02d%02d%02d.png", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
         std::string path = dir + name;
-        if (SUCCEEDED(save(path.c_str(), 3 /*D3DXIFF_PNG*/, mem, nullptr, nullptr))) {
+        wchar_t wpath[1024];
+        if (MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, wpath, 1024) > 0 && SUCCEEDED(save(wpath, 3 /*D3DXIFF_PNG*/, mem, nullptr, nullptr))) {
             if (custom) snprintf(g_shotMsg, sizeof g_shotMsg, "Screenshot saved: %s", path.c_str());
             else snprintf(g_shotMsg, sizeof g_shotMsg, "Screenshot saved: dadmod\\screenshots%s", name);
             g_shotMsgUntil = GetTickCount() + 400;
@@ -1812,8 +2056,17 @@ static void RunScreen(IDirect3DDevice9* dev) {
 static void CheckKeysAndIni() {
     if ((g_presents & 63) == 0) {  // ~once a second: pick up edits THUGPro Manager made to gfx.ini
         FILETIME t = IniTime();
-        if (CompareFileTime(&t, &g_iniTime)) Load();
+        if (CompareFileTime(&t, &g_iniTime)) {
+            int trick = V("gfx_tricksfx"), postfx = V("gfx_postfx");
+            Load();
+            if (trick && !V("gfx_tricksfx")) InterlockedExchange(&g_trickStopPending, 1);
+            else if (V("gfx_tricksfx") && trick != V("gfx_tricksfx")) InterlockedExchange(&g_trickVolPending, 1);
+            if (postfx != V("gfx_postfx"))
+                mmenu::Log("gfx: graphics effects -> %s (gfx.ini changed)", V("gfx_postfx") ? "ReShade (dadmod's screen effects skipped)" : "dadmod");
+        }
     }
+    if (InterlockedExchange(&g_trickStopPending, 0)) StopSpecialStream("gfx.ini changed");
+    if (InterlockedExchange(&g_trickVolPending, 0)) SetSpecialStreamVolume(g_trickBaseVol * V("gfx_tricksfx") / 100.0f);
     static bool down = false;
     DWORD pid = 0;
     HWND fg = GetForegroundWindow();
@@ -2092,7 +2345,9 @@ static HRESULT STDMETHODCALLTYPE HookReset(IDirect3DDevice9* dev, D3DPRESENT_PAR
 }
 
 // the game's own device: patch its vtable (it differs from a probe device's) and its swap chain
+static IDirect3DDevice9* g_gameDev = nullptr;
 static void PatchDevice(IDirect3DDevice9* dev) {
+    g_gameDev = dev;
     void** vt = *(void***)dev;
     Patch(vt, 69, (void*)&HookSSS, (void**)&g_origSSS);
     Patch(vt, 17, (void*)&HookPresent, (void**)&g_origPresent);
@@ -2112,7 +2367,131 @@ static void PatchDevice(IDirect3DDevice9* dev) {
     }
 }
 
+// ReShade 4.2.1 tested 2026-11-19 (a friend's install: d3d11.asi through an ASI loader, dinput8.dll): ReShade wraps
+// the device dadmod patched, and while ReShade sets itself up Direct3D rebuilds that device's function table (it is
+// per device, in the heap), which wipes every hook above about 3 seconds after creation. Present never reached
+// dadmod again, so no effects, FPS counter, screenshots or ReShade row bypass. Patching again later sticks, so
+// once a frame (game thread, from the controller read) the hooks are checked and put back if something undid them.
+static int SafeHooksGone(IDirect3DDevice9* dev) {
+    __try {
+        void** vt = *(void***)dev;
+        return vt[17] != (void*)&HookPresent || vt[82] != (void*)&HookDIP || vt[16] != (void*)&HookReset;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+}
+// 2026-11-19 (player shibe: colors, sky and weather did nothing): on some starts the game makes its device before our
+// IDirect3D9::CreateDevice hook is in (a race, seen on plain THUG Pro and on Kali), so HookCreate never runs and no
+// device hook goes in for the whole session. The game keeps its device in 0x7D69E0 (the main loop 0x44EEF0 calls
+// TestCooperativeLevel / Reset on it), so when no device came through HookCreate it is picked up from there and patched.
+static const DWORD kGameDevicePtr = 0x7D69E0;
+static IDirect3DDevice9* SafeGameDevice() {
+    __try { return *(IDirect3DDevice9* volatile*)kGameDevicePtr; } __except (EXCEPTION_EXECUTE_HANDLER) { return nullptr; }
+}
+static void AdoptGameDevice() {
+    IDirect3DDevice9* dev = SafeGameDevice();
+    if (!dev) return;
+    IDirect3D9* d3d = nullptr;
+    if (FAILED(dev->GetDirect3D(&d3d)) || !d3d) return;
+    D3DDEVICE_CREATION_PARAMETERS cp = {};
+    dev->GetCreationParameters(&cp);
+    g_d3d = d3d; g_adapter = cp.AdapterOrdinal; g_devType = cp.DeviceType;
+    if (!g_devWnd) g_devWnd = cp.hFocusWindow;
+    d3d->Release();   // the device keeps its own reference to it
+    PatchDevice(dev);
+    mmenu::Log("gfx: device picked up from the game (CreateDevice hook was bypassed), hooks in");
+}
+static void KeepDeviceHooks() {
+    IDirect3DDevice9* dev = g_gameDev;
+    if (!dev) { AdoptGameDevice(); return; }
+    int gone = SafeHooksGone(dev);
+    if (gone < 0) { g_gameDev = nullptr; return; }
+    if (!gone) return;
+    static int n = 0;
+    if (n < 5) { ++n; mmenu::Log("gfx: device hooks were undone (%d frames presented so far), put back", (int)g_presents); }
+    PatchDevice(dev);
+}
+
+// ReShade's own effects follow the Graphics effects row (Noah 2026-11-19, part 4 of the ReShade row). Works with every
+// ReShade version that has an effects key in ReShade.ini [INPUT] KeyEffects, with no ReShade add-on: ReShade reads its
+// keys from the game window's messages, so posting that key's down/up to the device window flips its effects, without
+// focus and without the game seeing a key (THUG Pro reads the keyboard through DirectInput). Tested with ReShade 4.2.1.
+// ReShade can't be asked whether its effects are on, so dadmod counts: they are on when ReShade starts, every key dadmod
+// posts flips them, and so does the player pressing the key in the game window. Nothing is sent until the player has used
+// the row once (gfx_postfxset), so updating dadmod leaves a ReShade player's setup as it was.
+static bool g_rsFxOn = true;
+static DWORD g_rsSince = 0;
+static void PostReShadeKey(const ReShadeFound& r) {
+    HWND w = g_devWnd;
+    if (!w || !IsWindow(w)) return;
+    auto post = [w](UINT msg, int vk, bool up) {
+        UINT sc = MapVirtualKeyA((UINT)vk, 0);
+        LPARAM lp = 1 | (LPARAM)(sc << 16);
+        if ((vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_INSERT || vk == VK_DELETE || vk == VK_DIVIDE || vk == VK_NUMLOCK) lp |= 1 << 24;
+        if (up) lp |= 0xC0000000;
+        PostMessageA(w, msg, (WPARAM)vk, lp);
+    };
+    if (r.ctrl) post(WM_KEYDOWN, VK_CONTROL, false);
+    if (r.shift) post(WM_KEYDOWN, VK_SHIFT, false);
+    if (r.alt) post(WM_SYSKEYDOWN, VK_MENU, false);
+    post(r.alt ? WM_SYSKEYDOWN : WM_KEYDOWN, r.vk, false);
+    post(r.alt ? WM_SYSKEYUP : WM_KEYUP, r.vk, true);
+    if (r.alt) post(WM_SYSKEYUP, VK_MENU, true);
+    if (r.shift) post(WM_KEYUP, VK_SHIFT, true);
+    if (r.ctrl) post(WM_KEYUP, VK_CONTROL, true);
+}
+static void SyncReShadeEffects() {
+    static bool checked = false;
+    if (!checked) {   // once, on the game thread after the device exists (ReShade loads before the device is made)
+        if (!g_gameDev) return;
+        checked = true;
+        g_reshadeLoaded = DetectReShade().found;
+        InterlockedExchange(&g_dirtyPost, 1);
+    }
+    if (!g_reshadeLoaded) return;
+    const ReShadeFound& r = g_reshade;
+    if (!r.vk) return;
+    // the player's own presses of ReShade's key (game window in front) flip ReShade's effects too
+    static bool wasDown = false;
+    DWORD pid = 0;
+    HWND fg = GetForegroundWindow();
+    if (fg) GetWindowThreadProcessId(fg, &pid);
+    bool down = pid == GetCurrentProcessId() && (GetAsyncKeyState(r.vk) & 0x8000) != 0 &&
+                ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) == (r.ctrl != 0) &&
+                ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) == (r.shift != 0) &&
+                ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) == (r.alt != 0);
+    if (down && !wasDown) { g_rsFxOn = !g_rsFxOn; mmenu::Log("gfx: ReShade effects key pressed: ReShade effects now %s", g_rsFxOn ? "on" : "off"); }
+    wasDown = down;
+    int setI = Index("gfx_postfxset"), fxI = Index("gfx_postfx");
+    if (setI < 0 || fxI < 0 || !g_val[setI]) return;
+    bool want = g_val[fxI] != 0;
+    if (want == g_rsFxOn) { g_rsSince = 0; return; }
+    // ReShade needs to be up and drawing first: 3 seconds after the first frames at boot, then at most one key a second
+    DWORD now = GetTickCount();
+    if (g_presents < 60) return;
+    if (!g_rsSince) { g_rsSince = now ? now : 1; if (g_presents < 600) return; }
+    if (g_presents < 600 && now - g_rsSince < 3000) return;
+    static DWORD last = 0;
+    if (last && now - last < 1000) return;
+    last = now ? now : 1;
+    PostReShadeKey(r);
+    g_rsFxOn = want;
+    g_rsSince = 0;
+    mmenu::Log("gfx: sent ReShade's effects key (%s): ReShade effects %s", r.key, want ? "on" : "off");
+}
+
+// Client build (Install(.., oneProbe = true), 2026-11-19): this thread goes through ProbeD3D9 too, so only one of
+// our probe Direct3Ds is ever made. A player's game crashed inside d3d9 while this thread and the main thread's
+// ProbeD3D9 each created one at the same moment. (Waiting for the main-thread probe alone is not enough: d3d9 often
+// comes in through thugpro.dll's d3dx9_43.dll, whose LoadLibrary calls are not hooked, and then no probe ran.)
+static volatile LONG g_probed = 0;
+static bool g_oneProbe = false;
+static void ProbeD3D9();
 static DWORD WINAPI PatchThread(LPVOID) {
+    if (g_oneProbe) {
+        if (!LoadLibraryA("d3d9.dll")) return 0;
+        ProbeD3D9();
+        mmenu::Log("gfx: hooks in (anisotropic %d, msaa %d, galaxy %d)", V("gfx_aniso"), V("gfx_msaa"), V("gfx_galaxy"));
+        return 0;
+    }
     typedef IDirect3D9*(WINAPI* Create_t)(UINT);
     HMODULE d3d = LoadLibraryA("d3d9.dll");
     Create_t create = d3d ? (Create_t)GetProcAddress(d3d, "Direct3DCreate9") : nullptr;
@@ -2136,6 +2515,11 @@ static short Neg(short v) { return v == -32768 ? 32767 : (short)-v; }
 static int __cdecl ReadControlsHook(int player, BYTE* out) {
     int r = ((ReadControls_t)kReadControls)(player, out);
     padhub::CaptureTick();  // Controls > bindings: press-to-bind
+    if (player <= 1) KeepDeviceHooks();   // ReShade: its setup undoes the device hooks
+    if (player <= 1) SyncReShadeEffects();   // ReShade's own effects follow the Graphics effects row
+    // ReadControls gets player + 1, so the first local player is 1 here (it was "== 0" before, which never ran)
+    if (player <= 1) padhub::DeviceTick();  // button prompts follow the device used last
+    if (player <= 1) skin::Tick();          // live skater looks online (skinsync.inc)
     if (out && padhub::BindBlocking()) { memset(out + 4, 0, 0x12); return r; }  // the press only sets the binding
     static bool logged = false;
     if (!logged) { logged = true; mmenu::Log("gfx: controller read hooked (player %d)", player); }
@@ -2204,7 +2588,6 @@ static void InstallMirrorInput() {
 // through GetProcAddress, so that call is hooked in the modules' import tables right away (plain memory
 // writes, safe at load time): the IDirect3D9 the game gets is patched before it can create a device.
 typedef IDirect3D9*(WINAPI* Create9_t)(UINT);
-static volatile LONG g_probed = 0;
 // As soon as d3d9.dll is loaded (and before the LoadLibrary that loaded it returns, so before anyone can
 // create a device), hook IDirect3D9::CreateDevice with the same probe PatchThread uses.
 static void ProbeD3D9() {
@@ -2260,9 +2643,14 @@ static void InstallCreateHook() {
     }
 }
 
-static void Install() {
+// d3dHooks = false: no Direct3D hooks at all (client safe start, loader.cpp); oneProbe: see PatchThread.
+// The server build calls Install() and keeps both probes as before.
+static void Install(bool d3dHooks = true, bool oneProbe = false) {
     Load();
     InstallMirrorInput();
+    InstallLevelSoundHooks();
+    if (!d3dHooks) { mmenu::Log("gfx: safe start, Direct3D hooks off (graphics settings do nothing)"); return; }
+    g_oneProbe = oneProbe;
     InstallCreateHook();
     CloseHandle(CreateThread(nullptr, 0, PatchThread, nullptr, 0, nullptr));
 }

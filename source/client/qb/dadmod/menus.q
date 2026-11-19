@@ -45,18 +45,16 @@ script dadmod_ins_items
             make_thugpro_menu_item {
             text = <dadmod_nc_label>
             id = dadmod_noclip_item
-            description_text = "Fly through walls (F6). Up/Down move, Left/Right turn, Jump up, Square down, Circle fast"
+            description_text = "Fly through walls (F6). Up/Down move, Left/Right turn, \\b3 up, \\b1 down, \\b2 fast"
             pad_choose_script = dadmod_noclip_quick
             }
         endif
-        if not InNetGame
-            make_thugpro_menu_item {
-            text = "Free Cam"
-            id = dadmod_free_cam
-            description_text = "Fly the camera around freely"
-            pad_choose_script = dadmod_free_cam
-            }
-        endif
+        make_thugpro_menu_item {
+        text = "Free Cam"
+        id = dadmod_free_cam
+        description_text = "Fly the camera around freely"
+        pad_choose_script = dadmod_free_cam
+        }
         dadmod_midload_quick_item
         make_thugpro_menu_item {
         text = "Set Main Menu Here"

@@ -11,6 +11,8 @@ load_level
 # generated from menuui: Kali-only item styles (two flags Kali added) still go to the installed version
 make_thugpro_menu_item
 ClientLaunchProjectile
+# throw.q: our own ClientLaunchProjectileReal (plain THUG Pro's skips every throw in a net game; Kali's does not)
+ClientLaunchProjectileReal
 # client_boot.q: the boot-time settings load skips its "Checking hard disk" / "Loading" dialogs and 3 s holds, like Kali and Dev
 mem_card_message_pause
 mcmess_CheckingCard
@@ -31,3 +33,13 @@ mcmess_SaveSuccessful
 mcmess_OverwriteSuccessful
 # update.q: the Update dadmod row goes on the main menu Dadmod page (layout root) just before the menu finds its last item
 thugpro_menu_find_last_item
+# prompts.q: helper bars are remembered so they can be rebuilt when the player switches keyboard <-> controller
+create_helper_text
+# bhra.q: BHRA keeps combo / Easy BHRA bank a pending combo first (land, bail, grind, wallride) and mark hops (Ollie)
+land
+BailSkaterTricks
+grind
+Ollie
+Wallride
+# screenfx.q: Trick Screen Effects Off skips the 3D Scary Grind full-screen effect (player shibe)
+CreatureScaryGrindEffect

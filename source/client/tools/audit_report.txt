@@ -29,7 +29,6 @@ thugpro_say_to  [qb/game/net/net.q]  <- thugpro_bankdrops_chat, thugpro_bankdrop
 
 ## STOCK: differ from Dev (used by)
 chosen_host_game  [qb/game/net/net.q, server change]  <- autoserver_break_timer, create_network_game_options_menu, create_network_host_options_menu, do_backend_retry
-clientlaunchprojectilereal  [qb/thugpro/procrastination.q, kali]  <- clientlaunchprojectile
 create_console_message  [qb/thugpro/procrastination.q, server change]  <- fliptrick, give_skater_ammo, walk_maybe_throw_projectile2
 create_display_options_menu  [qb/thugpro/procrastination.q, kali]  <- create_panel_message_options_menu, create_predisplay_options_menu
 create_game_modifiers_menu  [qb/thugpro/thugpro_server.q, kali]  <- create_pre_network_host_options_menu
@@ -46,6 +45,7 @@ forkliftsetup  [qb/thugpro/procrastination.q, kali]  <- vehiclesetupmapping
 groundgone  [qb/thugpro/procrastination.q, kali]  <- bailgroundgone, dadmod_noclip_state, flailexceptions, generalbail
 hide_net_player_names  [qb/thugpro/procrastination.q, kali]  <- create_network_game_options_menu
 horse_allowed_characters  [qb/game/net/net.q, server change]  <- create_mp_game_options_horse_word_menu
+landskatertricks  [qb/game/skater/tricks.q, server change]  <- dadmod_anim_play, dadmod_anim_seq_skate, dadmod_bhra_flush, dadmod_bhra_land2_out
 level_select_change_level_quit  [qb/thugpro/procrastination.q, kali]  <- menu_confirm_quit
 manual  [qb/thugpro/procrastination.q, kali]  <- dadmod_anim_list, manuallink, ped_skater_manual, special_trick_types
 quit_network_game  [qb/game/net/net.q, server change]  <- cat_exit_cleanup
@@ -56,6 +56,8 @@ set_theme_thugpro_special_meter_sprites  [qb/thugpro/procrastination.q, kali]  <
 setskaterairtricks  [qb/thugpro/procrastination.q, kali]  <- air_wallplant, fliptrick, groundgone, inairexceptions
 setskatergroundtricks  [qb/thugpro/procrastination.q, kali]  <- ongroundexceptions, toggleswitchregular
 shoes  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male, skater_m_legs, skater_m_torso
+skateinland  [qb/game/skater/grindscripts.q, server change]  <- skatein_left, skatein_right
+skateinorbail_out  [qb/game/skater/grindscripts.q, server change]  <- skatein_left, skatein_right
 skater_f_legs  [qb/thugpro/procrastination.q, kali]  <- cas_temp_disq_set_lower_legs, skater_m_torso
 skater_f_lower_legs  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male, cas_temp_disq_set_lower_legs
 skater_m_head  [qb/thugpro/procrastination.q, kali]  <- appearance_custom_skater_male
@@ -67,9 +69,7 @@ thugpro_clearallobservevalues  [qb/thugpro/procrastination.q, kali]  <- create_o
 thugpro_menu_create_count_text  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create
 thugpro_menu_get_style_params  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create, thugpro_menu_update_scrollbar
 thugpro_menu_item_update_extra_text  [qb/thugpro/thugpro_menu.q, kali]  <- autoservermenu_toggle_auto_game_mode, autoservermenu_toggle_auto_level, autoservermenu_toggle_auto_server, autoservermenu_toggle_auto_server_breaktime
-trick_wallplant  [qb/thugpro/procrastination.q, kali]  <- wallridetricks_doubletap, wallridetricks_singletap
 walkingruntoskating  [qb/thugpro/procrastination.q, kali]  <- walkgroundtricks
-wallride  [qb/thugpro/procrastination.q, kali]  <- default_playrevertsound, inairexceptiontable, offrail
 
 ## KALI: Dev has these, this install does not (used by)
 dadmod_levelthumb_for  [qb/thugpro/procrastination.q]  <- create_thugpro_level_menu_item
@@ -85,6 +85,9 @@ create_console_message  [qb/thugpro/procrastination.q, server change]  <- #"0x30
 create_net_panel_message  [qb/game/net/net.q, server change]  <- eliminatedyou, endofrun, goal_endofrun, level_select_change_level
 create_network_host_options_menu  [qb/game/net/net.q, server change]  <- create_pre_network_host_options_menu, host_options_back_from_keyboard, launch_network_host_options_menu, set_host_option_preference
 horse_allowed_characters  [qb/game/net/net.q, server change]  <- create_mp_game_options_horse_word_menu
+landskatertricks  [qb/game/skater/tricks.q, server change]  <- dadmod_anim_play, dadmod_anim_seq_skate, dadmod_bhra_flush, dadmod_bhra_land2_out
 quit_network_game  [qb/game/net/net.q, server change]  <- cat_exit_cleanup
+skateinland  [qb/game/skater/grindscripts.q, server change]  <- skatein_left, skatein_right
+skateinorbail_out  [qb/game/skater/grindscripts.q, server change]  <- skatein_left, skatein_right
 spawned_chosen_host_game  [qb/game/net/net.q, server change]  <- chosen_host_game
 

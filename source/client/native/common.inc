@@ -43,10 +43,13 @@ static void RetStr(void* script, const char* key, const char* s) {
     typedef void (THISCALL* Fn)(void*, DWORD, int, const char*);
     if (params) ((Fn)kAddString)(params, QbKey(key), 3, s);
 }
+// True only on the host of a net game. 0x44E4F0 (kIsServer) alone just means "in a net game" (true on joining
+// players too, found 2026-11-19); [manager] & 1 is "we run the server" (script OnServer, 0x533F90), which is also
+// set offline, so both are checked, in the order the stock IsHost (0x538D70) checks them.
 static bool IsHostServer() {
     char* mgr = *(char**)kNetManagerPtr;
     typedef char (THISCALL* Fn)(void*);
-    return mgr && ((Fn)kIsServer)(mgr);
+    return mgr && ((Fn)kIsServer)(mgr) && (*(DWORD*)mgr & 1) != 0;
 }
 // every file of ours lives in <game>\dadmod\ (Noah, 2026-10-11)
 static std::string ExeDirFile(const char* file) {
@@ -129,7 +132,13 @@ static bool __cdecl CF_SettingSave(void* params, void*) {
         out += line + "\r\n";
     }
     out += std::string(key) + " " + std::to_string(value) + "\r\n";
+#ifdef DADMOD_DIAG
+    bool ok = WriteWholeFile(path, out);
+    Diag("setting save %s = %d: %s (error %lu)", key, value, ok ? "ok" : "FAILED", ok ? 0UL : GetLastError());
+    return ok;
+#else
     return WriteWholeFile(path, out);
+#endif
 }
 static bool __cdecl CF_SettingLoad(void* params, void* script) {
     const char* key;

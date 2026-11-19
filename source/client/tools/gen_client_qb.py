@@ -102,6 +102,12 @@ PATCHES = {
     'dadmod_tod_watch_start': [(
         '    SpawnScript dadmod_tod_watch NotSessionSpecific = 1\n',
         '    SpawnScript dadmod_tod_watch NotSessionSpecific = 1\n    SpawnScript dadmod_balance_net_watch NotSessionSpecific = 1\n')],
+    # Free Cam shows online too (Noah 2026-11-19). Online, leaving the pause menu resets the camera (stock unpause) but
+    # view_mode stays 1, so the row would do nothing: online it turns view mode off first, then on again
+    'dadmod_free_cam_on': [(
+        '    if not IsTrue view_mode\n        ToggleViewMode\n',
+        '    if IsTrue view_mode\n        if InNetGame\n            ToggleViewMode\n        endif\n    endif\n'
+        '    if not IsTrue view_mode\n        ToggleViewMode\n')],
     # the Menu level list shows only the levels this install has (client/native/menulevels.inc)
     'dadmod_menu_level_menu': [(
         '        e = ( dadmod_menu_level_list [ <i> ] )\n        g = ( <e> . game )\n',
@@ -124,6 +130,8 @@ PATCHES = {
         '')],
 }
 PED = re.compile(r'^ped_[mf]_|^ped_body$', re.I)
+# Dev-only log calls a server mod adds into client scripts (mods/bhra_probe): the line goes, the script stays
+LOG_ONLY = re.compile(r'^[ \t]*dadmod_bhra_log\b[^\n]*\n', re.M)
 
 
 def blocks(path):
@@ -318,6 +326,7 @@ def main(argv):
             if v.count(a) < 1:
                 fail.append('%s: patch anchor not found: %r' % (n, a[:50]))
             v = v.replace(a, b, 1)
+        v = LOG_ONLY.sub('', v)
         gen[n] = (k, v, rel)
     # Edit Skater part lists: stock text + our hidden flags, so Kali's own edits are never shipped
     for n in sorted(set(unsafe) | {x for x in keep if PED.match(x)}):

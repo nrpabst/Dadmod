@@ -79,7 +79,7 @@ No Kali Edit Skater scripts (2026-11-03). Compared Dev (Kali) with THUG Pro - va
 the plain thugpro_qb.prx). Kali's Edit Skater changes and what replaces them:
   - color menu (thugpro_color_menu_add_options_to_menu with "Kalimod" label, randomize, reset): ownmenus.q has our own
     (Color / Brightness / Saturation sliders, Random Color, Default Color).
-  - unlimited scaling (scalingmenu_constraints 0..999999): ownmenus.q, our own limits 0..1000000 for every part (Noah 2026-11-18: truly unlimited; steps grow 5% of the value).
+  - unlimited scaling (scalingmenu_constraints 0..999999): ownmenus.q, our own limits 0..1000000 for every part (Noah 2026-11-18: truly unlimited; 2026-11-19: one number per press, 6 with the stick pushed hard).
   - sex change warning box (confirm_skater_sexchange) and an extra call in launch_pre_cas_menu: plain THUG Pro copies
     from gen_partmenu.py.
   - logo/texture position menus (posmenu_*): already ours (logo_adjust.q); options lists, part menu, options menu: ours.

@@ -1,3 +1,431 @@
+level_Mainmenu_burn = {
+structure_name = level_Mainmenu_burn
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+DisableGoalEditor
+DisableGoalAttack
+wallride_hack
+nosun
+DisableBackfacePatch
+level = "burn"
+sky = "burn_Sky"
+default_level_stuff
+pre = "burn_scripts.pre"
+scnpre = "burnscn.pre"
+colpre = "burncol.pre"
+overview_cam_angle = 90
+overview_cam_zoom = (-8e+02,7e+03,4e+02)
+thugpro_prx = "mainmenu_burn_scripts.pre"
+qb = "levels\\mainmenu_burn\\burn.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_ros = {
+structure_name = level_Mainmenu_ros
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+DisableGoalEditor
+DisableGoalAttack
+indoor
+level = "ros"
+sky = "ros_Sky"
+nosun
+default_level_stuff
+pre = "ros_scripts.pre"
+scnpre = "rosscn.pre"
+colpre = "roscol.pre"
+overview_cam_zoom = (0.0,2e+03,-1e+03)
+overview_cam_hide_objects = [ garage_ceiling surrounding_ground01 ]
+thugpro_prx = "mainmenu_ros_scripts.pre"
+qb = "levels\\mainmenu_ros\\ros.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_z_ms = {
+structure_name = level_Mainmenu_z_ms
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+DisableGoalEditor
+DisableGoalAttack
+DisableBackfacePatch
+level = "z_ms"
+sky = "steamboat_sky"
+indoor
+default_level_stuff
+pre = "z_ms_scripts.pre"
+scnpre = "z_msscn.pre"
+colpre = "z_mscol.pre"
+overview_cam_angle = 0
+overview_cam_zoom = (-7e+03,1.65e+04,-5e+02)
+thugpro_prx = "mainmenu_z_ms_scripts.pre"
+qb = "levels\\mainmenu_z_ms\\z_ms.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\z_ms\\z_ms_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_streets = {
+structure_name = level_Mainmenu_streets
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+loading_time = 8.5
+level = "Streets"
+sky = "Streets_Sky"
+wallride_hack
+pre = "Streets_scripts.pre"
+scnpre = "Streetsscn.pre"
+colpre = "Streetscol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_streets_scripts.pre"
+qb = "levels\\mainmenu_streets\\Streets.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\Streets\\Streets_scripts.qb"
+"levels\\Streets\\Streets_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_thps2ny = {
+structure_name = level_Mainmenu_thps2ny
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+loading_time = 8.5
+level = "THPS2NY"
+sky = "THPS2NY_Sky"
+nosun
+wallride_hack
+pre = "THPS2NY_scripts.pre"
+scnpre = "THPS2NYscn.pre"
+colpre = "THPS2NYcol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thps2ny_scripts.pre"
+qb = "levels\\mainmenu_thps2ny\\THPS2NY.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPS2NY\\THPS2NY_scripts.qb"
+"levels\\THPS2NY\\THPS2NY_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_thps2ss = {
+structure_name = level_Mainmenu_thps2ss
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+loading_time = 8.5
+level = "THPS2SS"
+sky = "default_sky"
+indoor
+nosun
+wallride_hack
+pre = "THPS2SS_scripts.pre"
+scnpre = "THPS2SSscn.pre"
+colpre = "THPS2SScol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thps2ss_scripts.pre"
+qb = "levels\\mainmenu_thps2ss\\THPS2SS.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPS2SS\\THPS2SS_scripts.qb"
+"levels\\THPS2SS\\THPS2SS_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_thps2bullring = {
+structure_name = level_Mainmenu_thps2bullring
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+loading_time = 8.5
+level = "THPS2Bullring"
+sky = "THPS2Bullring_Sky"
+nosun
+wallride_hack
+pre = "THPS2Bullring_scripts.pre"
+scnpre = "THPS2Bullringscn.pre"
+colpre = "THPS2Bullringcol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thps2bullring_scripts.pre"
+qb = "levels\\mainmenu_thps2bullring\\THPS2Bullring.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPS2Bullring\\THPS2Bullring_scripts.qb"
+"levels\\THPS2Bullring\\THPS2Bullring_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_thps2_sh = {
+structure_name = level_Mainmenu_thps2_sh
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+loading_time = 8.5
+level = "THPS2_SH"
+sky = "default_sky"
+nosun
+pre = "THPS2_SH_scripts.pre"
+scnpre = "THPS2_SHscn.pre"
+colpre = "THPS2_SHcol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thps2_sh_scripts.pre"
+qb = "levels\\mainmenu_thps2_sh\\THPS2_SH.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPS2_SH\\THPS2_SH_scripts.qb"
+"levels\\THPS2_SH\\THPS2_SH_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_thps2chopperdrop = {
+structure_name = level_Mainmenu_thps2chopperdrop
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS2
+loading_time = 8.5
+level = "THPS2ChopperDrop"
+sky = "THPS2ChopperDrop_Sky"
+nosun
+wallride_hack
+pre = "THPS2ChopperDrop_scripts.pre"
+scnpre = "THPS2ChopperDropscn.pre"
+colpre = "THPS2ChopperDropcol.pre"
+default_level_stuff
+thugpro_prx = "mainmenu_thps2chopperdrop_scripts.pre"
+qb = "levels\\mainmenu_thps2chopperdrop\\THPS2ChopperDrop.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\THPS2ChopperDrop\\THPS2ChopperDrop_scripts.qb"
+"levels\\THPS2ChopperDrop\\THPS2ChopperDrop_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_p8training = {
+structure_name = level_Mainmenu_p8training
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THP8
+loading_time = 8.5
+level = "P8Training"
+sky = "P8Training_Sky"
+pre = "P8Training_scripts.pre"
+scnpre = "P8Trainingscn.pre"
+colpre = "P8Trainingcol.pre"
+default_level_stuff
+DisableGoalEditor
+DisableGoalAttack
+overview_cam_pos = (-698.3,4416.4,795.5)
+overview_cam_angle = 0
+thugpro_prx = "mainmenu_p8training_scripts.pre"
+qb = "levels\\mainmenu_p8training\\P8Training.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\P8Training\\P8Training_scripts.qb"
+"levels\\P8Training\\P8Training_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_p8suburbs = {
+structure_name = level_Mainmenu_p8suburbs
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THP8
+loading_time = 8.5
+level = "P8Suburbs"
+sky = "P8Suburbs_Sky"
+pre = "P8Suburbs_scripts.pre"
+scnpre = "P8Suburbsscn.pre"
+colpre = "P8Suburbscol.pre"
+default_level_stuff
+DisableGoalEditor
+DisableGoalAttack
+overview_cam_pos = (-2032.6,4565.6,-2302.5)
+overview_cam_angle = 0
+thugpro_prx = "mainmenu_p8suburbs_scripts.pre"
+qb = "levels\\mainmenu_p8suburbs\\P8Suburbs.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\P8Suburbs\\P8Suburbs_scripts.qb"
+"levels\\P8Suburbs\\P8Suburbs_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_p8downtown = {
+structure_name = level_Mainmenu_p8downtown
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THP8
+loading_time = 8.5
+level = "P8Downtown"
+sky = "P8Downtown_Sky"
+pre = "P8Downtown_scripts.pre"
+scnpre = "P8Downtownscn.pre"
+colpre = "P8Downtowncol.pre"
+default_level_stuff
+DisableGoalEditor
+DisableGoalAttack
+overview_cam_pos = (2920.1,5821.6,-1341.0)
+overview_cam_angle = 0
+thugpro_prx = "mainmenu_p8downtown_scripts.pre"
+qb = "levels\\mainmenu_p8downtown\\P8Downtown.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\P8Downtown\\P8Downtown_scripts.qb"
+"levels\\P8Downtown\\P8Downtown_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_p8carfactory = {
+structure_name = level_Mainmenu_p8carfactory
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THP8
+loading_time = 8.5
+level = "P8CarFactory"
+sky = "P8CarFactory_Sky"
+pre = "P8CarFactory_scripts.pre"
+scnpre = "P8CarFactoryscn.pre"
+colpre = "P8CarFactorycol.pre"
+default_level_stuff
+DisableGoalEditor
+DisableGoalAttack
+overview_cam_pos = (-2428.3,6098.0,3137.1)
+overview_cam_angle = 0
+thugpro_prx = "mainmenu_p8carfactory_scripts.pre"
+qb = "levels\\mainmenu_p8carfactory\\P8CarFactory.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\P8CarFactory\\P8CarFactory_scripts.qb"
+"levels\\P8CarFactory\\P8CarFactory_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
 level_Mainmenu_p8cretepark = {
 structure_name = level_Mainmenu_p8cretepark
 load_script = Load_MainMenu
@@ -446,6 +874,34 @@ script Load_dadmod_THPGTraining
     load_level Level_dadmod_THPGTraining
 endscript
 
+script dadmod_thpg_scene_level
+    if not GlobalExists Name = #"0xfed067a9" Type = array
+        return
+    endif
+    GetArraySize #"0xfed067a9"
+    j = 0
+    begin
+        if ( <j> = <array_size> )
+            return
+        endif
+        e = ( #"0xfed067a9" [ <j> ] )
+        if StructureContains structure = <e> level
+            if StructureContains structure = <e> load_script
+                if ( ( <e> . level ) = <scene> )
+                    if ScriptExists ( <e> . load_script )
+                        return found = ( <e> . load_script )
+                    endif
+                endif
+            endif
+        endif
+        j = ( <j> + 1 )
+    repeat
+endscript
+
+script dadmod_thpg_not_installed
+    create_panel_message id = dadmod_thpg_msg text = "This level isn't installed. Run Setup.bat > Repair." time = 4000
+endscript
+
 script dadmod_thpg_user_level
     if not GlobalExists Name = list_level_user Type = array
         return
@@ -470,6 +926,9 @@ endscript
 
 script Load_dadmod_THPGLarxPhilly
     if not GotParam found
+        dadmod_thpg_scene_level scene = "Philly"
+    endif
+    if not GotParam found
         dadmod_thpg_user_level name = "Philly"
     endif
     if not GotParam found
@@ -483,11 +942,16 @@ script Load_dadmod_THPGLarxPhilly
     else
         if ScriptExists Load_dadmod_THPGPhilly
             Load_dadmod_THPGPhilly <...>
+        else
+            dadmod_thpg_not_installed
         endif
     endif
 endscript
 
 script Load_dadmod_THPGLarxBaltimore
+    if not GotParam found
+        dadmod_thpg_scene_level scene = "Baltimore"
+    endif
     if not GotParam found
         dadmod_thpg_user_level name = "Baltimore"
     endif
@@ -499,11 +963,16 @@ script Load_dadmod_THPGLarxBaltimore
     else
         if ScriptExists Load_dadmod_THPGBaltimore
             Load_dadmod_THPGBaltimore <...>
+        else
+            dadmod_thpg_not_installed
         endif
     endif
 endscript
 
 script Load_dadmod_THPGLarxWashington
+    if not GotParam found
+        dadmod_thpg_scene_level scene = "WashingtonDC"
+    endif
     if not GotParam found
         dadmod_thpg_user_level name = "Washington, D.C."
     endif
@@ -518,6 +987,8 @@ script Load_dadmod_THPGLarxWashington
     else
         if ScriptExists Load_dadmod_THPGWashington
             Load_dadmod_THPGWashington <...>
+        else
+            dadmod_thpg_not_installed
         endif
     endif
 endscript
@@ -1843,7 +2314,7 @@ script create_dadmod_mainmenu_menu
     show_gradient
     }
     dadmod_mmopt_item id = mmopt_scene key = "menu_scene" label = "Menu scene" desc = "The stock Skate Shop (normal or Halloween), your custom menu, or Starred: each start shows one of the menus you starred in Custom menus. Loads right away"
-    dadmod_mmopt_item id = mmopt_saved key = "saved_menu" label = "Custom menus" desc = "Main menus you saved while skating (Quick Menu > Set Main Menu Here). Pick one to load it. Right stars menus for Menu scene Starred. Square/F8 twice deletes one"
+    dadmod_mmopt_item id = mmopt_saved key = "saved_menu" label = "Custom menus" desc = "Main menus you saved while skating (Quick Menu > Set Main Menu Here). Pick one to load it. Right stars menus for Menu scene Starred. F8 (or X / Square on a controller) twice deletes one"
     dadmod_mmopt_item id = mmopt_camctl key = "camera_control" label = "Camera control" desc = "Menu: the cameras below move by themselves. You: the stick turns the camera around your skater"
     dadmod_mmopt_item id = mmopt_theme key = "shop_theme" label = "Skate shop theme" desc = "Halloween or normal look for the Skate Shop scene. Auto turns Halloween on in October"
     dadmod_mmopt_item id = mmopt_deck key = "deck" label = "Deck graphic" desc = "The big deck picture behind the menu. Off shows the whole scene"
@@ -2016,8 +2487,8 @@ dadmod_mm_reopen = 0
 dadmod_mm_armed = none
 
 dadmod_mm_helper_text = {
-helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "Y/F8 = Delete" } { text = "X/F7 = Favorite" } ]
-helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "Y/F8 = Delete" } { text = "X/F7 = Favorite" } ]
+helper_text_elements_pc = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\bn = Back" } { text = "\\bm = Accept" } { text = "F8 = Delete" } { text = "F7 = Favorite" } ]
+helper_text_elements_console = [ { text = "\\b7/\\b4 = Select" } { text = "\\b6/\\b5 = Adjust" } { text = "\\m1 = Back" } { text = "\\m0 = Accept" } { text = "\\b0 = Delete" } { text = "\\b1 = Favorite" } ]
 }
 
 script dadmod_mm_back
@@ -2148,7 +2619,9 @@ script dadmod_mm_delete_press
         dadmod_mm_disarm
         Change dadmod_mm_armed = <focused>
         Change dadmod_mm_armed_frames = 180
-        thugpro_menu_item_update_extra_text id = <focused> text = "Press Y/F8 again to delete"
+        dadmod_btn pad = y key = "F8"
+        FormatText TextName = dm_again "Press %b again to delete" b = <btn>
+        thugpro_menu_item_update_extra_text id = <focused> text = <dm_again>
         return
     endif
     Change dadmod_mm_armed = none
@@ -3550,12 +4023,12 @@ thugpro_main_reorder_pick = -1
 
 thugpro_main_helper = {
 helper_text_elements_PC = [ { text = "\\b7/\\b4 = Select" } { text = "\\bm = Accept" } { text = "F9 = Reorder" } { text = "F10 = Undo" } { text = "F12 = Default" } ]
-helper_text_elements_Console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m0 = Accept" } { text = "F9 = Reorder" } { text = "F10 = Undo" } { text = "F12 = Default" } ]
+helper_text_elements_Console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m0 = Accept" } { text = "\\b9+\\bg = Reorder" } { text = "\\b9+\\bh = Undo" } { text = "\\b9+\\be = Default" } ]
 }
 
 thugpro_main_helper_reorder = {
 helper_text_elements_PC = [ { text = "\\b7/\\b4 = Select" } { text = "\\bm = Pick up / Put here" } { text = "F9 = Done" } { text = "F10 = Undo" } { text = "F12 = Default" } ]
-helper_text_elements_Console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m0 = Pick up / Put here" } { text = "F9 = Done" } { text = "F10 = Undo" } { text = "F12 = Default" } ]
+helper_text_elements_Console = [ { text = "\\b7/\\b4 = Select" } { text = "\\m0 = Pick up / Put here" } { text = "\\b9+\\bg = Done" } { text = "\\b9+\\bh = Undo" } { text = "\\b9+\\be = Default" } ]
 }
 
 script dadmod_main_green_focus
@@ -6621,11 +7094,13 @@ dadmod_gfx_lists = [
 { list = gfx_padpopup names = ["Off" "On"] }
 { list = gfx_levelsfx names = ["Off" "On"] }
 { list = gfx_tricksfx names = ["Off" "On"] }
+{ list = gfx_postfx names = ["dadmod" "ReShade"] }
 ]
 
 script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen. THUG Pro's own setting, the same one its launcher changes. Shows after you restart the game." pdesc = "Window or fullscreen. Shows after you restart the game."
     dadmod_ui_item id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The game's size: the sizes your monitor supports (in a window, the ones that fit the screen). Sets the window and fullscreen size together. Shows after you restart the game." pdesc = "The game's size. Shows after you restart the game."
+    dadmod_ui_item id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show."
     dadmod_ui_item id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little."
     dadmod_ui_item id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer."
     dadmod_ui_item id = gfx_uismooth key = "gfx_uismooth" label = "Smooth menu graphics" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_uismooth desc = "Smooths blocky scaled-up menu and HUD graphics. Changes show right away."
@@ -6674,8 +7149,8 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture."
     dadmod_ui_item id = gfx_vsync key = "gfx_vsync" label = "V-sync (restart)" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_vsync desc = "Locks frames to your monitor to stop tearing. Needs a restart of the game."
     dadmod_ui_item id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal. Only on your screen." pdesc = "Flips the 3D view left to right and swaps steering to match. Only your screen."
-    dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_levelsfx desc = "Water, crowds, machines and other sounds that come from spots in a map. Off silences them from the next map load."
-    dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_tricksfx desc = "The sound clips some special tricks play, like the guitar grind. Off keeps them quiet."
+    dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away."
+    dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing."
     dadmod_ui_item id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away."
     dadmod_ui_item id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away."
     dadmod_ui_item id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away."
@@ -6817,6 +7292,12 @@ script dadmod_ui_item step = 1
         if GotParam pdesc
             desc = <pdesc>
         endif
+    endif
+    if (<kind> = reshade)
+        if not THUGRECOMP_ReShadeInfo
+            return
+        endif
+        kind = gfxlist
     endif
     if (<kind> = gfxreset)
         make_thugpro_menu_item {
@@ -7323,6 +7804,7 @@ script thugpro_menu_desc_text_focus
     if not GotParam text
         return
     endif
+    Change dadmod_desc_seq = ( dadmod_desc_seq + 1 )
     THUGRECOMP_TextClip text = <text> max = 90
     short = <clipped>
     dadmod_box = 0
@@ -7418,6 +7900,35 @@ script thugpro_menu_create_helper_text parent = current_menu_anchor
     }
 endscript
 
+dadmod_desc_seq = 0
+
+script thugpro_menu_desc_text_unfocus
+    if ScreenElementExists id = desc_text_container
+        DoScreenElementMorph id = { desc_text_container child = text } alpha = 0.0 time = 0.2
+        SetScreenElementProps id = { desc_text_container child = text } text = " "
+        KillSpawnedScript Name = dadmod_desc_fit_later
+        KillSpawnedScript Name = dadmod_desc_hide_later
+        SpawnScript dadmod_desc_hide_later params = { seq = ( dadmod_desc_seq ) }
+    endif
+    if ScreenElementExists id = tp_helper_text
+        DoScreenElementMorph id = tp_helper_text alpha = 0.0 time = 0.2
+        SetScreenElementProps id = tp_helper_text text = " "
+    endif
+endscript
+
+script dadmod_desc_hide_later
+    wait 2 gameframes
+    if not (<seq> = ( dadmod_desc_seq ))
+        return
+    endif
+    if not ScreenElementExists id = desc_text_container
+        return
+    endif
+    if desc_text_container : GetSingleTag dadmod_box
+        dadmod_desc_fit hide
+    endif
+endscript
+
 script make_thugpro_menu_item {
     parent_id = current_menu
     Dims = (3.2e+02,20.5)
@@ -7451,6 +7962,9 @@ script make_thugpro_menu_item {
         if (<captured> = 1)
             return
         endif
+    endif
+    if not GotParam dadmod_rebuild
+        dadmod_keep_item <...>
     endif
     if GotParam #"0x1d710c47"
         make_thugpro_menu_item_orig <...>
@@ -7823,6 +8337,11 @@ script make_thugpro_menu_item {
         event_handlers = <handlers>
         }
     endif
+    if GotParam dadmod_rebuild
+        dadmod_keep_link h = <dadmod_rebuild> item = <container_id>
+    else
+        dadmod_keep_link h = ( dadmod_keep_last ) item = <container_id>
+    endif
     return { menu_item_id = <container_id> }
 endscript
 
@@ -7866,7 +8385,7 @@ script dadmod_replay_all
         endif
         h = <id>
         if (<hide> = 0)
-            dadmod_replay_item h = <h> grey = <grey>
+            dadmod_replay_item h = <h> grey = <grey> stock = <stock>
         endif
         if ScreenElementExists id = <h>
             DestroyScreenElement id = <h>
@@ -7911,6 +8430,381 @@ script thugpro_menu_finalize {
             endif
         endif
     endif
+endscript
+
+dadmod_keep_n = 0
+
+dadmod_keep_last = none
+
+dadmod_reorder_on = 0
+
+dadmod_reorder_pick = -1
+
+dadmod_reorder_menu = none
+
+script dadmod_keep_item
+    Change dadmod_keep_last = none
+    if not ScreenElementExists id = current_menu_anchor
+        return
+    endif
+    if not ScreenElementExists id = <parent_id>
+        return
+    endif
+    if not <parent_id> : GetSingleTag Anchor
+        return
+    endif
+    if not current_menu_anchor : GetSingleTag dadmod_keep_menu
+        Change dadmod_keep_n = 0
+        SetScreenElementProps id = current_menu_anchor tags = { dadmod_keep_menu = <Anchor> }
+    endif
+    if not GotParam stock
+        stock = ( dadmod_keep_n )
+    endif
+    FormatText ChecksumName = keep_h "dadmod_keep_%i" i = ( dadmod_keep_n )
+    if ScreenElementExists id = <keep_h>
+        DestroyScreenElement id = <keep_h>
+    endif
+    CreateScreenElement {
+    type = ContainerElement
+    parent = current_menu_anchor
+    id = <keep_h>
+    alpha = 0.0
+    }
+    <keep_h> : SetTags <...>
+    Change dadmod_keep_last = <keep_h>
+    Change dadmod_keep_n = ( dadmod_keep_n + 1 )
+endscript
+
+script dadmod_keep_link
+    if ScreenElementExists id = <h>
+        SetScreenElementProps id = <h> tags = { dadmod_item = <item> }
+    endif
+endscript
+
+script dadmod_reorder_keys
+    if ScreenElementExists id = startup_menu
+        return
+    endif
+    if not ScreenElementExists id = current_menu_anchor
+        Change dadmod_reorder_on = 0
+        return
+    endif
+    if IsTrue dadmod_reorder_on
+        live = 0
+        if current_menu_anchor : GetSingleTag dadmod_reorder_live
+            live = <dadmod_reorder_live>
+        endif
+        if (<live> = 0)
+            Change dadmod_reorder_on = 0
+        endif
+    endif
+    dadmod_pad_chord
+    if THUGRECOMP_KeyPressed key = "F9"
+        SpawnScript dadmod_reorder_toggle
+    endif
+    if (<chord> = 1)
+        SpawnScript dadmod_reorder_toggle
+    endif
+    if IsTrue dadmod_reorder_on
+        if THUGRECOMP_KeyPressed key = "F10"
+            SpawnScript dadmod_reorder_undo
+        endif
+        if THUGRECOMP_KeyPressed key = "F12"
+            SpawnScript dadmod_reorder_reset
+        endif
+        if (<chord> = 2)
+            SpawnScript dadmod_reorder_undo
+        endif
+        if (<chord> = 3)
+            SpawnScript dadmod_reorder_reset
+        endif
+    endif
+endscript
+
+script dadmod_reorder_toggle
+    if not ScreenElementExists id = current_menu_anchor
+        return
+    endif
+    if IsTrue dadmod_reorder_on
+        Change dadmod_reorder_on = 0
+        Change dadmod_reorder_pick = -1
+        dadmod_reorder_rebuild
+        THUGRECOMP_Log text = "menu reorder: done"
+        return
+    endif
+    if not current_menu_anchor : GetSingleTag dadmod_keep_menu
+        return
+    endif
+    if ( ( dadmod_keep_n ) < 2 )
+        return
+    endif
+    if current_menu_anchor : GetSingleTag dadmod_reorder_live
+        if not THUGRECOMP_ReorderPermInit menu = <dadmod_keep_menu> count = ( dadmod_keep_n )
+            return
+        endif
+    else
+        if not THUGRECOMP_ReorderPermInit menu = <dadmod_keep_menu> count = ( dadmod_keep_n ) fresh = 1
+            return
+        endif
+    endif
+    Change dadmod_reorder_menu = <dadmod_keep_menu>
+    Change dadmod_reorder_pick = -1
+    Change dadmod_reorder_on = 1
+    THUGRECOMP_Log text = "menu reorder: move mode on"
+    dadmod_reorder_rebuild
+endscript
+
+script dadmod_reorder_rebuild
+    n = ( dadmod_keep_n )
+    i = 0
+    begin
+        if (<i> = <n>)
+            break
+        endif
+        FormatText ChecksumName = h "dadmod_keep_%i" i = <i>
+        if ScreenElementExists id = <h>
+            if <h> : GetSingleTag dadmod_item
+                if ScreenElementExists id = <dadmod_item>
+                    DestroyScreenElement id = <dadmod_item>
+                endif
+            endif
+        endif
+        i = ( <i> + 1 )
+    repeat
+    THUGRECOMP_ReorderPermInit menu = ( dadmod_reorder_menu ) count = <n>
+    pos = 0
+    begin
+        if (<pos> = <n>)
+            break
+        endif
+        if THUGRECOMP_ReorderPermAt pos = <pos>
+            FormatText ChecksumName = h "dadmod_keep_%i" i = <idx>
+            if ScreenElementExists id = <h>
+                dadmod_reorder_make h = <h> pos = <pos>
+            endif
+        endif
+        pos = ( <pos> + 1 )
+    repeat
+    if IsTrue dadmod_reorder_on
+        SetScreenElementProps id = current_menu_anchor tags = { dadmod_reorder_live = 1 }
+    else
+        SetScreenElementProps id = current_menu_anchor tags = { dadmod_reorder_live = 0 }
+    endif
+    thugpro_menu_finalize no_animate
+    if GotParam focus_pos
+        SpawnScript dadmod_reorder_refocus params = { focus_pos = <focus_pos> n = <n> }
+    endif
+endscript
+
+script dadmod_reorder_refocus
+    wait 2 gameframes
+    if not ScreenElementExists id = current_menu
+        return
+    endif
+    if GetScreenElementChildren id = current_menu
+        GetArraySize <children>
+        k = ( <array_size> - <n> + <focus_pos> )
+        if (<k> > -1)
+            if (<k> < <array_size>)
+                FireEvent Type = unfocus target = current_menu
+                FireEvent Type = Focus target = current_menu data = { child_id = ( <children> [ <k> ] ) }
+            endif
+        endif
+    endif
+endscript
+
+script dadmod_reorder_make
+    dadmod_ro_holder = <h>
+    <dadmod_ro_holder> : GetTags
+    RemoveParameter dadmod_item
+    if IsTrue dadmod_reorder_on
+        RemoveParameter option_arrows
+        RemoveParameter option_arrows_callback
+        RemoveParameter option_arrows_callback_params
+        RemoveParameter pad_choose
+        RemoveParameter not_focusable
+        focus_script = NullScript
+        unfocus_script = NullScript
+        focus_params = { }
+        unfocus_params = { }
+        if GotParam text
+            if ( ( dadmod_reorder_pick ) = <pos> )
+                FormatText TextName = text "\\c4> %s <" s = <text>
+            endif
+        endif
+        if ( ( dadmod_reorder_pick ) = <pos> )
+            description_text = "Now choose where to put it"
+        else
+            if dadmod_on_pad
+                description_text = "Move mode: \\b9+\\bh undo, \\b9+\\be stock order, \\b9+\\bg done. Pick an option, then where it goes"
+            else
+                description_text = "Move mode: pick an option, then where it goes. F10 undo, F12 stock order, F9 done"
+            endif
+        endif
+        pad_choose_script = dadmod_reorder_choose
+        pad_choose_params = { pos = <pos> }
+    endif
+    make_thugpro_menu_item <...> dadmod_rebuild = <dadmod_ro_holder> dadmod_replay
+    return made_id = <menu_item_id>
+endscript
+
+script dadmod_reorder_choose
+    if ( ( dadmod_reorder_pick ) = -1 )
+        Change dadmod_reorder_pick = <pos>
+    else
+        THUGRECOMP_ReorderPermMove from = ( dadmod_reorder_pick ) to = <pos>
+        Change dadmod_reorder_pick = -1
+        dadmod_reorder_save
+    endif
+    dadmod_reorder_rebuild focus_pos = <pos>
+endscript
+
+script dadmod_reorder_save
+    THUGRECOMP_ReorderBegin menu = ( dadmod_reorder_menu )
+    n = ( dadmod_keep_n )
+    pos = 0
+    begin
+        if (<pos> = <n>)
+            break
+        endif
+        if THUGRECOMP_ReorderPermAt pos = <pos>
+            FormatText ChecksumName = h "dadmod_keep_%i" i = <idx>
+            t = "-"
+            if ScreenElementExists id = <h>
+                if <h> : GetSingleTag text
+                    t = <text>
+                endif
+            endif
+            THUGRECOMP_ReorderAdd text = <t>
+        endif
+        pos = ( <pos> + 1 )
+    repeat
+    THUGRECOMP_ReorderSave
+endscript
+
+script dadmod_reorder_undo
+    if THUGRECOMP_ReorderUndo menu = ( dadmod_reorder_menu )
+        Change dadmod_reorder_pick = -1
+        dadmod_reorder_rebuild
+    endif
+endscript
+
+script dadmod_reorder_reset
+    if THUGRECOMP_ReorderReset menu = ( dadmod_reorder_menu )
+        THUGRECOMP_ReorderPermPush
+        n = ( dadmod_keep_n )
+        pos = 0
+        begin
+            if (<pos> = <n>)
+                break
+            endif
+            i = 0
+            begin
+                if (<i> = <n>)
+                    break
+                endif
+                FormatText ChecksumName = h "dadmod_keep_%i" i = <i>
+                if ScreenElementExists id = <h>
+                    if <h> : GetSingleTag stock
+                        if (<stock> = <pos>)
+                            THUGRECOMP_ReorderPermSet pos = <pos> idx = <i>
+                        endif
+                    endif
+                endif
+                i = ( <i> + 1 )
+            repeat
+            pos = ( <pos> + 1 )
+        repeat
+        Change dadmod_reorder_pick = -1
+        dadmod_reorder_rebuild
+    endif
+endscript
+
+script dadmod_helper_seen
+    if ScreenElementExists id = dadmod_helper_store
+        DestroyScreenElement id = dadmod_helper_store
+    endif
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = dadmod_helper_store
+    alpha = 0.0
+    }
+    dadmod_helper_store : SetTags <...>
+    if ( ( GLOBAL_CtrlLayout ) = 0 )
+        if not GotParam spacing_between
+            return spacing_between = 26
+        endif
+        if ( <spacing_between> < 26 )
+            return spacing_between = 26
+        endif
+    endif
+endscript
+
+script dadmod_helper_refresh
+    if not ScreenElementExists id = dadmod_helper_store
+        return
+    endif
+    dadmod_helper_store : GetTags
+    if not GotParam anchor_id
+        anchor_id = helper_text_anchor
+    endif
+    if not ScreenElementExists id = <anchor_id>
+        return
+    endif
+    if GotParam parent
+        if not ScreenElementExists id = <parent>
+            return
+        endif
+    endif
+    create_helper_text <...>
+endscript
+
+script dadmod_prompt_tick
+    if not THUGRECOMP_InputDevice
+        return
+    endif
+    if ScreenElementExists id = keyboard_anchor
+        return
+    endif
+    if THUGRECOMP_BindPoll
+        return
+    endif
+    if THUGRECOMP_InputDevice apply = 1
+        Change GLOBAL_CtrlLayout = <layout>
+        dadmod_helper_refresh
+    endif
+endscript
+
+script dadmod_btn
+    if THUGRECOMP_ButtonText <...>
+        return btn = <text>
+    endif
+    return btn = "?"
+endscript
+
+script dadmod_on_pad
+    THUGRECOMP_InputDevice
+    if (<device> = 1)
+        return true
+    endif
+    return false
+endscript
+
+script dadmod_pad_chord
+    chord = 0
+    if THUGRECOMP_PadHeld button = "back"
+        if THUGRECOMP_PadPressed button = "leftshoulder"
+            chord = 1
+        endif
+        if THUGRECOMP_PadPressed button = "rightshoulder"
+            chord = 2
+        endif
+        if THUGRECOMP_PadPressed button = "lefttrigger"
+            chord = 3
+        endif
+    endif
+    return chord = <chord>
 endscript
 
 script dadmod_hl_style
@@ -8228,741 +9122,4 @@ script dadmod_hl_brk_code t = 0
     dadmod_ui_mod v = <k> m = 12
     return brk_code = ( <codes> [ <v> ] )
 endscript
-
-script dadmod_hl_brk_scan
-    k = 0
-    begin
-        if not ScreenElementExists id = <id>
-            break
-        endif
-        if not ( ( dadmod_ui_focused ) = <id> )
-            break
-        endif
-        RemoveParameter dadmod_brk
-        <id> : GetTags
-        if not GotParam dadmod_brk
-            break
-        endif
-        if not (<dadmod_brk> = "scan")
-            break
-        endif
-        dadmod_hl_text_managed
-        if (<managed> = 0)
-            dadmod_hl_brk_code t = ( <k> * 0.5 )
-            FormatText TextName = bt "%c> \\c0%s %c<" c = <brk_code> s = <bl>
-            if ScreenElementExists id = { <id> child = text }
-                SetScreenElementProps id = { <id> child = text } text = <bt>
-            endif
-        endif
-        k = ( <k> + 1 )
-        wait 0.1 seconds
-    repeat
-endscript
-
-script dadmod_hl_grow
-    dadmod_hl_grow_child id = { <id> child = text } s = <s>
-    dadmod_hl_grow_child id = { <id> child = extra_text } s = <s>
-    dadmod_hl_grow_child id = { <id> child = left_arrow } s = <s>
-    dadmod_hl_grow_child id = { <id> child = right_arrow } s = <s>
-    dadmod_hl_grow_child id = { <id> child = icon } s = <s>
-endscript
-
-script dadmod_hl_grow_child
-    if ScreenElementExists id = <id>
-        RunScriptOnScreenElement id = <id> dadmod_hl_grow_morph params = { s = <s> }
-    endif
-endscript
-
-script dadmod_hl_grow_morph
-    DoMorph time = 0.08 scale = <s> relative_scale
-endscript
-
-dadmod_layout_block_begin = "Dadmod menus built from dadmod_layout.txt (Host Manager > Dadmod Menus). Items come from dadmod_item_catalog (layout_catalog.q, generated by gen_layout.py)"
-
-dadmod_layout_node = -1
-
-script create_dadmod_setup_menu
-    dadmod_layout_open node = 0
-endscript
-
-script dadmod_layout_back
-    if THUGRECOMP_PadHeld button = "y"
-        if ( ( dadmod_ui_focused ) = mmopt_spotpick )
-            return
-        endif
-    endif
-    Change dadmod_mm_armed = none
-    if (<parent> < 0)
-        Change dadmod_layout_node = -1
-        dadmod_back_to_main
-    else
-        dadmod_layout_open node = <parent>
-    endif
-endscript
-
-script dadmod_layout_open node = 0
-    THUGRECOMP_LayoutInfo node = <node>
-    Change dadmod_layout_node = <node>
-    me = <node>
-    hmode = 0
-    has_eff = 0
-    i = 0
-    begin
-        if (<i> = <count>)
-            break
-        endif
-        if THUGRECOMP_LayoutChild node = <me> index = <i>
-            if (<type> = 1)
-                if (<hmode> = 0)
-                    hmode = 1
-                endif
-                if ( ( <key> = "mmopt_spotpick" ) or ( <key> = "mmopt_anim" ) )
-                    hmode = 2
-                endif
-                if (<key> = "mui_rainbow")
-                    has_eff = 1
-                endif
-            endif
-        endif
-        i = ( <i> + 1 )
-    repeat
-    switch <hmode>
-    case 1
-        helper = generic_helper_text_up_down_adjust
-    case 2
-        helper = dadmod_mm_helper_text
-    default
-        helper = generic_helper_text
-    endswitch
-    off_page = 0
-    if (<has_eff> = 1)
-        dadmod_ui_get key = "ui_rainbow" def = 0 raw
-        if (<value> = 0)
-            off_page = 1
-        endif
-        if (<value> = 11)
-            off_page = 2
-        endif
-    endif
-    rows = <count>
-    if ( <rows> > 13 )
-        rows = 13
-    endif
-    if ( <rows> < 1 )
-        rows = 1
-    endif
-    default_skateshop_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_layout
-    scrolling
-    num_items_to_show = <rows>
-    menu_title = <title>
-    menu_style = MENU_STYLE_LEFT
-    helper_text = <helper>
-    pad_back_script = dadmod_layout_back
-    pad_back_params = { parent = <parent> }
-    show_description_panel
-    show_gradient
-    }
-    i = 0
-    begin
-        if (<i> = <count>)
-            break
-        endif
-        if THUGRECOMP_LayoutChild node = <me> index = <i>
-            dadmod_layout_entry <...>
-        endif
-        i = ( <i> + 1 )
-    repeat
-    dadmod_desc_panel_right
-    if GotParam focus_id
-        thugpro_menu_finalize focus_target = <focus_id> no_animate
-    else
-        thugpro_menu_finalize
-    endif
-    Change dadmod_mm_armed = none
-endscript
-
-script dadmod_layout_static_ok
-    switch <type>
-    case 1
-        keys = [ "mui_rainbow" "mui_hl_style" "mui_br_color" "mui_br_speed" "mui_c_text" "mui_c_textfx" "mui_c_focus" "mui_c_focusfx" "mui_c_bar" "mui_c_barfx" "mui_c_title" "mui_c_titlefx" "mui_c_fxspeed" "mui_rb_speed" "mui_rb_angle" ]
-        GetArraySize <keys>
-        i = 0
-        begin
-            if (<i> = <array_size>)
-                break
-            endif
-            if ( ( <keys> [ <i> ] ) = <key> )
-                return static_ok = 1
-            endif
-            i = ( <i> + 1 )
-        repeat
-    case 2
-        if ( ( <label> = "Your colors" ) or ( <label> = "Highlight" ) or ( <label> = "Text" ) )
-            return static_ok = 1
-        endif
-    endswitch
-    return static_ok = 0
-endscript
-
-script dadmod_layout_entry
-    if (<hide> = 1)
-        return
-    endif
-    if (<type> = 2)
-        if (<label> = "Theme")
-            dadmod_ui_get key = "ui_rainbow" def = 0 raw
-            dadmod_ui_effect_resolve v = <value>
-            if not (<v> = 9)
-                return
-            endif
-        endif
-    endif
-    mmc = 0
-    if (<type> = 0)
-        if ( ( <label> = "Main menu colors" ) or ( <label> = "Main screen options" ) )
-            mmc = 1
-            dadmod_ui_get key = "ui_rainbow" def = 0 raw
-            if not (<value> = 0)
-                return
-            endif
-        endif
-    endif
-    if GotParam off_page
-        if (<off_page> = 1)
-            if (<mmc> = 0)
-                if not (<type> = 1)
-                    return
-                endif
-                if not ( ( <key> = "mui_rainbow" ) or ( <key> = "mui_hl_style" ) or ( <key> = "mui_br_color" ) or ( <key> = "mui_br_speed" ) or ( <key> = "mui_c_focus" ) )
-                    return
-                endif
-            endif
-        endif
-        if (<off_page> = 2)
-            dadmod_layout_static_ok type = <type> key = <key> label = <label>
-            if (<static_ok> = 0)
-                return
-            endif
-        endif
-    endif
-    switch <type>
-    case 0
-        if (<desc> = "")
-            FormatText TextName = desc "Opens %s" s = <label>
-        endif
-        FormatText TextName = shown "%s  >" s = <label>
-        make_thugpro_menu_item {
-        text = <shown>
-        sub_label = <label>
-        description_text = <desc>
-        pad_choose_script = dadmod_layout_open
-        pad_choose_params = { node = <child> }
-        }
-        if (<grey> = 1)
-            dadmod_layout_grey_last
-        endif
-    case 1
-        dadmod_layout_item name = <key> label = <label> grey = <grey>
-    case 2
-        make_thugpro_menu_item {
-        text = <label>
-        not_focusable = not_focusable
-        centered
-        heading_alpha = 0.55
-        }
-    default
-        make_thugpro_menu_item {
-        text = " "
-        not_focusable = not_focusable
-        }
-    endswitch
-endscript
-
-script dadmod_layout_item
-    GetArraySize dadmod_item_catalog
-    j = 0
-    begin
-        if (<j> = <array_size>)
-            return
-        endif
-        e = ( dadmod_item_catalog [ <j> ] )
-        if ( ( <e> . name ) = <name> )
-            break
-        endif
-        j = ( <j> + 1 )
-    repeat
-    p = ( <e> . p )
-    if GotParam dadmod_pause
-        p = ( <p> + { dadmod_pause = 1 } )
-    endif
-    if not (<label> = "")
-        p = ( <p> + { label = <label> } )
-    endif
-    b = ( <e> . b )
-    switch <b>
-    case 0
-        dadmod_mmopt_item <p>
-        if (<grey> = 1)
-            dadmod_layout_grey_last
-        endif
-    case 1
-        if ( ( <p> . key ) = "ui_br_color" )
-            dadmod_hl_style
-            if not (<hl> = 3)
-                return
-            endif
-        endif
-        if ( ( <p> . key ) = "ui_br_speed" )
-            dadmod_hl_style
-            if not (<hl> = 3)
-                return
-            endif
-            dadmod_ui_get key = "ui_br_color" def = 10
-            if not (<value> = 10)
-                return
-            endif
-        endif
-        dadmod_ui_should_grey key = ( <p> . key )
-        if (<grey_it> = 1)
-            return
-        endif
-        if (<grey> = 1)
-            grey_it = 1
-        endif
-        if (<grey_it> = 1)
-            p = ( <p> + { dadmod_grey = 1 } )
-        endif
-        dadmod_ui_item <p>
-        if (<grey_it> = 1)
-            dadmod_layout_grey_last
-        endif
-    default
-        if (<label> = "")
-            label = "Reset Menu UI"
-        endif
-        make_thugpro_menu_item {
-        text = <label>
-        id = mui_reset
-        description_text = "Puts every Menu UI setting back to stock"
-        pad_choose_script = dadmod_ui_reset
-        }
-        if (<grey> = 1)
-            dadmod_layout_grey_last
-        endif
-    endswitch
-endscript
-
-script dadmod_layout_live
-    if (dadmod_layout_node > -1)
-        if ScreenElementExists id = desc_text_container
-            dadmod_layout_open node = ( dadmod_layout_node )
-        endif
-    endif
-endscript
-
-script dadmod_layout_grey_last
-    if GetScreenElementChildren id = current_menu
-        GetArraySize <children>
-        c = ( <children> [ ( <array_size> - 1 ) ] )
-        SetScreenElementProps id = <c> not_focusable
-        if ScreenElementExists id = { <c> child = text }
-            SetScreenElementProps id = { <c> child = text } alpha = 0.4
-        endif
-    endif
-endscript
-
-dadmod_tod_states = [ afternoon morning afternoon evening night night ]
-
-dadmod_tod_requested = afternoon
-
-dadmod_tod_custom = 0
-
-dadmod_tod_last = -1
-
-dadmod_tod_watch_on = 0
-
-dadmod_tod_evening_lights = {
-state_length = 140000
-sun_theta = 0.0
-sun_phi = 1.9e+02
-sun_red = 255.0
-sun_green = 110.0
-sun_blue = 60.0
-lev_red = 78
-lev_green = 70
-lev_blue = 76
-sky_red = 70
-sky_green = 48
-sky_blue = 60
-fog_on = 1
-fog_red = 70
-fog_green = 46
-fog_blue = 52
-fog_alpha = 40
-fog_dist = 6000
-ambient_red = 34
-ambient_green = 30
-ambient_blue = 38
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 340
-red_0 = 110
-green_0 = 78
-blue_0 = 52
-mod_factor_0_lo = 0.6
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 36
-green_1 = 34
-blue_1 = 52
-mod_factor_1_lo = 0.3
-mod_factor_1_hi = 0.0
-headlights_on = 1
-bloom_on = 1
-bloom1 = 35
-bloom2 = 90
-bloom_color = [ 160 , 110 , 90 ]
-entry_script = nullscript
-}
-
-dadmod_tod_night_moon = {
-state_length = 140000
-sun_theta = 0.0
-sun_phi = 2e+02
-sun_red = 0.0
-sun_green = 0.0
-sun_blue = 0.0
-lev_red = 74
-lev_green = 82
-lev_blue = 100
-sky_red = 14
-sky_green = 20
-sky_blue = 34
-fog_red = 18
-fog_green = 26
-fog_blue = 40
-fog_alpha = 30
-fog_dist = 9000
-ambient_red = 42
-ambient_green = 48
-ambient_blue = 66
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 330
-pitch_0 = 330
-red_0 = 96
-green_0 = 110
-blue_0 = 140
-mod_factor_0_lo = 0.45
-mod_factor_0_hi = 0.0
-heading_1 = 151
-pitch_1 = 330
-red_1 = 30
-green_1 = 36
-blue_1 = 52
-mod_factor_1_lo = 0.25
-mod_factor_1_hi = 0.0
-headlights_on = 1
-bloom_on = 1
-bloom1 = 30
-bloom2 = 90
-bloom_color = [ 120 , 130 , 200 ]
-entry_script = nullscript
-}
-
-script dadmod_tod_value
-    value = 0
-    if THUGRECOMP_SettingLoad key = "gfx_todnow"
-    endif
-    dadmod_tod_client_allowed
-    if (<allowed> = 0)
-        value = 0
-    endif
-    if (<value> < 0)
-        value = 0
-    endif
-    if (<value> > 5)
-        value = 0
-    endif
-    return tod = <value>
-endscript
-
-script thugpro_change_time_of_day
-    if (dadmod_tod_upd = 1)
-        <from_update> = 1
-    endif
-    Change dadmod_tod_requested = <tod_state>
-    dadmod_tod_value
-    Change dadmod_tod_last = <tod>
-    custom = 0
-    if (<tod> = 5)
-        tod_manager_set_default_params night_params = dadmod_tod_evening_lights
-        custom = 1
-    endif
-    if (<tod> = 4)
-        tod_manager_set_default_params night_params = dadmod_tod_night_moon
-        custom = 1
-    endif
-    if (<custom> = 1)
-        Change dadmod_tod_custom = 1
-    else
-        if IsTrue dadmod_tod_custom
-            tod_manager_set_default_params
-            Change dadmod_tod_custom = 0
-        endif
-    endif
-    if (<tod> > 0)
-        tod_state = ( dadmod_tod_states [ <tod> ] )
-    endif
-    Change tod_manager_inactive = 0
-    TODManager_SetActive 1
-    SpawnScript thugpro_tod_level_specific_hack_before
-    switch <tod_state>
-    case afternoon
-        Change LEVEL_TOD_STATE = afternoon
-        TODManager_SetTODInstant afternoon
-        set_current_tod_values tod_state = afternoon
-    case night
-        Change LEVEL_TOD_STATE = night
-        TODManager_SetTODInstant night
-        set_current_tod_values tod_state = night
-    case morning
-        Change LEVEL_TOD_STATE = morning
-        TODManager_SetTODInstant morning
-        set_current_tod_values tod_state = morning
-    case evening
-        Change LEVEL_TOD_STATE = evening
-        TODManager_SetTODInstant evening
-        set_current_tod_values tod_state = evening
-    default
-        Change LEVEL_TOD_STATE = afternoon
-        TODManager_SetTODInstant afternoon
-        set_current_tod_values tod_state = afternoon
-    endswitch
-    SpawnScript thugpro_tod_level_specific_hack_after
-endscript
-
-script dadmod_tod_refresh
-    Change dadmod_tod_fading = 0
-    if LevelIs Load_MainMenu
-        return
-    endif
-    if not InNetGame
-        THUGPRO_SetLightUpdateState unpause
-    endif
-    TODManager_ResetLevelLights
-    thugpro_change_time_of_day tod_state = ( dadmod_tod_requested ) from_local
-    if not InNetGame
-        KillSpawnedScript Name = dadmod_tod_lights_settle
-        SpawnScript dadmod_tod_lights_settle
-    endif
-endscript
-
-script dadmod_tod_lights_settle
-    wait 60 gameframes
-    THUGPRO_SetLightUpdateState pause
-endscript
-
-script dadmod_tod_watch_start
-    if IsTrue dadmod_tod_watch_on
-        return
-    endif
-    dadmod_balance_apply
-    Change dadmod_tod_watch_on = 1
-    SpawnScript dadmod_tod_watch NotSessionSpecific = 1
-    SpawnScript dadmod_balance_net_watch NotSessionSpecific = 1
-    SpawnScript dadmod_mirror_watch NotSessionSpecific = 1
-endscript
-
-script dadmod_balance_meter_side
-    arrows = [ (0.0,-17.0) (1e+01,-17.0) (2e+01,-15.0) (3e+01,-11.0) (4e+01,-6.0) (5e+01,1.0) (6e+01,12.0) ]
-    info = ( balance_meter_info )
-    info = ( <info> + { arrow_positions = <arrows> } )
-    Change balance_meter_info = <info>
-endscript
-
-script dadmod_mirror_spin
-    mir = 0
-    if THUGRECOMP_SettingLoad key = "gfx_mirror"
-        mir = <value>
-    endif
-    if (<mir> = 1)
-        switch ( GLOBAL_ShoulderSpinButtons )
-        case L2_R2
-            THUGPRO_SetSkaterPhysicsParams { spin_button_left = R2 spin_button_right = L2 shoulder_spin_enabled = 1 }
-        case L1_R1
-            THUGPRO_SetSkaterPhysicsParams { spin_button_left = R1 spin_button_right = L1 shoulder_spin_enabled = 1 }
-        case R1_R2
-            THUGPRO_SetSkaterPhysicsParams { spin_button_left = R1 spin_button_right = R2 shoulder_spin_enabled = 1 }
-        case L1_L2
-            THUGPRO_SetSkaterPhysicsParams { spin_button_left = L1 spin_button_right = L2 shoulder_spin_enabled = 1 }
-        endswitch
-    else
-        thugpro_set_ShoulderSpinButtons value = ( GLOBAL_ShoulderSpinButtons )
-    endif
-    return mir = <mir>
-endscript
-
-script dadmod_mirror_watch
-    last = -1
-    lastmir = -1
-    lastspin = none
-    lastsk = 0
-    n = 0
-    lastbal = -1
-    lastmm = -1
-    begin
-        wait 1 gameframe
-        mm = 0
-        if LevelIs Load_MainMenu
-            mm = 1
-        endif
-        if not (<mm> = <lastmm>)
-            THUGRECOMP_SettingSave key = "gfx_mainmenu" value = <mm>
-            lastmm = <mm>
-        endif
-        n = (<n> + 1)
-        if (<n> > 15)
-            n = 0
-            sk = 0
-            if ObjectExists id = skater
-                sk = 1
-            endif
-            mir = 0
-            if THUGRECOMP_SettingLoad key = "gfx_mirror"
-                mir = <value>
-            endif
-            again = 0
-            if not (<mir> = <lastmir>)
-                again = 1
-            endif
-            if not (<sk> = <lastsk>)
-                again = 1
-            endif
-            if not (( GLOBAL_ShoulderSpinButtons ) = <lastspin>)
-                again = 1
-            endif
-            if (<again> = 1)
-                dadmod_mirror_spin
-                lastmir = <mir>
-                lastsk = <sk>
-                lastspin = ( GLOBAL_ShoulderSpinButtons )
-            endif
-            dadmod_balance_flags
-        endif
-        bal = 0
-        if ObjectExists id = skater
-            if skater : OnRail
-                bal = 1
-            endif
-            if skater : OnLip
-                bal = 1
-            endif
-        endif
-        if not (<bal> = <lastbal>)
-            THUGRECOMP_SettingSave key = "gfx_balancing" value = <bal>
-            lastbal = <bal>
-        endif
-        up = 0
-        if ScreenElementExists id = current_menu_anchor
-            up = 1
-        endif
-        if ScreenElementExists id = current_menu
-            up = 1
-        endif
-        if ScreenElementExists id = dialog_box_anchor
-            up = 1
-        endif
-        if ScreenElementExists id = keyboard_anchor
-            up = 1
-        endif
-        if ScreenElementExists id = quit_dialog_anchor
-            up = 1
-        endif
-        if not (<up> = <last>)
-            THUGRECOMP_SettingSave key = "gfx_menuup" value = <up>
-            last = <up>
-        endif
-    repeat
-endscript
-
-script dadmod_tod_server_state
-    st = 0
-    if InNetGame
-        TODManager_GetCurrentTODParams
-        if GotParam tod_params
-            if StructureContains structure = <tod_params> current_state_name
-                switch ( <tod_params> . current_state_name )
-                case morning
-                    st = 1
-                case afternoon
-                    st = 2
-                case evening
-                    st = 3
-                case night
-                    st = 4
-                endswitch
-            endif
-        endif
-    endif
-    THUGRECOMP_SettingSave key = "gfx_servertod" value = <st>
-endscript
-
-script dadmod_tod_watch
-    begin
-        wait 30 gameframes
-        dadmod_tod_server_state
-        GetLevelStructureName
-        if StructureContains structure = ( <level_structure_name> ) level
-            FormatText TextName = lk "gfx_level_%a" a = ( <level_structure_name> . level )
-            THUGRECOMP_SettingSave key = <lk> value = 1
-        endif
-        if not LevelIs Load_MainMenu
-            if ObjectExists id = skater
-                dadmod_tod_kali_watch
-                dadmod_tod_value
-                if not (<tod> = ( dadmod_tod_last ))
-                    from = ( dadmod_tod_last )
-                    Change dadmod_tod_last = <tod>
-                    dyn = 0
-                    if THUGRECOMP_SettingLoad key = "gfx_tod"
-                        dyn = <value>
-                    endif
-                    fade = 0
-                    if (<dyn> = 6)
-                        if (<from> > 0)
-                            if (<from> < 6)
-                                if (<tod> > 0)
-                                    fade = 1
-                                endif
-                            endif
-                        endif
-                    endif
-                    if (<fade> = 1)
-                        Change dadmod_tod_fading = 0
-                        KillSpawnedScript Name = dadmod_tod_fade
-                        SpawnScript dadmod_tod_fade NotSessionSpecific = 1 params = { from = <from> to = <tod> }
-                    else
-                        dadmod_tod_refresh
-                    endif
-                else
-                    if IsTrue dadmod_tod_fading
-                        tod = 0
-                    endif
-                    if (<tod> > 0)
-                        if not ( ( LEVEL_TOD_STATE ) = ( dadmod_tod_states [ <tod> ] ) )
-                            dadmod_tod_refresh
-                        endif
-                    endif
-                endif
-            endif
-        endif
-    repeat
-endscript
-
-dadmod_tod_fading = 0
 

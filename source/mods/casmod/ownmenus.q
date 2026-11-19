@@ -17,6 +17,47 @@ scalingmenu_constraints = [
 { part = board_bone_group male_max = 1000000.0 male_min = 0.0 female_max = 1000000.0 female_min = 0.0 }
 { part = wheels_bone_group male_max = 1000000.0 male_min = 0.0 female_max = 1000000.0 female_min = 0.0 }
 ]
+script scalingmenu_get_limits
+    <lo> = ( scalingmenu_min_scale )
+    <hi> = ( scalingmenu_max_scale )
+    GetCurrentSkaterProfileIndex
+    GetSkaterProfileInfo player = <currentSkaterProfileIndex>
+    if not GotParam is_male
+        <is_male> = 1
+    endif
+    GetArraySize scalingmenu_constraints
+    <dm_n> = 0
+    begin
+        <dm_row> = ( scalingmenu_constraints [ <dm_n> ] )
+        if ChecksumEquals a = ( <dm_row> . part ) b = <part>
+            if ( <is_male> = 1 )
+                <lo> = ( <dm_row> . male_min )
+                <hi> = ( <dm_row> . male_max )
+            else
+                <lo> = ( <dm_row> . female_min )
+                <hi> = ( <dm_row> . female_max )
+            endif
+            break
+        endif
+        <dm_n> = ( <dm_n> + 1 )
+    repeat <array_size>
+    return min = <lo> max = <hi>
+endscript
+script scalingmenu_set_xyz
+    if GotParam part
+        GetCurrentSkaterProfileIndex
+        SetPlayerAppearanceScale use_default_scale = 0 z = <z> y = <y> x = <x> player = <currentSkaterProfileIndex> part = <part>
+    endif
+endscript
+script scalingmenu_refresh_skaters
+    if InNetGame
+        return
+    endif
+    GetCurrentSkaterProfileIndex
+    RefreshSkaterScale profile = <currentSkaterProfileIndex> Skater = 0
+endscript
+script cas_post_load
+endscript
 dadmod_analog_boost = 6
 dadmod_stick_threshold = 0.3
 script dadmod_stick_step
@@ -128,9 +169,6 @@ script dadmod_stick_slow
 endscript
 script dadmod_scale_nudge
     <dm_step> = ( ( scalingmenu_scale_increment ) * 1.0 )
-    if ( ( <dm_v> / 20.0 ) > <dm_step> )
-        <dm_step> = ( <dm_v> / 20.0 )
-    endif
     <dm_v> = ( <dm_v> + ( <dm_step> * <dm_sign> ) )
     if ( <lo> > <dm_v> )
         <dm_v> = <lo>

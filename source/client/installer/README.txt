@@ -178,6 +178,52 @@
 ==========================================================================
 
   NEW
+    + Pause > dadmod > Gameplay > BHRA keeps combo (default Off): a
+      Bunny Hop Revert (hop out of a revert window, revert in the air)
+      keeps your combo going. Only your own game changes.
+    + Pause > dadmod > Gameplay > Easy BHRA (default Off): a longer
+      revert window around the hop, so BHRAs are easier to hit.
+    + Pause > Graphics > Sound: Level sounds and Special trick sounds
+      sliders (0 to 100).
+    + Graphics: a "Graphics effects: dadmod / ReShade" row when ReShade
+      is installed in the game folder.
+    + Reorder any menu: F9 move mode, F10 undo, F12 stock order (on a
+      controller: hold Select and press LB, RB or LT).
+    + Online Load Skater: other dadmod players see your new skater
+      within about a second (others after a rejoin).
+    + Pause > dadmod > Gameplay > Trick Screen Effects (default On):
+      Off skips the full-screen effect of special tricks like the 3D
+      Scary Grind. Thanks shibe.
+    + Edit Skater: Male Backpack and Female Backpack rows, so any
+      skater can wear either one. Thanks shibe.
+
+  CHANGED
+    ~ Quick Menu > Free Cam shows online too (where the server allows
+      the free camera).
+    ~ Menus show the keys and buttons you actually use, and switch
+      between keyboard and controller pictures as you play.
+    ~ Edit Skater scale sliders move 1 per press; push the stick hard to
+      go faster.
+    ~ A controller that disconnects is picked up again by itself.
+
+  FIXED
+    x Settings, keybinds and menus not saving on some Windows 11 PCs.
+    x The game not starting on some PCs.
+    x Bank drops could not be switched in the player build.
+    x Keybind menu missing in the player build.
+    x Empty black description box under some menus.
+    x "ESC = Back" and "ENT = Accept" overlapping in pop-ups.
+    x Throwables now work online without Kali (plain THUG Pro).
+      Vehicle throwables need Kali's models; without them you throw
+      a COMBO O. Thanks shibe.
+    x THPG tab: Larxian's cities load even when your copy has another
+      name.
+
+
+  0.9.12
+  ------
+
+  NEW
     + Edit Skater scaling has no limits: Scale Options go from 0 to
       1,000,000, and each press moves about 5% of the number, so big
       sizes come fast.

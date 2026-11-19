@@ -85,6 +85,8 @@ struct DiPad {
     DWORD since;     // when it was found
     bool announced;  // its connect popup was shown (only then does it get a disconnect popup)
     bool checked;    // the connect popup was decided
+    DWORD seenPass;  // last worker scan that DirectInput still listed it (reconnect fix 2026-11-19)
+    const char* why; // why it was dropped (for the log)
 };
 
 struct XState { DWORD packet; WORD buttons; BYTE lt, rt; SHORT lx, ly, rx, ry; };
@@ -97,12 +99,20 @@ static CRITICAL_SECTION g_lock;
 static DiPad* g_pads[8];
 static int g_numPads;
 static GUID g_skip[16];  // XInput pads as DirectInput sees them (read through XInput instead)
+static DWORD g_skipSeen[16];  // last scan that listed each g_skip entry (unlisted ones are forgotten)
 static int g_numSkip;
+static DWORD g_pass = 1;  // worker scan counter
+// Reconnect fix (Noah 2026-11-19, "sometimes when my controller disconnects i can't reconnect", DS4 + DS4Windows +
+// HidHide): a DirectInput pad was only dropped after 3 failed reads. A raw pad that HidHide hides again, or a Bluetooth
+// pad that drops, can keep answering with frozen data and no error, and its GUID then stopped it from ever being opened
+// again. Now a pad DirectInput no longer lists for kGoneScans scans in a row is dropped and opened fresh when it returns.
+static const DWORD kGoneScans = 2;
 static XGetStateFn g_xget;
 static volatile LONG g_xconn[4];  // XInput slot connected
 static volatile LONG g_xlost[4];  // game thread saw the slot drop (logged by the worker)
 static char* g_db;                // gamecontrollerdb.txt contents, or null
-static volatile LONG g_padButtons;  // merged buttons last frame (Xbox layout bits), for THUGRECOMP_PadPressed
+static volatile LONG g_padButtons;
+static volatile LONG g_padActive;   // a pad button is down or a stick/trigger is pushed past 60% (button prompts)  // merged buttons last frame (Xbox layout bits), for THUGRECOMP_PadPressed
 // Dadmod > Controls (gfx.ini, kept in step by gfx.inc SyncInput, Noah 2026-11-16)
 static volatile LONG g_deadzone;  // Stick dead zone: 0 off, 1..10 = 3%..30% radial dead zone on both sticks
 static volatile LONG g_abSwap;    // Swap A/B and X/Y (Nintendo-style labels)
@@ -592,14 +602,46 @@ static void SwitchMerge(PadOut* acc, bool* any) {
 
 // Called on the game thread every frame. False when no controller is connected.
 #ifdef DADMOD_PADINJECT
-// Test builds only (never shipped): <game>\dadmod\padinject.txt holds button names separated by spaces
-// (a b x y start back up down left right lb rb), each pressed for 120 ms with 450 ms between presses.
-// The file is renamed padinject.done once read. Lets an automated test press controller buttons.
-static volatile LONG g_injButtons;
+// Test builds only (never shipped): <game>\dadmod\padinject.txt holds tokens separated by spaces; the file is
+// renamed padinject.done once read. Lets an automated test press controller buttons.
+//   a b x y lb rb back start ls rs guide up down left right   press for 120 ms, then 450 ms gap ("x:300" = hold 300 ms)
+//   down:<b>   start holding <b>          release:<b>   let go of <b>
+//   press:<b>:<ms>   hold <b> for <ms>, no gap afterwards      wait:<ms>   pause
+//   waitgo     wait (max 15 s) for the next time QB sets the gfx_padinject_go pseudo-key (gfx::SetKey), then clear it
+// "lt" / "rt" drive the trigger axis and the trigger button bit (see InjSet).
+// Each step is logged to padhub.log with GetTickCount ms (CF_Log adds the same tick to thugrecomp_debug.log).
+static volatile LONG g_injButtons, g_injLT, g_injRT, g_injBusy;
+HANDLE g_injGo;  // auto-reset event, set by gfx::SetKey("gfx_padinject_go")
+static void InjSleep(DWORD ms) {  // ms-accurate: Sleep(1) can take 15 ms without timeBeginPeriod
+    LARGE_INTEGER f, t0, t; QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
+    LONGLONG end = t0.QuadPart + f.QuadPart * ms / 1000;
+    for (;;) {
+        QueryPerformanceCounter(&t);
+        if (t.QuadPart >= end) return;
+        LONGLONG left = (end - t.QuadPart) * 1000 / f.QuadPart;
+        Sleep(left > 20 ? 1 : 0);
+    }
+}
+static void InjSet(const char* b, bool on) {
+    // "lt"/"rt" set the trigger axis AND the trigger button bit, like a real pad (ReadXPad sets the bit past 0.3);
+    // dadmod's Xbox preset binds L2/R2 to DirectInput buttons 11/12. "lta"/"rta" = axis only, "ltb"/"rtb" = bit only.
+    if (!_stricmp(b, "rt") || !_stricmp(b, "rta")) InterlockedExchange(&g_injRT, on);
+    if (!_stricmp(b, "lt") || !_stricmp(b, "lta")) InterlockedExchange(&g_injLT, on);
+    if (!_stricmp(b, "rta") || !_stricmp(b, "lta")) return;
+    if (!_stricmp(b, "rtb")) b = "rt";
+    if (!_stricmp(b, "ltb")) b = "lt";
+    static const char* names[] = { "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "lt", "rt", "guide", "up", "down", "left", "right" };
+    for (int i = 0; i < B_COUNT; ++i) if (!_stricmp(b, names[i])) {
+        LONG v, n;
+        do { v = g_injButtons; n = on ? (v | (1 << i)) : (v & ~(1 << i)); } while (InterlockedCompareExchange(&g_injButtons, n, v) != v);
+        return;
+    }
+    Log("padinject: unknown button '%s'", b);
+}
 static DWORD WINAPI PadInjectWorker(LPVOID) {
     std::string path = std::string(g_dir) + "padinject.txt", done = std::string(g_dir) + "padinject.done";
     for (;;) {
-        Sleep(50);
+        Sleep(20);
         HANDLE h = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
         if (h == INVALID_HANDLE_VALUE) continue;
         char buf[4096]; DWORD n = 0;
@@ -607,18 +649,46 @@ static DWORD WINAPI PadInjectWorker(LPVOID) {
         CloseHandle(h);
         buf[n] = 0;
         MoveFileExA(path.c_str(), done.c_str(), MOVEFILE_REPLACE_EXISTING);
-        static const char* names[] = { "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "lt", "rt", "guide", "up", "down", "left", "right" };
+        Log("padinject: [%lu] start: %s", GetTickCount(), buf);
+        InterlockedExchange(&g_injBusy, 1);
+        if (g_injGo) ResetEvent(g_injGo);
         for (char* t = strtok(buf, " \t\r\n,"); t; t = strtok(nullptr, " \t\r\n,")) {
-            for (int i = 0; i < B_COUNT; ++i) if (!_stricmp(t, names[i])) {
-                InterlockedExchange(&g_injButtons, 1 << i); Sleep(120);
-                InterlockedExchange(&g_injButtons, 0); Sleep(450);
+            char* c1 = strchr(t, ':'); char* arg = nullptr; char* arg2 = nullptr;
+            if (c1) { *c1 = 0; arg = c1 + 1; char* c2 = strchr(arg, ':'); if (c2) { *c2 = 0; arg2 = c2 + 1; } }
+            if (!_stricmp(t, "waitgo")) {
+                if (g_injGo) ResetEvent(g_injGo);  // only a signal sent after this point counts
+                DWORD r = g_injGo ? WaitForSingleObject(g_injGo, 15000) : WAIT_FAILED;
+                Log("padinject: [%lu] waitgo %s", GetTickCount(), r == WAIT_OBJECT_0 ? "GO" : "TIMEOUT (sequence stopped)");
+                if (r != WAIT_OBJECT_0) break;
+            } else if (!_stricmp(t, "wait") && arg) {
+                InjSleep((DWORD)atoi(arg));
+            } else if (!_stricmp(t, "down") && arg) {
+                InjSet(arg, true); Log("padinject: [%lu] down %s", GetTickCount(), arg);
+            } else if (!_stricmp(t, "release") && arg) {
+                InjSet(arg, false); Log("padinject: [%lu] release %s", GetTickCount(), arg);
+            } else if (!_stricmp(t, "press") && arg) {
+                int ms = arg2 ? atoi(arg2) : 120; if (ms < 1) ms = 120;
+                InjSet(arg, true); Log("padinject: [%lu] press %s %d ms", GetTickCount(), arg, ms);
+                InjSleep(ms); InjSet(arg, false); Log("padinject: [%lu] release %s", GetTickCount(), arg);
+            } else {
+                int ms = arg ? atoi(arg) : 120; if (ms < 1) ms = 120;
+                InjSet(t, true); InjSleep(ms); InjSet(t, false); InjSleep(450);
             }
         }
+        InterlockedExchange(&g_injButtons, 0); InterlockedExchange(&g_injLT, 0); InterlockedExchange(&g_injRT, 0);
+        InterlockedExchange(&g_injBusy, 0);
+        Log("padinject: [%lu] sequence done", GetTickCount());
     }
 }
-static DWORD PadInjectButtons() {
+static DWORD PadInjectButtons(PadOut* acc, bool* any) {
     static LONG started;
-    if (!InterlockedExchange(&started, 1)) { HANDLE t = CreateThread(nullptr, 0, PadInjectWorker, nullptr, 0, nullptr); if (t) CloseHandle(t); }
+    if (!InterlockedExchange(&started, 1)) {
+        g_injGo = CreateEventA(nullptr, FALSE, FALSE, nullptr);
+        HANDLE t = CreateThread(nullptr, 0, PadInjectWorker, nullptr, 0, nullptr); if (t) CloseHandle(t);
+    }
+    if (g_injLT) acc->axis[A_LT] = 1.0f;
+    if (g_injRT) acc->axis[A_RT] = 1.0f;
+    if (g_injBusy || g_injLT || g_injRT || g_injButtons) *any = true;
     return (DWORD)g_injButtons;
 }
 #endif
@@ -629,7 +699,7 @@ static bool ReadAll(DIJOYSTATE2* st) {
         for (DWORD i = 0; i < 4; ++i) {
             if (!g_xconn[i]) continue;
             XState x;
-            if (g_xget(i, &x) != 0) { InterlockedExchange(&g_xconn[i], 0); InterlockedExchange(&g_xlost[i], 1); continue; }
+            if (g_xget(i, &x) != 0) { if (InterlockedExchange(&g_xconn[i], 0)) InterlockedExchange(&g_xlost[i], 1); continue; }
             PadOut p; ReadXPad(x, &p); Merge(&acc, p); any = true; xinput = true;
         }
     }
@@ -641,6 +711,7 @@ static bool ReadAll(DIJOYSTATE2* st) {
         // Noah 2026-11-16 (stick pushing right): a DS4 / DualSense run through DS4Windows-style remappers shows up
         // twice, as the virtual Xbox pad (XInput) and as the raw Sony pad, whose DirectInput reading goes stale once
         // the remapper owns it (HidHide stops hiding it after a Bluetooth reconnect). Skip raw Sony pads while an XInput pad is in.
+        // (if the raw pad drops or HidHide hides it meanwhile, the worker's sweep drops it and it is opened fresh later)
         if (xinput && p->vid == 0x054C) continue;
         DIJOYSTATE2 js;
         p->dev->Poll();
@@ -649,13 +720,13 @@ static bool ReadAll(DIJOYSTATE2* st) {
             p->dev->Acquire(); p->dev->Poll();
             hr = p->dev->GetDeviceState(sizeof js, &js);
         }
-        if (FAILED(hr)) { if (++p->fails >= 3) InterlockedExchange(&p->dead, 1); continue; }
+        if (FAILED(hr)) { if (++p->fails >= 3) { p->why = "3 failed reads in a row"; InterlockedExchange(&p->dead, 1); } continue; }
         p->fails = 0;
         PadOut o; ReadDiPad(p, js, &o); Merge(&acc, o); any = true;
     }
     LeaveCriticalSection(&g_lock);
 #ifdef DADMOD_PADINJECT
-    { DWORD inj = PadInjectButtons(); if (inj) { acc.buttons |= inj; any = true; } }
+    acc.buttons |= PadInjectButtons(&acc, &any);
 #endif
     if (g_abSwap) {  // swapped before g_padButtons so menu shortcuts match what the game sees
         DWORD b = acc.buttons, m = (1u << B_A) | (1u << B_B) | (1u << B_X) | (1u << B_Y);
@@ -672,6 +743,11 @@ static bool ReadAll(DIJOYSTATE2* st) {
         }
     }
     InterlockedExchange(&g_padButtons, any ? (LONG)acc.buttons : 0);
+    {   // button prompts: the pad counts as "in use" only for a button or a stick/trigger pushed well past any drift
+        float m = 0;
+        for (int k = 0; k < A_COUNT; ++k) { float a = fabsf(acc.axis[k]); if (a > m) m = a; }
+        InterlockedExchange(&g_padActive, any && (acc.buttons || m > 0.6f) ? 1 : 0);
+    }
     if (!any) return false;
 
     memset(st, 0, sizeof *st);
@@ -728,6 +804,11 @@ static bool KnownGuid(const GUID& g) {
 
 static BOOL CALLBACK FoundDevice(LPCDIDEVICEINSTANCEA inst, LPVOID ctx) {
     IDirectInput8A* di = ((EnumCtx*)ctx)->di;
+    // still listed this scan: keep it (pads and XInput copies DirectInput stops listing are dropped by the sweep)
+    EnterCriticalSection(&g_lock);
+    for (int i = 0; i < g_numPads; ++i) if (IsEqualGUID(g_pads[i]->instance, inst->guidInstance)) g_pads[i]->seenPass = g_pass;
+    LeaveCriticalSection(&g_lock);
+    for (int i = 0; i < g_numSkip; ++i) if (IsEqualGUID(g_skip[i], inst->guidInstance)) g_skipSeen[i] = g_pass;
     if (KnownGuid(inst->guidInstance) || g_numPads >= 8) return DIENUM_CONTINUE;
     if (g_switchActive > 0 && LOWORD(inst->guidProduct.Data1) == kNintendoVid && HIWORD(inst->guidProduct.Data1) == kSwitchProPid)
         return DIENUM_CONTINUE;  // read natively (Switch Pro section)
@@ -739,7 +820,7 @@ static BOOL CALLBACK FoundDevice(LPCDIDEVICEINSTANCEA inst, LPVOID ctx) {
     gp.diph.dwSize = sizeof gp; gp.diph.dwHeaderSize = sizeof gp.diph; gp.diph.dwHow = DIPH_DEVICE;
     if (SUCCEEDED(dev->GetProperty(DIPROP_GUIDANDPATH, &gp.diph)) && (wcsstr(gp.wszPath, L"IG_") || wcsstr(gp.wszPath, L"ig_"))) {
         dev->Release();
-        if (g_numSkip < 16) g_skip[g_numSkip++] = inst->guidInstance;
+        if (g_numSkip < 16) { g_skipSeen[g_numSkip] = g_pass; g_skip[g_numSkip++] = inst->guidInstance; }
         return DIENUM_CONTINUE;
     }
     if (FAILED(dev->SetDataFormat(&c_dfDIJoystick2))) { dev->Release(); return DIENUM_CONTINUE; }
@@ -766,6 +847,7 @@ static BOOL CALLBACK FoundDevice(LPCDIDEVICEINSTANCEA inst, LPVOID ctx) {
     Log("connected: %s (%04X:%04X, DirectInput, %d axes %d buttons %d hats, mapping: %s)",
         p->name, p->vid, p->pid, p->numAxes, p->numButtons, p->numHats, source);
     p->since = GetTickCount();
+    p->seenPass = g_pass;
     return DIENUM_CONTINUE;
 }
 
@@ -802,10 +884,15 @@ static DWORD WINAPI Worker(LPVOID) {
     for (;;) {
         if (g_xget) {
             for (DWORD i = 0; i < 4; ++i) {
-                if (InterlockedExchange(&g_xlost[i], 0)) { Log("disconnected: XInput pad %u", i + 1); Popup("disconnected", "Xbox controller"); }
-                if (g_xconn[i]) continue;
+                if (InterlockedExchange(&g_xlost[i], 0)) { Log("disconnected: XInput pad %u (stopped answering)", i + 1); Popup("disconnected", "Xbox controller"); }
                 XState x;
-                if (g_xget(i, &x) == 0) { InterlockedExchange(&g_xconn[i], 1); g_xseen = true; Log("connected: XInput pad %u", i + 1); Popup("connected", "Xbox controller"); }
+                bool answers = g_xget(i, &x) == 0;
+                if (g_xconn[i]) {
+                    // also checked here: the game thread only reads pads while it has input (not with another THUG Pro in front)
+                    if (!answers && InterlockedExchange(&g_xconn[i], 0)) { Log("disconnected: XInput pad %u (stopped answering, found by the background check)", i + 1); Popup("disconnected", "Xbox controller"); }
+                    continue;
+                }
+                if (answers) { InterlockedExchange(&g_xconn[i], 1); g_xseen = true; Log("connected: XInput pad %u", i + 1); Popup("connected", "Xbox controller"); }
             }
         }
         // Drop unplugged DirectInput pads so they are picked up again when plugged back in.
@@ -817,7 +904,7 @@ static DWORD WINAPI Worker(LPVOID) {
         }
         LeaveCriticalSection(&g_lock);
         for (int i = 0; i < numGone; ++i) {
-            Log("disconnected: %s", gone[i]->name);
+            Log("disconnected: %s (%s; opened fresh when DirectInput lists it again)", gone[i]->name, gone[i]->why ? gone[i]->why : "dropped");
             if (gone[i]->announced) Popup("disconnected", gone[i]->name);
             gone[i]->dev->Unacquire(); gone[i]->dev->Release(); free(gone[i]);
         }
@@ -834,7 +921,43 @@ static DWORD WINAPI Worker(LPVOID) {
         }
         LeaveCriticalSection(&g_lock);
         SwitchScan();
-        if (di) { EnumCtx ctx = { di }; di->EnumDevices(DI8DEVCLASS_GAMECTRL, FoundDevice, &ctx, DIEDFL_ATTACHEDONLY); }
+        if (di) {
+            ++g_pass;
+            EnumCtx ctx = { di };
+            if (SUCCEEDED(di->EnumDevices(DI8DEVCLASS_GAMECTRL, FoundDevice, &ctx, DIEDFL_ATTACHEDONLY))) {
+                // sweep: a pad DirectInput stopped listing (unplugged, Bluetooth dropped, or hidden by HidHide) may still
+                // answer with frozen data and no error; drop it so the same pad is opened fresh when it comes back
+                EnterCriticalSection(&g_lock);
+                for (int i = 0; i < g_numPads; ++i) {
+                    DiPad* p = g_pads[i];
+                    if (p->dead || g_pass - p->seenPass < kGoneScans) continue;
+                    p->why = "no longer listed by DirectInput: unplugged, Bluetooth dropped, or hidden by HidHide";
+                    InterlockedExchange(&p->dead, 1);
+                }
+                LeaveCriticalSection(&g_lock);
+                for (int i = 0; i < g_numSkip; ) {
+                    if (g_pass - g_skipSeen[i] >= kGoneScans) {
+                        Log("XInput pad's DirectInput copy is gone (%d left to ignore)", g_numSkip - 1);
+                        g_skip[i] = g_skip[g_numSkip - 1]; g_skipSeen[i] = g_skipSeen[g_numSkip - 1]; --g_numSkip;
+                    } else ++i;
+                }
+            }
+        }
+        // which pad drives player 1 right now (logged when it changes, so a reconnect that picks the wrong pad shows up)
+        {
+            static int lastX = -1, lastRaw = -1;
+            int x = 0, raw = 0;
+            for (int i = 0; i < 4; ++i) x += g_xconn[i] ? 1 : 0;
+            EnterCriticalSection(&g_lock);
+            for (int i = 0; i < g_numPads; ++i) raw += (!g_pads[i]->dead && g_pads[i]->vid == 0x054C) ? 1 : 0;
+            LeaveCriticalSection(&g_lock);
+            if (x != lastX || raw != lastRaw) {
+                if (raw && x) Log("input: %d XInput pad(s) in use; %d raw Sony pad(s) ignored while an XInput pad is in (remapper's copy)", x, raw);
+                else if (raw) Log("input: no XInput pad; using %d raw Sony pad(s) directly", raw);
+                else Log("input: %d XInput pad(s), %d other DirectInput pad(s)", x, g_numPads);
+                lastX = x; lastRaw = raw;
+            }
+        }
         Sleep(1500);
     }
 }
@@ -1231,6 +1354,167 @@ static bool __cdecl CF_BindCapture(void* params, void*) {
 }
 // THUGRECOMP_BindPoll -> true while a capture is still running
 static bool __cdecl CF_BindPoll(void*, void*) { return g_capPhase != 0; }
+
+// ---- button prompts: which device was used last (Noah 2026-11-19: "all menu buttons need to properly be telegraphed on
+// screen with proper conversion for xbox layout or keyboard and mouse"). THUG Pro picks keyboard or controller prompts
+// once, from the launcher's CtrlLayout (0 keyboard, 1 PlayStation, 2 Xbox): thugpro.dll keeps it (RVA 0x8C750) and draws
+// key names instead of button glyphs while it is 0, and the scripts read GLOBAL_CtrlLayout. DeviceTick notes the device
+// on a fresh press (a key, a mouse click, a pad button, or a stick/trigger pushed well past drift; mouse movement alone
+// does not count); QB (dadmod_prompt_tick) applies it through THUGRECOMP_InputDevice when no typing or binding is going
+// on, setting both values and rebuilding the helper bar. On a pad the launcher's PlayStation choice is kept; any other
+// choice shows Xbox (the exe's button font is ButtonsXbox unless the launcher picked PlayStation).
+static const DWORD kTpCtrlLayoutRva = 0x8C750, kTpCtrlLayoutUseRva = 0x7FB2;   // cmp dword ptr [CtrlLayout], 0 (text draw: key names vs glyphs)
+static volatile LONG g_lastDevice = -1;   // 0 keyboard/mouse, 1 pad
+static LONG g_appliedDevice = -1;
+static int g_launcherLayout = -1;
+static int* TpCtrlLayout() {
+    static int* p; static bool tried;
+    if (tried) return p;
+    BYTE* tp = (BYTE*)GetModuleHandleA("thugpro.dll");
+    if (!tp) return nullptr;   // not loaded yet: try again later
+    tried = true;
+    BYTE* use = tp + kTpCtrlLayoutUseRva;
+    if (use[0] == 0x83 && use[1] == 0x3D && *(DWORD*)(use + 2) == (DWORD)(tp + kTpCtrlLayoutRva) && use[6] == 0x00) {
+        p = (int*)(tp + kTpCtrlLayoutRva);
+        g_launcherLayout = *p;
+        Log("button prompts: launcher layout %d (%s)", *p, *p == 1 ? "PlayStation" : *p == 2 ? "Xbox" : "keyboard");
+    } else Log("button prompts: thugpro.dll layout value not found (another thugpro.dll build), prompts stay as the launcher set them");
+    return p;
+}
+// ---- key names for button codes in menus (Noah 2026-11-19: the on-screen keyboard bar read "=Cancel", "=Accept").
+// Text like "\m0=Accept" goes \mN -> \bN through meta_button_map_xbox (\m0 -> \b3, \m1 -> \b2, \mf -> \bf,
+// \mg -> \bg), and on keyboard prompts thugpro.dll draws \bN as the name 0x5BCD50 returns. In menus that function
+// only names \bm (Enter) and \bn (Esc); for A, B and the shoulders/triggers it returns "" and nothing is drawn.
+// While the prompts show keyboard (CtrlLayout 0) and the name came back empty, this fills it in: A -> the Enter name,
+// B -> the Esc name (both from 0x5BCD50 itself), L1/R1/L2/R2 -> the keys bound to them. Controllers are untouched.
+static const DWORD kKeyNameFn = 0x5BCD50;   // char* __cdecl ButtonKeyName(int button)
+typedef char* (__cdecl* KeyNameFn_t)(int);
+static KeyNameFn_t g_keyNameOrig = nullptr;   // trampoline: the 7 moved bytes + jmp 0x5BCD57
+static char* __cdecl KeyNameHook(int button) {
+    char* r = g_keyNameOrig(button);
+    int* tp = TpCtrlLayout();
+    if (!r || r[0] || !tp || *tp != 0) return r;
+    int slot = -1;
+    switch (button) {
+    case 3: return g_keyNameOrig(0x16);   // A (accept) -> Enter
+    case 2: return g_keyNameOrig(0x17);   // B (back) -> Esc
+    case 0x10: slot = 14; break;          // L1 (\bg)
+    case 0x11: slot = 15; break;          // R1 (\bh)
+    case 0x0E: slot = 16; break;          // L2 (\be)
+    case 0x0F: slot = 17; break;          // R2 (\bf)
+    }
+    if (slot < 0) return r;
+    int dik = ((int*)kKb0Binds)[slot];
+    if (dik < 0) return r;
+    static char name[64];
+    KeyName(dik, name, sizeof name);
+    return name;
+}
+static void InstallKeyNameHook() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    static const BYTE orig[7] = { 0x6A, 0xFF, 0x68, 0xF8, 0x06, 0x64, 0x00 };   // push -1 / push 0x6406F8
+    BYTE* site = (BYTE*)kKeyNameFn;
+    if (memcmp(site, orig, 7) != 0) { Log("button prompts: 0x5BCD50 not as expected, key names in menus skipped"); return; }
+    BYTE* t = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!t) return;
+    memcpy(t, orig, 7);
+    t[7] = 0xE9; *(DWORD*)(t + 8) = (kKeyNameFn + 7) - ((DWORD)t + 12);
+    g_keyNameOrig = (KeyNameFn_t)t;
+    DWORD old;
+    VirtualProtect(site, 7, PAGE_EXECUTE_READWRITE, &old);
+    site[0] = 0xE9; *(DWORD*)(site + 1) = (DWORD)&KeyNameHook - ((DWORD)site + 5);
+    site[5] = 0x90; site[6] = 0x90;
+    VirtualProtect(site, 7, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, 7);
+    Log("button prompts: key names for A/B/shoulders in menus on keyboard");
+}
+static void DeviceTick() {   // game thread, every frame (ReadControlsHook)
+    InstallKeyNameHook();
+    static bool kbPrev, padPrev;
+    bool kb = false;
+    DWORD pid = 0; HWND fg = GetForegroundWindow();
+    if (fg) GetWindowThreadProcessId(fg, &pid);
+    if (pid == GetCurrentProcessId())
+        kb = KeyAny() || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) || (GetAsyncKeyState(VK_MBUTTON) & 0x8000);
+    bool pad = g_padActive != 0;
+    if (kb && !kbPrev) InterlockedExchange(&g_lastDevice, 0);
+    if (pad && !padPrev) InterlockedExchange(&g_lastDevice, 1);
+    kbPrev = kb; padPrev = pad;
+}
+// THUGRECOMP_InputDevice -> true when the device used last differs from the prompts on screen; device (0 keyboard,
+// 1 pad), layout (the CtrlLayout value for it). apply=1 makes it the one on screen (sets thugpro.dll's value too).
+// pretend=0|1 (testing) acts as if that device had just been used.
+static bool __cdecl CF_InputDevice(void* params, void* script) {
+    int* tp = TpCtrlLayout();
+    if (!tp) return false;
+    if (g_appliedDevice < 0) g_appliedDevice = g_launcherLayout == 0 ? 0 : 1;   // what the launcher set at start
+    int force = IntParam(params, "pretend", -1);   // testing aid: pretend this device was just used (0 keyboard, 1 pad)
+    if (force == 0 || force == 1) InterlockedExchange(&g_lastDevice, force);
+    LONG dev = g_lastDevice;
+    if (dev < 0) dev = g_appliedDevice;
+    int layout = dev == 0 ? 0 : (g_launcherLayout == 1 ? 1 : 2);
+    RetInt(script, "device", dev);
+    RetInt(script, "layout", layout);
+    if (IntParam(params, "apply", 0) && dev != g_appliedDevice) {
+        *tp = layout;
+        g_appliedDevice = dev;
+        Log("button prompts: now %s", dev == 0 ? "keyboard and mouse" : layout == 1 ? "controller (PlayStation)" : "controller (Xbox)");
+        return true;
+    }
+    return dev != g_appliedDevice;
+}
+// THUGRECOMP_ButtonText action=<ollie|grab|flip|grind|pause|select|l1|r1|l2|r2|l3|r3>   (a bindable action)
+//                       or pad=<a|b|x|y|lb|rb|lt|rt|l3|r3|start|back> [key="F8"]   (a fixed pad button / keyboard key)
+//   -> text = what to show for it on the device the prompts show now: the bound key's name on keyboard, the bound
+//   button's glyph on a controller ( codes draw as Xbox or PlayStation buttons, following Swap A/B and X/Y).
+static int SwapAB(int code) {
+    if (!g_abSwap) return code;
+    switch (code) { case 11: return 12; case 12: return 11; case 13: return 14; case 14: return 13; }
+    return code;
+}
+static const char* PadGlyph(int code) {   // Xbox-layout button code (PadName numbering) -> glyph token
+    switch (code) {
+    case 11: return "\\b3"; case 12: return "\\b2"; case 13: return "\\b1"; case 14: return "\\b0";
+    case 15: return "\\bg"; case 16: return "\\bh"; case 17: return "\\b9"; case 18: return "\\b8";
+    case 19: return "\\bk"; case 20: return "\\bl"; case 21: case 90: return "\\be"; case 22: case 91: return "\\bf";
+    }
+    return nullptr;
+}
+static bool __cdecl CF_ButtonText(void* params, void* script) {
+    static const char* kActions[] = { "ollie", "grab", "flip", "grind", "pause", "select", "l1", "r1", "l2", "r2", "l3", "r3" };
+    static const char* kPads[] = { "a", "b", "x", "y", "lb", "rb", "back", "start", "l3", "r3", "lt", "rt" };
+    const char* action = nullptr; const char* pad = nullptr; const char* key = nullptr;
+    GetStringParam(params, "action", &action); GetStringParam(params, "pad", &pad); GetStringParam(params, "key", &key);
+    // action / pad are usually written as names (checksums) in QB: action = ollie, pad = y
+    typedef bool (__thiscall* GetSumFn)(void*, DWORD, DWORD*, bool);
+    DWORD actSum = 0, padSum = 0;
+    ((GetSumFn)0x476950)(params, QbKey("action"), &actSum, false);
+    ((GetSumFn)0x476950)(params, QbKey("pad"), &padSum, false);
+    if (g_appliedDevice < 0) { TpCtrlLayout(); g_appliedDevice = g_launcherLayout == 0 ? 0 : 1; }
+    int forceDev = IntParam(params, "dev", -1);   // dev=0 keyboard / 1 controller: that device, whatever is on screen
+    bool onPad = forceDev >= 0 ? forceDev == 1 : g_appliedDevice == 1;
+    char out[64] = "";
+    int slot = -1, padCode = -1;
+    for (int i = 0; i < 12; ++i) if ((action && !_stricmp(action, kActions[i])) || (actSum && actSum == QbKey(kActions[i]))) slot = 8 + i;
+    for (int i = 0; i < 12; ++i) if ((pad && !_stricmp(pad, kPads[i])) || (padSum && padSum == QbKey(kPads[i]))) padCode = 11 + i;
+    bool padGiven = pad || padSum;
+    if (slot >= 0) {
+        if (onPad) {
+            int code = ((int*)kPad0Binds)[slot];
+            const char* g = PadGlyph(SwapAB(code));
+            if (g) strcpy(out, g); else PadName(code, out, sizeof out);
+        } else KeyName(((int*)kKb0Binds)[slot], out, sizeof out);
+    } else if (padGiven && padCode >= 0 && (onPad || !key)) {
+        const char* g = PadGlyph(SwapAB(padCode));
+        if (g) strcpy(out, g);
+    } else if (key) {
+        _snprintf(out, sizeof out, "%s", key); out[sizeof out - 1] = 0;
+    } else return false;
+    RetStr(script, "text", out);
+    return true;
+}
 // THUGRECOMP_BindReset dev= -> that device back to its default layout
 static bool __cdecl CF_BindReset(void* params, void*) {
     int dev = IntParam(params, "dev", 0);

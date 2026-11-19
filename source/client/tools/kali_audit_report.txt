@@ -1,0 +1,36 @@
+# Kali-only names the client build uses (defined by Kali, not by plain THUG Pro, not by our client)
+
+aksequence1  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence2  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence3  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence4  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence5  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence6  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence7  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+aksequence8  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim78wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim79wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim80wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim81wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim82wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim83wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim84wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+anim85wrapper  (Kali: script kmod/old_anim_scripts.q)
+    used by dadmod_anim_kali_kill in client/qb/gen\gen00.q
+
+# wrapped stock scripts plain THUG Pro does not have

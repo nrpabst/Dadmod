@@ -3258,6 +3258,7 @@ static const char kLayoutDefault[] =
 "  item|mui_edit_theme|||\n"
 "  item|mui_reset|||\n"
 "menu||Graphics||Make the game look better: filtering, anti-aliasing, lighting effects, color, retro looks, sky and time of day\n"
+"  item|gfx_postfx|||\n"
 "  menu||Display||Windowed or fullscreen and the resolution (shows after a restart)\n"
 "    item|gfx_windowed|||\n"
 "    item|gfx_res|||\n"
@@ -3341,6 +3342,24 @@ static void LoadLayout() {
     if (!ReadWholeFile(path, data) || data.find('|') == std::string::npos) {
         data = kLayoutDefault;
         WriteWholeFile(path, data);
+    }
+    // 2026-11-19: layouts saved before the ReShade row existed get it as the first Graphics row (the row only shows
+    // when ReShade is loaded). The old file is kept in dadmod\backups.
+    if (data.find("|gfx_postfx|") == std::string::npos) {
+        size_t g = data.find("menu||Graphics||");
+        if (g != std::string::npos) {
+            size_t ls = data.rfind('\n', g); ls = ls == std::string::npos ? 0 : ls + 1;
+            size_t le = data.find('\n', g);
+            if (le != std::string::npos) {
+                std::string indent(g - ls, ' ');
+                CreateDirectoryA(ExeDirFile("backups").c_str(), nullptr);
+                WriteWholeFile(ExeDirFile("backups\\dadmod_layout.txt.before_reshade_row"), data);
+                bool crlf = le > 0 && data[le - 1] == '\r';
+                data.insert(le + 1, indent + "  item|gfx_postfx|||" + (crlf ? "\r\n" : "\n"));
+                WriteWholeFile(path, data);
+                Log("layout: added the ReShade row (gfx_postfx) to the Graphics menu");
+            }
+        }
     }
     g_lay.clear();
     LayNode root; root.title = "Dadmod"; root.parent = -1;
@@ -3567,10 +3586,143 @@ static bool __cdecl CF_CaptureNext(void* params, void* script) {
     if (sp) ((Fn)kAddChecksum)(sp, QbKey("id"), c.id);
     RetInt(script, "grey", grey ? 1 : 0);
     RetInt(script, "hide", hide ? 1 : 0);
+    RetInt(script, "stock", g_capOrder[g_capNext - 1]);   // its place in the stock build order (menu reorder reset)
     return true;
 }
 // THUGRECOMP_CaptureClear: drop anything parked (a menu was abandoned before finalize)
 static bool __cdecl CF_CaptureClear(void*, void*) { g_cap.clear(); g_capOrder.clear(); return true; }
+
+// ---- reorder any menu in game (Noah 2026-11-19: "the menu reorder found in main menu to work in every single menu")
+// F9 in a menu puts it in move mode (QB: menuitem.q dadmod_reorder_*); every move saves the menu's new order as a
+// "[#<anchor checksum>]" section of menu_order.txt, which the capture/replay above applies whenever the menu is built.
+// Undo (F10) puts the section back as it was before the last change; reset (F12) removes it (stock order).
+static DWORD g_roMenu;
+static std::vector<std::string> g_roTexts;
+static std::map<DWORD, std::vector<std::string>> g_roUndo;   // menu -> earlier sections (text block, "" = none)
+static bool SectionKeyIs(const std::string& header, DWORD menu) {
+    std::string name = Trim(header.substr(1, header.find(']') == std::string::npos ? std::string::npos : header.find(']') - 1));
+    if (name.empty()) return false;
+    DWORD k = name[0] == '#' ? strtoul(name.c_str() + 1, nullptr, 16) : QbKey((name + "_menu").c_str());
+    return k == menu;
+}
+// splits menu_order.txt into everything but the menu's section(s) (rest) and that section's lines (block)
+static void SplitOrderFile(DWORD menu, std::string& rest, std::string& block) {
+    std::string data;
+    ReadWholeFile(ExeDirFile("menu_order.txt"), data);
+    rest.clear(); block.clear();
+    bool in = false;
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find('\n', s);
+        std::string raw = data.substr(s, e == std::string::npos ? std::string::npos : e - s + 1);
+        s = e == std::string::npos ? data.size() : e + 1;
+        std::string line = Trim(raw);
+        if (!line.empty() && line[0] == '[') in = SectionKeyIs(line, menu);
+        (in ? block : rest) += raw;
+    }
+    if (!rest.empty() && rest.back() != '\n') rest += "\r\n";
+}
+static void WriteOrderFile(const std::string& data) {
+    WriteWholeFile(ExeDirFile("menu_order.txt"), data);
+    g_orderStamp = 0;   // re-read on the next menu build
+}
+// THUGRECOMP_ReorderBegin menu=<anchor> / ReorderAdd text="..." / ReorderSave -> the menu's options in the new order
+static bool __cdecl CF_ReorderBegin(void* params, void*) { g_roMenu = ChecksumParam(params, "menu"); g_roTexts.clear(); return g_roMenu != 0; }
+static bool __cdecl CF_ReorderAdd(void* params, void*) {
+    const char* text = nullptr; GetStringParam(params, "text", &text);
+    g_roTexts.push_back(text ? StripCodes(text) : "");
+    return true;
+}
+static bool __cdecl CF_ReorderSave(void*, void*) {
+    if (!g_roMenu) return false;
+    std::string rest, block;
+    SplitOrderFile(g_roMenu, rest, block);
+    LoadMenuOrder();
+    std::map<std::string, std::string> flags;   // keep grey/hide marks the Manager set
+    auto it = g_order.find(g_roMenu);
+    if (it != g_order.end()) for (auto& o : it->second) flags[o.text] = std::string(o.grey ? "grey" : "") + (o.grey && o.hide ? "," : "") + (o.hide ? "hide" : "");
+    char h[32]; sprintf(h, "[#%08x]\r\n", g_roMenu);
+    std::string sec = h;
+    for (auto& t : g_roTexts) {
+        if (t.empty()) continue;
+        auto f = flags.find(Lower(t));
+        sec += t + "|" + (f != flags.end() ? f->second : "") + "\r\n";
+    }
+    if (it != g_order.end())   // options the Manager hid are not on screen: keep them (still hidden) at the end
+        for (auto& o : it->second) {
+            if (!o.hide) continue;
+            bool listed = false;
+            for (auto& t : g_roTexts) if (Lower(t) == o.text) listed = true;
+            if (!listed) sec += o.text + "|" + flags[o.text] + "\r\n";
+        }
+    g_roUndo[g_roMenu].push_back(block);
+    WriteOrderFile(rest + sec);
+    Log("menu order: saved %d options for menu %08x", (int)g_roTexts.size(), g_roMenu);
+    return true;
+}
+// The order shown while moving: position -> index of the option's kept copy (dadmod_keep_<i>, in build order)
+static DWORD g_permMenu;
+static std::vector<int> g_perm;
+static std::vector<std::vector<int>> g_permUndo;
+// THUGRECOMP_ReorderPermInit menu=<anchor> count=N [fresh=1]   (keeps the current order when it is the same menu)
+static bool __cdecl CF_ReorderPermInit(void* params, void*) {
+    DWORD menu = ChecksumParam(params, "menu");
+    int n = IntParam(params, "count", 0);
+    if (IntParam(params, "fresh", 0) || menu != g_permMenu || (int)g_perm.size() != n) {   // fresh: entering move mode (the menu is built in its saved order)
+        g_permMenu = menu; g_perm.clear(); g_permUndo.clear();
+        for (int i = 0; i < n; ++i) g_perm.push_back(i);
+    }
+    return n > 0;
+}
+// THUGRECOMP_ReorderPermAt pos=i -> idx
+static bool __cdecl CF_ReorderPermAt(void* params, void* script) {
+    int p = IntParam(params, "pos", -1);
+    if (p < 0 || p >= (int)g_perm.size()) return false;
+    RetInt(script, "idx", g_perm[p]);
+    return true;
+}
+// THUGRECOMP_ReorderPermMove from=i to=j  (undoable)
+static bool __cdecl CF_ReorderPermMove(void* params, void*) {
+    int f = IntParam(params, "from", -1), t = IntParam(params, "to", -1), n = (int)g_perm.size();
+    if (f < 0 || t < 0 || f >= n || t >= n || f == t) return false;
+    g_permUndo.push_back(g_perm);
+    int v = g_perm[f];
+    g_perm.erase(g_perm.begin() + f);
+    g_perm.insert(g_perm.begin() + t, v);
+    return true;
+}
+// THUGRECOMP_ReorderPermPush (before a reset)  /  THUGRECOMP_ReorderPermSet pos=i idx=k
+static bool __cdecl CF_ReorderPermPush(void*, void*) { g_permUndo.push_back(g_perm); return true; }
+static bool __cdecl CF_ReorderPermSet(void* params, void*) {
+    int p = IntParam(params, "pos", -1), k = IntParam(params, "idx", -1);
+    if (p < 0 || p >= (int)g_perm.size()) return false;
+    g_perm[p] = k;
+    return true;
+}
+// THUGRECOMP_ReorderUndo menu=<anchor> -> false when there is nothing to undo
+static bool __cdecl CF_ReorderUndo(void* params, void*) {
+    DWORD menu = ChecksumParam(params, "menu");
+    if (menu == g_permMenu && !g_permUndo.empty()) { g_perm = g_permUndo.back(); g_permUndo.pop_back(); }
+    auto& u = g_roUndo[menu];
+    if (u.empty()) return false;
+    std::string rest, block;
+    SplitOrderFile(menu, rest, block);
+    WriteOrderFile(rest + u.back());
+    u.pop_back();
+    Log("menu order: undid the last change for menu %08x", menu);
+    return true;
+}
+// THUGRECOMP_ReorderReset menu=<anchor> -> removes the menu's section (stock order; undoable); false when it had none
+static bool __cdecl CF_ReorderReset(void* params, void*) {
+    DWORD menu = ChecksumParam(params, "menu");
+    std::string rest, block;
+    SplitOrderFile(menu, rest, block);
+    if (block.empty()) return false;
+    g_roUndo[menu].push_back(block);
+    WriteOrderFile(rest);
+    Log("menu order: menu %08x back to its stock order", menu);
+    return true;
+}
 
 // THUGRECOMP_MenuFavAnim anim=<checksum> [toggle=1] [refresh=1] -> true when it is a main menu favorite (after the
 // toggle); count = how many are starred. Pause > dadmod > Animations stars them; Skater pose cycles them.

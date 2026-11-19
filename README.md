@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.9.12](#6-whats-new-in-0912)
+6. [What's new in 0.9.13](#6-whats-new-in-0913)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.9.12 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.9.13 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -129,19 +129,49 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * Faster boot.
 * A fix for a crash some skater parts cause.
 
-## 6. What's new in 0.9.12
+## 6. What's new in 0.9.13
 
 ### New
+* Pause > dadmod > Gameplay > **BHRA keeps combo** (default Off): a Bunny Hop Revert (hop out of a revert window, revert in the air) keeps your combo going. Only your own game changes.
+* Pause > dadmod > Gameplay > **Easy BHRA** (default Off): a longer revert window around the hop, so BHRAs are easier to hit.
+* Pause > Graphics > Sound: Level sounds and Special trick sounds sliders (0 to 100).
+* Graphics: a "Graphics effects: dadmod / ReShade" row when ReShade is installed in the game folder.
+* Reorder any menu: F9 move mode, F10 undo, F12 stock order (on a controller: hold Select and press LB, RB or LT).
+* Online Load Skater: other dadmod players see your new skater within about a second (others after a rejoin).
+* Pause > dadmod > Gameplay > **Trick Screen Effects** (default On): Off skips the full-screen effect of special tricks like the 3D Scary Grind. Thanks shibe.
+* Edit Skater: Male Backpack and Female Backpack rows, so any skater can wear either one. Thanks shibe.
+
+### Changed
+* Quick Menu > Free Cam shows online too (where the server allows the free camera).
+* Menus show the keys and buttons you actually use, and switch between keyboard and controller pictures as you play.
+* Edit Skater scale sliders move 1 per press; push the stick hard to go faster.
+* A controller that disconnects is picked up again by itself.
+* Vehicle throwables can only be thrown offline, so nobody's game can crash from a thrown car.
+
+### Fixed
+* Colors, sky and weather doing nothing on some starts (dadmod now picks up the game's graphics even when it starts late). Thanks shibe.
+* Throwables work online without Kali (plain THUG Pro). Vehicle throwables need Kali's models; without them you throw a COMBO O. Thanks shibe.
+* Settings, keybinds and menus not saving on some Windows 11 PCs.
+* The game not starting on some PCs.
+* Bank drops could not be switched in the player build.
+* Keybind menu missing in the player build.
+* Empty black description box under some menus.
+* "ESC = Back" and "ENT = Accept" overlapping in pop-ups.
+* THPG tab: Larxian's cities load even when your copy has another name.
+
+### 0.9.12
+
+#### New
 * Edit Skater scaling has no limits: Scale Options go from 0 to 1,000,000, and each press moves about 5% of the number, so big sizes come fast.
 * Logo and tattoo Scale has no limits either and shows a plain number (100 is normal size).
 * Main menu > Match slope: your skater leans with the ground they stand on (On), or stands straight up (Off).
 
-### Changed
+#### Changed
 * Edit Skater is now all dadmod's own code. It looks and works the same as before.
 * Long menu titles shrink to fit on the screen.
 * When Setup stops, it says why in plain words (for example a CAS mod changed your skate shop scripts) and writes a report you can send to Noah.
 
-### Fixed
+#### Fixed
 * Setup no longer stops on Kali Mod installs that don't have a CAS mod or the extra Kali file.
 
 ### 0.9.11

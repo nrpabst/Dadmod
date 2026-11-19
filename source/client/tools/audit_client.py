@@ -34,6 +34,20 @@ def keyed(d):
     return out
 
 
+def indented_in(tree):
+    """scripts a decompiled tree defines with leading spaces (g.blocks only sees definitions at column 0)"""
+    found = {}
+    for p in sorted(glob.glob(os.path.join(tree, '**', '*.q'), recursive=True)):
+        if g.SKIP.search(os.path.basename(p)):
+            continue
+        for m in re.finditer(r'(?m)^[ \t]+script[ \t]+(\S+)', open(p, encoding='latin-1').read()):
+            found.setdefault(m.group(1).lower(), os.path.relpath(p, tree).replace('\\', '/'))
+    for n in list(found):
+        if not n.startswith('#"0x'):
+            found.setdefault('#"0x%08x"' % g.qbkey(n), found[n])
+    return found
+
+
 def main():
     stock, kali = g.effective(g.STOCK), g.effective(g.KALI)
     dev = g.effective(g.KALI, overlay=g.TREE)
@@ -43,6 +57,9 @@ def main():
             client[g.name_of(k).lower()] = (k, v, p)
     wrapped = {x.strip().lower() for x in open('client/wrap.txt', encoding='latin-1') if x.strip() and not x.startswith('#')}
     devk = keyed(dev)
+    indented = indented_in(g.TREE)
+    # the stock and Kali trees also define some scripts with leading spaces (thugpro/control_setup.q): those exist there
+    base_indented = {'STOCK': indented_in(g.STOCK), 'KALI': indented_in(g.KALI)}
     report = []
     for label, base in (('STOCK', stock), ('KALI', kali)):
         eff = dict(base)
@@ -62,7 +79,11 @@ def main():
             if not blk:
                 continue
             for r in refs(blk[1]):
-                if r not in devk or r == n:
+                if r == n:
+                    continue
+                if r not in devk:
+                    if r in indented and r not in effk and r not in base_indented[label]:
+                        missing[r].add(n)
                     continue
                 if r not in effk:
                     missing[r].add(n)
@@ -72,7 +93,7 @@ def main():
                 todo.append(r)
         report.append('## %s: Dev has these, this install does not (used by)' % label)
         for r in sorted(missing):
-            report.append('%s  [%s]  <- %s' % (r, devk[r][2], ', '.join(sorted(missing[r])[:4])))
+            report.append('%s  [%s]  <- %s' % (r, devk[r][2] if r in devk else indented[r] + ', indented', ', '.join(sorted(missing[r])[:4])))
         report.append('')
         report.append('## %s: differ from Dev (used by)' % label)
         for r in sorted(differs):

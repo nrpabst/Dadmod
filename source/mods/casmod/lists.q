@@ -37,6 +37,8 @@ dadmod_es_torso = [
 { hdr t = "GEAR" }
 { t = "Elbowpads" p = [ elbowpads elbowpads ] }
 { t = "Backpack" p = [ skater_m_backpack skater_f_backpack ] }
+{ t = "Male Backpack" sex = m p = [ skater_m_backpack skater_m_backpack ] }
+{ t = "Female Backpack" sex = f p = [ skater_f_backpack skater_f_backpack ] }
 { t = "Left Accessory" p = [ accessory1 accessory1 ] }
 { t = "Right Accessory" p = [ accessory2 accessory2 ] }
 { t = "Male Gloves" sex = m p = [ skater_m_hands skater_m_hands ] }

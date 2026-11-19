@@ -249,7 +249,7 @@ dadmod_help_words = [
 { k = pick pc = "\\bn = Back" con = "\\m1 = Back" }
 { k = pick pc = "\\bm = Accept" con = "\\m0 = Accept" }
 { k = spin pc = "\\bq/\\br = Rotate" con = "\\bg/\\bh = Rotate" }
-{ k = pick pc = "\\be/\\bf = Zoom" con = "\\be/\\bf = Zoom" }
+{ k = pick pc = "Pad LT/RT = Zoom" con = "\\be/\\bf = Zoom" }
 { k = skip pc = "\\bk/\\bl = Skip" con = "\\bk/\\bl = Skip" }
 { k = undo pc = "\\b0 = Undo" con = "\\b0 = Undo" }
 { k = undo pc = "\\b1 = Redo" con = "\\b1 = Redo" }
@@ -298,6 +298,13 @@ script dadmod_help_build
     if IsTrue dadmod_help_ready
         return built = 0
     endif
+    dadmod_btn action = l3 dev = 0
+    dm_l3 = <btn>
+    dadmod_btn action = r3 dev = 0
+    FormatText TextName = dm_skip "%a/%b = Skip" a = <dm_l3> b = <btn>
+    dm_words = ( dadmod_help_words )
+    SetArrayElement arrayname = dm_words index = 6 newvalue = { k = skip pc = <dm_skip> con = "\\bk/\\bl = Skip" }
+    Change dadmod_help_words = <dm_words>
     dadmod_help_one want = [ pick spin undo ]
     Change dadmod_help_cas = <bar>
     Change generic_helper_text_cas = <bar>

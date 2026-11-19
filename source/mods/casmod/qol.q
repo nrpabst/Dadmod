@@ -124,12 +124,12 @@ script dadmod_page_jump
         return
     endif
     <dm_n> = ( dadmod_page_size )
+    <dm_ev> = pad_down
+    if GotParam up
+        <dm_ev> = pad_up
+    endif
     begin
-        if GotParam up
-            FireEvent Type = pad_up target = current_menu
-        else
-            FireEvent Type = pad_down target = current_menu
-        endif
+        FireEvent Type = <dm_ev> target = current_menu
     repeat <dm_n>
 endscript
 script dadmod_color_copy_items

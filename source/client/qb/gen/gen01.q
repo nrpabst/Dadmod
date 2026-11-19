@@ -1,3 +1,37 @@
+level_Mainmenu_p8cretepark = {
+structure_name = level_Mainmenu_p8cretepark
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THP8
+loading_time = 8.5
+level = "P8CretePark"
+sky = "P8CretePark_Sky"
+pre = "P8CretePark_scripts.pre"
+scnpre = "P8CreteParkscn.pre"
+colpre = "P8CreteParkcol.pre"
+default_level_stuff
+DisableGoalEditor
+DisableGoalAttack
+overview_cam_pos = (-7389.1,6911.9,-2279.5)
+overview_cam_angle = 0
+thugpro_prx = "mainmenu_p8cretepark_scripts.pre"
+qb = "levels\\mainmenu_p8cretepark\\P8CretePark.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\P8CretePark\\P8CretePark_scripts.qb"
+"levels\\P8CretePark\\P8CretePark_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
 level_Mainmenu_thpgtraining = {
 structure_name = level_Mainmenu_thpgtraining
 load_script = Load_MainMenu
@@ -1836,6 +1870,7 @@ script create_dadmod_mainmenu_menu
     dadmod_mmopt_item id = mmopt_ce_blend key = "blend_seconds" label = "Blend time" desc = "How long the camera glides to a new shot. Cut jumps straight there"
     dadmod_mmopt_item id = mmopt_ce_home key = "use_home" label = "Use saved spots" desc = "On: each level uses the spot and camera you saved there"
     dadmod_mmopt_item id = mmopt_ce_context key = "context_cams" label = "Close-ups" desc = "The camera moves in close on the Edit Skater screens"
+    dadmod_mmopt_item id = mmopt_slope key = "match_slope" label = "Match slope" desc = "On: your skater leans with the ground they stand on. Off: they stand straight up"
     dadmod_desc_panel_right
     thugpro_menu_finalize <...>
 endscript

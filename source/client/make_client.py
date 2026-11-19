@@ -263,6 +263,7 @@ def package(out, release=None):
             h.update(('%s|%s|%s|%s;' % (g, src, st.st_size if st else -1, int(st.st_mtime) if st else -1)).encode('utf-8', 'replace'))
     corpus_key = h.hexdigest()
     corpora_box = []
+    noshop_box = []
 
     def get_corpora():
         if not corpora_box:
@@ -270,6 +271,17 @@ def package(out, release=None):
             corpora_box.extend(dadpatch.Corpus(g, dadpatch.all_script_sources(g) + extra) for g in games)
             print('recipe sources: ' + '; '.join('%s %d files' % (os.path.basename(c.game), len(c.sources)) for c in corpora_box))
         return corpora_box
+
+    # dadmod_qb.prx must not depend on Skateshop_scripts.prx (Noah 2026-11-18: the CAS mod replaces that file and
+    # dadmod must install with or without it), so its recipe is made from every source except that one
+    def no_shop(srcs):
+        return [s for s in srcs if os.path.basename(s).lower() != 'skateshop_scripts.prx']
+
+    def get_corpora_noshop():
+        if not noshop_box:
+            noshop_box.extend(dadpatch.Corpus(g, no_shop(dadpatch.all_script_sources(g) + extra)) for g in games)
+            print('recipe sources (no Skateshop_scripts.prx): ' + '; '.join('%s %d files' % (os.path.basename(c.game), len(c.sources)) for c in noshop_box))
+        return noshop_box
 
     def reuse(key, path):
         e = old_cache.get(key)
@@ -286,12 +298,14 @@ def package(out, release=None):
     for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'),):
         want.remove(rel)
         name = os.path.splitext(os.path.basename(rel))[0] + '.dpr'
-        key = 'recipe|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
+        key = 'recipe-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
         recipes.append(name)
         if reuse(key, os.path.join(rdir, name)):
             reused += 1
             continue
-        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora())
+        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora_noshop())
+        if b'skateshop_scripts.prx' in b.lower():
+            sys.exit('PACKAGE FAILED: recipe %s still reads Skateshop_scripts.prx' % name)
         open(os.path.join(rdir, name), 'wb').write(b)
         for g in games:
             if dadpatch.apply_recipe(b, g) != target:

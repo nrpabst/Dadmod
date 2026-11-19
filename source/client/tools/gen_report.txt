@@ -1,5 +1,5 @@
 client script generator report (gen_client_qb.py)
-generated blocks: 648   left out (server): 724   hand-written: 48
+generated blocks: 648   left out (server): 724   hand-written: 49
 
 ## unclassified: changed in the server build, no rule says client or server (4)
 global thugpro_joins_loading  (qb/game/net/net.q, new)

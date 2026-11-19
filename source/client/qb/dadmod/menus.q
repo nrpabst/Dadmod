@@ -110,13 +110,53 @@ script thugpro_update_tod
     Change dadmod_tod_upd = 0
 endscript
 
-script thugpro_menu_create_title
+script thugpro_menu_create_title title_scale = 0.6 title_pos = (0.0,52.5) title_text_just = [ left center ]
+    if GotParam title_texture
+        thugpro_menu_create_title_orig <...>
+        return
+    endif
+    <dm_want> = <title_scale>
+    <title_scale> = 1.0
     thugpro_menu_create_title_orig <...>
     if GotParam title_text
         if ScreenElementExists id = menu_title_text
             SetScreenElementProps id = menu_title_text tags = { dadmod_txt = <title_text> }
         endif
     endif
+    dadmod_title_fit dm_at = <title_pos> dm_tj = <title_text_just> want = <dm_want>
+endscript
+script dadmod_title_fit want = 0.6
+    if not ScreenElementExists id = menu_title_container
+        return
+    endif
+    <dm_fit> = <want>
+    if ScreenElementExists id = menu_title_text
+        GetScreenElementDims id = menu_title_text
+        <dm_x> = ( <dm_at> . (1.0,0.0) )
+        <dm_side> = left
+        if GotParam dm_tj
+            <dm_side> = ( <dm_tj> [ 0 ] )
+        endif
+        <dm_room> = ( 628.0 - <dm_x> )
+        if ChecksumEquals a = <dm_side> b = right
+            <dm_room> = ( <dm_x> - 12.0 )
+        endif
+        if ChecksumEquals a = <dm_side> b = center
+            if ( ( <dm_x> - 12.0 ) < <dm_room> )
+                <dm_room> = ( <dm_x> - 12.0 )
+            endif
+            <dm_room> = ( <dm_room> * 2.0 )
+        endif
+        if ( <dm_room> < 60.0 )
+            <dm_room> = 60.0
+        endif
+        if ( <width> > 0 )
+            if ( ( <width> * <want> ) > <dm_room> )
+                <dm_fit> = ( <dm_room> / <width> )
+            endif
+        endif
+    endif
+    DoScreenElementMorph id = menu_title_container scale = <dm_fit> time = 0
 endscript
 
 script load_level

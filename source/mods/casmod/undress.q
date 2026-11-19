@@ -30,23 +30,23 @@ dadmod_undress_female = [
 ]
 script dadmod_remove_clothes
     dadmod_undo_save
-    GetCurrentSkaterProfileIndex
-    GetSkaterSex player = <currentSkaterProfileIndex>
+    dadmod_me
+    GetSkaterSex player = <me>
     <outfit> = dadmod_undress_female
     if ( <is_male> )
         <outfit> = dadmod_undress_male
     endif
     GetArraySize <outfit>
-    <i> = 0
+    <dm_i> = 0
     begin
-        <slot> = ( <outfit> [ <i> ] )
+        <slot> = ( <outfit> [ <dm_i> ] )
         cas_handle_disqualifications part = ( <slot> . part ) desc_id = ( <slot> . desc_id )
         EditPlayerAppearance {
-        profile = <currentSkaterProfileIndex>
+        profile = <me>
         target = SetPart targetParams = { part = ( <slot> . part ) desc_id = ( <slot> . desc_id ) }
         }
-        <i> = ( <i> + 1 )
+        <dm_i> = ( <dm_i> + 1 )
     repeat <array_size>
-    RefreshSkaterModel profile = <currentSkaterProfileIndex> Skater = 0 no_board = no_board
+    RefreshSkaterModel profile = <me> Skater = 0 no_board = no_board
     Skater : TurnOffSpecialItem
 endscript

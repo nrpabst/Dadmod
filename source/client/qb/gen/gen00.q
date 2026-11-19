@@ -4119,6 +4119,7 @@ dadmod_item_catalog = [
 { name = "mmopt_ce_blend" b = 0 p = { id = mmopt_ce_blend key = "blend_seconds" label = "Blend time" desc = "How long the camera glides to a new shot. Cut jumps straight there" } }
 { name = "mmopt_ce_home" b = 0 p = { id = mmopt_ce_home key = "use_home" label = "Use saved spots" desc = "On: each level uses the spot and camera you saved there" } }
 { name = "mmopt_ce_context" b = 0 p = { id = mmopt_ce_context key = "context_cams" label = "Close-ups" desc = "The camera moves in close on the Edit Skater screens" } }
+{ name = "mmopt_slope" b = 0 p = { id = mmopt_slope key = "match_slope" label = "Match slope" desc = "On: your skater leans with the ground they stand on. Off: they stand straight up" } }
 { name = "mui_edit_theme" b = 1 p = { id = mui_edit_theme key = "none" label = "Edit Theme" kind = uiaction min = 0 max = 0 def = 0 action = dadmod_theme_open desc = "Opens the stock Edit Theme menu for your custom theme: meters, icons and every theme color, plus Random Theme and Saved Themes" } }
 { name = "mui_c_theme" b = 1 p = { id = mui_c_theme key = "ui_colortheme" label = "Theme" kind = ctheme min = 1 max = 11 def = 1 desc = "A ready-made color set for all menus. Only used when Effect is Theme. Your own colors below still win where you set them" } }
 { name = "mui_c_thmode" b = 1 p = { id = mui_c_thmode key = "ui_theme_mode" label = "Theme style" kind = thmode min = 0 max = 5 def = 0 desc = "How the theme colors are laid out: solid, one per option, per letter, or moving. Anything but Solid colors the options itself, so Text FX and Highlight FX wait until it is Solid" } }
@@ -4936,6 +4937,10 @@ script thugpro_menu_driver
                 <objID> : PausePhysics
                 RemoveParameter freeze
             endif
+            if GotParam unfreeze
+                <objID> : UnpausePhysics
+                RemoveParameter unfreeze
+            endif
             if GotParam keep_pos
                 <objID> : Obj_SetPosition position = <keep_pos>
                 if GotParam keep_dir
@@ -5277,16 +5282,16 @@ endscript
 script thugpro_menu_idle
     dadmod_menu_idleseq_kill
     Obj_GetId
-    <objID> : TurnOffSpecialItem
     <objID> : Obj_ShadowOff
     <objID> : ClearExceptions
-    if IsTrue LAST_SELECTED_SKATER_HIDE_BOARD
-        SkaterInit NoEndRun ReturnControl NoAnims no_board = no_board
-    else
-        SkaterInit NoEndRun ReturnControl NoAnims
-    endif
     <objID> : TurnOffSpecialItem
+    if not IsTrue LAST_SELECTED_SKATER_HIDE_BOARD
+        SkaterInit NoAnims ReturnControl NoEndRun
+    else
+        SkaterInit NoAnims ReturnControl NoEndRun no_board = no_board
+    endif
     <objID> : CancelRotateDisplay
+    <objID> : TurnOffSpecialItem
     thugpro_DisablePlayerInput
     THUGRECOMP_MenuOpt key = "frozen" step = 0
     if (<on> = 1)
@@ -9417,40 +9422,6 @@ level_qb = "levels\\skateshop\\skateshop_scripts.qb"
 more_level_qbs = [
 "levels\\P8CarFactory\\P8CarFactory_scripts.qb"
 "levels\\P8CarFactory\\P8CarFactory_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_p8cretepark = {
-structure_name = level_Mainmenu_p8cretepark
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-loading_time = 8.5
-level = "P8CretePark"
-sky = "P8CretePark_Sky"
-pre = "P8CretePark_scripts.pre"
-scnpre = "P8CreteParkscn.pre"
-colpre = "P8CreteParkcol.pre"
-default_level_stuff
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_pos = (-7389.1,6911.9,-2279.5)
-overview_cam_angle = 0
-thugpro_prx = "mainmenu_p8cretepark_scripts.pre"
-qb = "levels\\mainmenu_p8cretepark\\P8CretePark.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\P8CretePark\\P8CretePark_scripts.qb"
-"levels\\P8CretePark\\P8CretePark_thugpro.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

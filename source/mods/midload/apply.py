@@ -33,9 +33,10 @@ PRX_IO = {
     'mcmess_OverwriteSuccessful': 'game/menu/memcardmessages.q',
 }
 # Edit Skater commit scripts (mods/casmod + casidle): parts, colors, scale, logos, clothes, sex, undo/redo
-CAS_MARK = ['dadmod_choose_part', 'dadmod_clear_part', 'dadmod_color_step', 'dadmod_scale_step', 'dadmod_random_color',
+CAS_MARK = ['dadmod_choose_part', 'dadmod_clear_part', 'dadmod_random_color',
             'dadmod_color_paste', 'dadmod_remove_clothes', 'cas_apply_skater_sex', 'dadmod_undo', 'dadmod_redo',
-            'posmenu_adjust_uv_position', 'posmenu_adjust_uv_rotation', 'posmenu_adjust_uv_scale']
+            'posmenu_adjust_uv_position', 'posmenu_adjust_uv_rotation', 'posmenu_adjust_uv_scale',
+            '__thugpro_scaling_menu_change_uniform']
 # Edit Skater main menu entries that open stock pages we have no commit hook in: they mark when opened
 CAS_OPEN = ['edit_skater_premade_skater_menu', 'edit_skater_info_menu', 'create_face_map_menu']
 

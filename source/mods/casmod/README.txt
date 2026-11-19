@@ -79,7 +79,7 @@ No Kali Edit Skater scripts (2026-11-03). Compared Dev (Kali) with THUG Pro - va
 the plain thugpro_qb.prx). Kali's Edit Skater changes and what replaces them:
   - color menu (thugpro_color_menu_add_options_to_menu with "Kalimod" label, randomize, reset): ownmenus.q has our own
     (Color / Brightness / Saturation sliders, Random Color, Default Color).
-  - unlimited scaling (scalingmenu_constraints 0..999999): ownmenus.q, our own limits 1..1000 for every part.
+  - unlimited scaling (scalingmenu_constraints 0..999999): ownmenus.q, our own limits 0..1000000 for every part (Noah 2026-11-18: truly unlimited; steps grow 5% of the value).
   - sex change warning box (confirm_skater_sexchange) and an extra call in launch_pre_cas_menu: plain THUG Pro copies
     from gen_partmenu.py.
   - logo/texture position menus (posmenu_*): already ours (logo_adjust.q); options lists, part menu, options menu: ours.
@@ -159,3 +159,23 @@ are dropped: their own item's color tag colors the same part.
 2026-11-07: "adjust" tag. Each Adjust option (front/back logo, tattoo positions) is now a tag on its logo / tattoo
 item instead of its own line: "Shirt Front Logo   adjust", "Chest Tattoo   color  adjust". A logo item (no color tag)
 shows only "adjust". dadmod_extra = { label dx run params } ("script" is a QB keyword, it can't be a key) (gen_mixmatch.py extra_tag) runs its script on that side.
+
+All own code (2026-11-18, Noah: "rewrite those casmod scripts into dadmod"). The Edit Skater qb used to carry copies of THUG
+Pro's skate shop scripts and option lists (gen_mixmatch.py / gen_partmenu.py read decompiled_vanilla), so the installer had to
+rebuild it from each player's Skateshop_scripts.prx and failed on any other version (CAS mods, newer Kali). Now:
+  - lists.q: our own option lists (short rows: t text, p parts [male female], sex = m/f/p/l text color, lp logo parts,
+    x = sleeves/laces/adjust second tag, xt its title, xc its color parts, sz scale bone group, cam, cb back camera, ok
+    allowed boards, pre ped desc prefix, mo male only, hdr group header). dadmod_es_row turns a row into a menu item.
+  - menus.q: our own options / part / color / scale menus (dadmod_es_*). They keep the stock menu names (edit_skater_options,
+    edit_skater_part, edit_skater_color, scaling) because the menu camera and menu_order.txt key on them. They call the
+    player's own cas_set_part (via dadmod_set_part, which adds the hair-color keep and Null-pants step after it and refreshes
+    again if either changed something), thugpro_scaling_menu_add_options_to_menu and create_part_cas_pos_menu.
+    Helper bars are built at run time from dadmod_help_words (dadmod_help_build; also sets generic_helper_text_cas and
+    generic_helper_text_color_menu, which the stock Edit Skater menu and the Adjust menu use).
+  - mainmenu/casidle.q: our own SkateshopCasIdle (camera + idle anims per screen, keeps a frozen skater paused).
+  - sexchange.q reads the new sex's base parts from the game's own default skaters (appearance_custom_skater_male_06 /
+    appearance_custom_skater_female) instead of a copy of them.
+  - launch_pre_cas_menu and confirm_skater_sexchange are no longer replaced: the player's own versions run.
+  - The old color/scale step scripts (unused since the v3 analog sliders) are gone.
+Check: no 32-byte run of the built qb occurs in THUG Pro / Kali scripts (client package audit, tools/stock_audit.py).
+The client package ships data\dadmod_casidle.qb as a normal file (no recipe).

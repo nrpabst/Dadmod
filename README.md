@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.9.11 beta · for THUG Pro**
+**0.9.12 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.9.11](#6-whats-new-in-0911)
+6. [What's new in 0.9.12](#6-whats-new-in-0912)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.9.11 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.9.12 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -129,18 +129,33 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * Faster boot.
 * A fix for a crash some skater parts cause.
 
-## 6. What's new in 0.9.11
+## 6. What's new in 0.9.12
 
 ### New
+* Edit Skater scaling has no limits: Scale Options go from 0 to 1,000,000, and each press moves about 5% of the number, so big sizes come fast.
+* Logo and tattoo Scale has no limits either and shows a plain number (100 is normal size).
+* Main menu > Match slope: your skater leans with the ground they stand on (On), or stands straight up (Off).
+
+### Changed
+* Edit Skater is now all dadmod's own code. It looks and works the same as before.
+* Long menu titles shrink to fit on the screen.
+* When Setup stops, it says why in plain words (for example a CAS mod changed your skate shop scripts) and writes a report you can send to Noah.
+
+### Fixed
+* Setup no longer stops on Kali Mod installs that don't have a CAS mod or the extra Kali file.
+
+### 0.9.11
+
+#### New
 * In-game updates: when a new dadmod is out, "Update available" shows under the dadmod text on the main menu. Main menu > Dadmod > **Download newest update** downloads it while you play, then **Restart to install update** installs it and restarts the game.
 * 12 of the extra maps can be hosted online: pick them in the online level select, or type their ! command (like !STREETS, !NYC, !SUBURBS).
 * Time of day follows Kali Mod's Time Of Day menu and the other way round (Morning, Day/Afternoon, Sunset/Evening, Night).
 
-### Changed
+#### Changed
 * Time of day works online: your pick shows on your screen only and stays when the server changes the time. "Level / server" follows the server.
 * INSTALL.txt is now README.txt.
 
-### Fixed
+#### Fixed
 * Hosting on a THPG tab level no longer crashes the game.
 
 ### 0.9.8 - 0.9.10

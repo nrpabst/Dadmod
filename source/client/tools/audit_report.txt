@@ -1,6 +1,10 @@
 ## STOCK: Dev has these, this install does not (used by)
+#"0x1343061c"  [qb/thugpro/procrastination.q]  <- dadmod_tod_kali_follow
 #"0x4c606620"  [qb/thugpro/procrastination.q]  <- thugpro_main_item
+#"0xa4ea632e"  [qb/thugpro/procrastination.q]  <- dadmod_tod_kali_follow
+#"0xbc4c779a"  [qb/thugpro/procrastination.q]  <- dadmod_tod_kali_follow
 #"0xc46e26a0"  [qb/thugpro/procrastination.q]  <- thugpro_main_item
+#"0xd6b550ba"  [qb/thugpro/procrastination.q]  <- dadmod_tod_kali_follow
 aksequence1  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
 aksequence2  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
 aksequence3  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
@@ -17,6 +21,8 @@ anim82wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
 anim83wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
 anim84wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
 anim85wrapper  [kmod/old_anim_scripts.q]  <- dadmod_anim_kali_kill
+dadmod_levelthumb_for  [qb/thugpro/procrastination.q]  <- create_thugpro_level_menu_item
+dadmod_levelthumbs_load  [qb/thugpro/procrastination.q]  <- dadmod_levelthumbs_boot, load_update_level_select_textures_to_main_memory
 thugpro_hostasobserver  [qb/game/net/net.q]  <- dadmod_noclip_allowed
 thugpro_mapvote_active  [qb/game/net/net.q]  <- level_select_change_level
 thugpro_say_to  [qb/game/net/net.q]  <- thugpro_bankdrops_chat, thugpro_bankdrops_confirm
@@ -59,7 +65,6 @@ skip_to_custom_restart  [qb/thugpro/procrastination.q, kali]  <- create_options_
 spawned_chosen_host_game  [qb/game/net/net.q, server change]  <- chosen_host_game
 thugpro_clearallobservevalues  [qb/thugpro/procrastination.q, kali]  <- create_observe_menu, quit_network_game, thugpro_observemode
 thugpro_menu_create_count_text  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create
-thugpro_menu_create_helper_text  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create
 thugpro_menu_get_style_params  [qb/thugpro/thugpro_menu.q, kali]  <- thugpro_menu_create, thugpro_menu_update_scrollbar
 thugpro_menu_item_update_extra_text  [qb/thugpro/thugpro_menu.q, kali]  <- autoservermenu_toggle_auto_game_mode, autoservermenu_toggle_auto_level, autoservermenu_toggle_auto_server, autoservermenu_toggle_auto_server_breaktime
 trick_wallplant  [qb/thugpro/procrastination.q, kali]  <- wallridetricks_doubletap, wallridetricks_singletap
@@ -67,6 +72,8 @@ walkingruntoskating  [qb/thugpro/procrastination.q, kali]  <- walkgroundtricks
 wallride  [qb/thugpro/procrastination.q, kali]  <- default_playrevertsound, inairexceptiontable, offrail
 
 ## KALI: Dev has these, this install does not (used by)
+dadmod_levelthumb_for  [qb/thugpro/procrastination.q]  <- create_thugpro_level_menu_item
+dadmod_levelthumbs_load  [qb/thugpro/procrastination.q]  <- dadmod_levelthumbs_boot, load_update_level_select_textures_to_main_memory
 thugpro_hostasobserver  [qb/game/net/net.q]  <- dadmod_noclip_allowed
 thugpro_mapvote_active  [qb/game/net/net.q]  <- level_select_change_level
 thugpro_say_to  [qb/game/net/net.q]  <- thugpro_bankdrops_chat, thugpro_bankdrops_confirm

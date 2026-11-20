@@ -35,7 +35,9 @@ script Land2 {
             else
                 GetSpeed
                 if ( <speed> > 250 )
+                    dadmod_bhra_easy_time RevertTime = <RevertTime>
                     SetExtraTricks tricks = LandPivot duration = <RevertTime>
+                    dadmod_bhra_land2_arm RevertTime = <RevertTime> pivot = 1
                 endif
             endif
         endif
@@ -288,4 +290,73 @@ endscript
 script Wallride
     dadmod_bhra_flush
     goto Wallride_orig params = { <...> }
+endscript
+script dadmod_bhra_pivot_land
+    ClearEventBuffer
+    if GotParam revert_style
+        if not Held x
+            PlayAnim anim = CrouchIdleToIdle BlendPeriod = 0.2 speed = 0.7
+        else
+            PlayAnim anim = CrouchIdle BlendPeriod = 0.2 From = 0 To = 0.3 seconds
+            BlendPeriodOut 0.3
+        endif
+    else
+        PlayAnim anim = PutDownManual BlendPeriod = 0.3 speed = 2.5
+    endif
+    Obj_ClearFlag FLAG_SKATER_IN_LAND_PIVOT
+    if InAir
+        if GoalManager_GoalShouldExpire
+            OnGroundExceptions NoEndRun
+            WaitAnimWhilstChecking AndManuals
+            if not OnGround
+                SetState GROUND
+            endif
+            OnGroundExceptions NoEndRun
+            begin
+                wait 1 gameframe
+            repeat 30
+            goto OnGroundAi
+        endif
+        WaitAnimWhilstChecking AndManuals
+        goto OnGroundAi
+    endif
+    if not OnGround
+        SetState GROUND
+    endif
+    OnGroundExceptions NoEndRun
+    RevertTime = 5
+    dadmod_bhra_easy_time RevertTime = <RevertTime>
+    SetExtraTricks tricks = LandPivot duration = <RevertTime>
+    dadmod_bhra_land2_arm RevertTime = <RevertTime> pivot = 1
+    if GoalManager_GoalShouldExpire
+        if GotParam bhra_arm
+            if IsTrue dadmod_bhra_keep
+                bhra_keepz = 1
+            endif
+        endif
+        if GotParam bhra_keepz
+            ClearException GroundGone
+            ClearException WallPush
+            SetQueueTricks NoTricks
+        else
+            LandSkaterTricks
+            WaitAnimWhilstChecking AndManuals
+            goto OnGroundAi
+        endif
+    endif
+    if GotParam bhra_arm
+        OnExceptionRun dadmod_bhra_land2_out
+    else
+        OnExceptionRun LandSkaterTricks
+    endif
+    begin
+        DoNextManualTrick FromAir
+        wait 1 gameframe
+    repeat 10
+    KillExtraTricks
+    LandSkaterTricks
+    OnExceptionRun
+    OnGroundExceptions
+    WaitAnimWhilstChecking AndManuals
+    goto OnGroundAi
 endscript

@@ -1284,9 +1284,7 @@ script revert
             BSAnim = <a>
         endif
     endif
-    if not GotParam LandPivot
-        dadmod_bhra_revert_check
-    endif
+    dadmod_bhra_revert_check
     OnExitRun ExitRevert
     InRevert
     ClearLipCombos
@@ -1348,17 +1346,25 @@ script revert
     if not GotParam LandPivot
         ResetLandedFromVert
     endif
-    WaitAnim 100 Percent
+    if GotParam bhra_pv
+        WaitAnim 60 Percent
+    else
+        WaitAnim 100 Percent
+    endif
     CanKickOn
     if GotParam bhra_air
-        if InAir
-            InAirExceptions
-            goto Airborne
+        if not GotParam LandPivot
+            if not GotParam bhra_pv
+                if InAir
+                    InAirExceptions
+                    goto Airborne
+                endif
+                begin
+                    DoNextManualTrick FromAir
+                    wait 1 gameframe
+                repeat 10
+            endif
         endif
-        begin
-            DoNextManualTrick FromAir
-            wait 1 gameframe
-        repeat 10
     endif
     if GotParam LandPivot
         PlayAnim anim = Manual_Range From = middle BlendPeriod = 0.0
@@ -1368,6 +1374,14 @@ script revert
     endif
     DoNextTrick
     OnGroundExceptions
+    if GotParam bhra_air
+        if GotParam LandPivot
+            goto dadmod_bhra_pivot_land
+        endif
+        if GotParam bhra_pv
+            goto dadmod_bhra_pivot_land params = { revert_style = 1 }
+        endif
+    endif
     LandSkaterTricks
     ClearEventBuffer
     if GotParam LandPivot

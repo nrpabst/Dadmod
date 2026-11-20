@@ -4651,11 +4651,14 @@ dadmod_bhra_keep = 0
 
 dadmod_bhra_easy = 0
 
+dadmod_bhra_style = 0
+
 dadmod_bhra_loaded = 0
 
 script dadmod_bhra_load
     keep = 0
     easy = 0
+    style = 0
     if THUGRECOMP_SettingLoad key = "bhra_keep"
         if ( <value> = 1 )
             keep = 1
@@ -4666,8 +4669,14 @@ script dadmod_bhra_load
             easy = 1
         endif
     endif
+    if THUGRECOMP_SettingLoad key = "bhra_style"
+        if ( <value> = 1 )
+            style = 1
+        endif
+    endif
     Change dadmod_bhra_keep = <keep>
     Change dadmod_bhra_easy = <easy>
+    Change dadmod_bhra_style = <style>
     Change dadmod_bhra_loaded = 1
 endscript
 
@@ -4725,6 +4734,11 @@ script dadmod_bhra_land2_arm RevertTime = 5
             return
         endif
     endif
+    if GotParam pivot
+        SetTags bhra_pivot = 1
+    else
+        SetTags bhra_pivot = 0
+    endif
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
     pf = ( <RevertTime> + 4 )
     Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> }
@@ -4746,6 +4760,7 @@ script dadmod_bhra_dd_arm
             return
         endif
     endif
+    SetTags bhra_pivot = 0
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
     Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 }
     dadmod_bhra_dbg what = "skate-in window armed"
@@ -4819,11 +4834,32 @@ script dadmod_bhra_ollie_mark
     if GotParam bhra_wait
         if ( <bhra_wait> > 0 )
             SetTags bhra_wait = 0 bhra_hopped = <bhra_wait>
-            if IsTrue dadmod_bhra_easy
-                if ( <bhra_wait> = 2 )
-                    SetExtraTricks_Reverts duration = 50
+            pv = 0
+            if ( <bhra_wait> = 1 )
+                GetSingleTag bhra_pivot
+                if GotParam bhra_pivot
+                    pv = <bhra_pivot>
+                endif
+            endif
+            if ( <pv> = 1 )
+                if IsTrue dadmod_bhra_style
+                    if IsTrue dadmod_bhra_easy
+                        SetExtraTricks_Reverts duration = 20
+                    else
+                        SetExtraTricks_Reverts duration = 6
+                    endif
                 else
-                    SetExtraTricks_Reverts duration = 20
+                    if IsTrue dadmod_bhra_easy
+                        SetExtraTricks tricks = LandPivot duration = 20
+                    endif
+                endif
+            else
+                if IsTrue dadmod_bhra_easy
+                    if ( <bhra_wait> = 2 )
+                        SetExtraTricks_Reverts duration = 50
+                    else
+                        SetExtraTricks_Reverts duration = 20
+                    endif
                 endif
             endif
             dadmod_bhra_dbg what = "ollie: it was a hop"
@@ -4894,6 +4930,12 @@ script dadmod_bhra_revert_check
             if InAir
                 if IsTrue dadmod_bhra_keep
                     dadmod_bhra_dbg what = "air revert after a hop: combo kept"
+                    GetSingleTag bhra_pivot
+                    if GotParam bhra_pivot
+                        if ( <bhra_pivot> = 1 )
+                            return bhra_air = 1 bhra_pv = 1
+                        endif
+                    endif
                     return bhra_air = 1
                 endif
             endif
@@ -4924,7 +4966,36 @@ script dadmod_bhra_text
     else
         bhra_easy_text = "Off"
     endif
-    return bhra_keep_text = <bhra_keep_text> bhra_easy_text = <bhra_easy_text>
+    if IsTrue dadmod_bhra_style
+        bhra_style_text = "Revert"
+    else
+        bhra_style_text = "Land Pivot"
+    endif
+    return bhra_keep_text = <bhra_keep_text> bhra_easy_text = <bhra_easy_text> bhra_style_text = <bhra_style_text>
+endscript
+script dadmod_bhra_style_toggle
+    if ScreenElementExists id = dadmod_bhra_style_item
+        if dadmod_bhra_style_item : GetSingleTag bhra_lock
+            if ( <bhra_lock> = 1 )
+                return
+            endif
+        endif
+        dadmod_bhra_style_item : SetTags bhra_lock = 1
+        SpawnScript dadmod_bhra_unlock params = { id = dadmod_bhra_style_item }
+    endif
+    dadmod_bhra_load
+    if IsTrue dadmod_bhra_style
+        on = 0
+        bhra_t = "Land Pivot"
+    else
+        on = 1
+        bhra_t = "Revert"
+    endif
+    THUGRECOMP_SettingSave key = "bhra_style" value = <on>
+    dadmod_bhra_load
+    if ScreenElementExists id = dadmod_bhra_style_item
+        thugpro_menu_item_update_extra_text id = dadmod_bhra_style_item text = <bhra_t>
+    endif
 endscript
 
 script dadmod_bhra_keep_toggle
@@ -6136,6 +6207,15 @@ script dadmod_pause_gameplay_menu
     extra_text = <bhra_easy_text>
     description_text = "Longer revert window around the hop, so Bunny Hop Reverts are easier to land. Only you."
     option_arrows_callback = dadmod_bhra_easy_toggle
+    option_arrows
+    pad_choose
+    }
+    make_thugpro_menu_item {
+    id = dadmod_bhra_style_item
+    text = "BHRA style"
+    extra_text = <bhra_style_text>
+    description_text = "How your Bunny Hop Revert looks after a land pivot hop: Land Pivot or Revert. Needs Land Pivots on. Only you."
+    option_arrows_callback = dadmod_bhra_style_toggle
     option_arrows
     pad_choose
     }

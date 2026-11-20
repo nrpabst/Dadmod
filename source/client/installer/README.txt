@@ -177,6 +177,24 @@
  6. WHAT'S NEW IN @DADMOD_VERSION@
 ==========================================================================
 
+  NEW
+    + Pause > dadmod > Gameplay > BHRA style (default Land Pivot): with
+      Land Pivots on, pick how your Bunny Hop Revert looks after a land
+      pivot hop: the Land Pivot or a Revert.
+
+  FIXED
+    x BHRA keeps combo now works with Land Pivots on: a hop then a land
+      pivot in the air (THUG Pro's own BHRA) keeps your combo. Before,
+      only BHRAs off vert ramps did.
+    x Easy BHRA after a land pivot hop gives a longer land pivot window
+      (it used to give a normal revert window instead).
+    x Buttslaps out of a BHRA work like in the normal game.
+    x BHRA keeps combo after zero also works for land pivot BHRAs.
+
+
+  0.9.14
+  ------
+
   FIXED
     x BHRA keeps combo now also works after zero (the timer running
       out in Trick Attack, Graffiti and other timed modes). Before,

@@ -1,5 +1,5 @@
 client script generator report (gen_client_qb.py)
-generated blocks: 704   left out (server): 731   hand-written: 64
+generated blocks: 706   left out (server): 731   hand-written: 65
 
 ## unclassified: changed in the server build, no rule says client or server (7)
 script LandSkaterTricks  (qb/game/skater/tricks.q, changed)
@@ -67,7 +67,7 @@ THUGRECOMP_ReorderSave  (1 blocks, e.g. dadmod_reorder_save)
 THUGRECOMP_ReorderUndo  (1 blocks, e.g. dadmod_reorder_undo)
 THUGRECOMP_ScanText  (4 blocks, e.g. dadmod_noclip_msg_show)
 THUGRECOMP_SettingLoad  (22 blocks, e.g. dadmod_anim_go)
-THUGRECOMP_SettingSave  (25 blocks, e.g. dadmod_anim_loop)
+THUGRECOMP_SettingSave  (26 blocks, e.g. dadmod_anim_loop)
 THUGRECOMP_SkinLocalZero  (1 blocks, e.g. dadmod_midload_go)
 THUGRECOMP_SkinSend  (1 blocks, e.g. dadmod_midload_online_note)
 THUGRECOMP_TextClip  (3 blocks, e.g. dadmod_ui_hl_plain)
@@ -94,7 +94,7 @@ script thugpro_bankdrops_chat -> thugpro_say_to
 script thugpro_bankdrops_confirm -> thugpro_say_to
 script walk_maybe_throw_projectile2 -> create_console_message
 
-## generated (704)
+## generated (706)
 script #"0x001202e3"  [qb/thugpro/procrastination.q]
 script #"0x16a10a9a"  [qb/thugpro/procrastination.q]
 script #"0x1a69989e"  [qb/thugpro/procrastination.q]
@@ -196,6 +196,8 @@ script dadmod_bhra_poll  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_revert_check  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_skatein_exc  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_skatein_out  [qb/engine/ButtonScripts.q]
+global dadmod_bhra_style  [qb/engine/ButtonScripts.q]
+script dadmod_bhra_style_toggle  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_text  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_toggle  [qb/engine/ButtonScripts.q]
 script dadmod_bhra_toggle_get  [qb/engine/ButtonScripts.q]

@@ -178,6 +178,24 @@
 ==========================================================================
 
   NEW
+    + Pause > Graphics > Sound > Teleporter sounds (0 to 100): the
+      volume of the sounds teleporters and teleporting elevators play.
+    + Pause > Graphics > Sound > Sound logger (default Off): On writes
+      every sound the game plays to dadmod\soundlog.txt, for finding
+      sound bugs.
+
+  FIXED
+    x BHRA: your skater holds the revert pose in the air again.
+    x Easy BHRA: buttslaps out of a BHRA work again.
+    x BHRA style Land Pivot plays the full Land Pivot animation. The
+      Revert style keeps its shorter (60%) revert.
+    x Level sounds no longer go quiet after you pause the game.
+
+
+  0.9.15
+  ------
+
+  NEW
     + Pause > dadmod > Gameplay > BHRA style (default Land Pivot): with
       Land Pivots on, pick how your Bunny Hop Revert looks after a land
       pivot hop: the Land Pivot or a Revert.

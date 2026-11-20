@@ -1892,7 +1892,11 @@ script create_thugpro_level_menu_item {
     else
         level_callback_script = level_select_change_level
     endif
-    pad_choose_params = <...>
+    if GotParam online_level
+        pad_choose_params = { <...> level = <online_level> }
+    else
+        pad_choose_params = <...>
+    endif
     if GetGlobalFlag flag = FLAG_AUTO_LEVEL_MODE
         GetIndexOfItemContaining { array = level_select_menu_level_info index = 0 Name = level value = <level> }
         if ( ( ( level_select_menu_level_info [ <index> ] ) . enabled ) = 1 )

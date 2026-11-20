@@ -1,3 +1,169 @@
+level_Mainmenu_si = {
+structure_name = level_Mainmenu_si
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS3
+indoor
+DisableGoalEditor
+DisableGoalAttack
+models_in_script_prx
+level = "si"
+sky = "si_Sky"
+default_level_stuff
+pre = "si_scripts.pre"
+scnpre = "siscn.pre"
+colpre = "sicol.pre"
+overview_cam_angle = 180
+overview_cam_zoom = (-1e+03,1e+04,3.5e+03)
+overview_cam_hide_objects = [ SI_Ceiling01 SI_SmallBeam SI_BigBeam SI_BigBeam01 ]
+thugpro_prx = "mainmenu_si_scripts.pre"
+qb = "levels\\mainmenu_si\\si.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\si\\si_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_oil = {
+structure_name = level_Mainmenu_oil
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS3
+DisableGoalEditor
+DisableGoalAttack
+indoor
+nosun
+models_in_script_prx
+level = "oil"
+sky = "oil_Sky"
+default_level_stuff
+pre = "oil_scripts.pre"
+scnpre = "oilscn.pre"
+colpre = "oilcol.pre"
+overview_cam_angle = 0
+overview_cam_zoom = (0.0,2.6e+04,-1e+03)
+thugpro_prx = "mainmenu_oil_scripts.pre"
+qb = "levels\\mainmenu_oil\\OIL.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\oil\\oil_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_ware = {
+structure_name = level_Mainmenu_ware
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+DisableGoalEditor
+DisableGoalAttack
+level = "ware"
+nosun
+default_level_stuff
+indoor
+pre = "ware_scripts.pre"
+scnpre = "warescn.pre"
+colpre = "warecol.pre"
+thugpro_prx = "mainmenu_ware_scripts.pre"
+qb = "levels\\mainmenu_ware\\ware.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\ware\\ware_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_z_ma = {
+structure_name = level_Mainmenu_z_ma
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+DisableGoalEditor
+DisableGoalAttack
+DisableBackfacePatch
+default_level_stuff
+indoor IsBigLevel nosun
+level = "z_ma"
+sky = "thaw_Sky"
+pre = "z_ma_scripts.pre"
+scnpre = "z_mascn.pre"
+colpre = "z_macol.pre"
+thugpro_prx = "mainmenu_z_ma_scripts.pre"
+qb = "levels\\mainmenu_z_ma\\z_ma.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\z_ma\\z_ma_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_z_dn = {
+structure_name = level_Mainmenu_z_dn
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = THPS1
+DisableGoalEditor
+DisableGoalAttack
+DisableBackfacePatch
+level = "z_dn"
+nosun
+default_level_stuff
+indoor
+pre = "z_dn_scripts.pre"
+scnpre = "z_dnscn.pre"
+colpre = "z_dncol.pre"
+overview_cam_zoom = (-2e+03,1.5e+04,-2e+03)
+thugpro_prx = "mainmenu_z_dn_scripts.pre"
+qb = "levels\\mainmenu_z_dn\\z_dn.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\z_dn\\z_dn_scripts.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
 level_Mainmenu_burn = {
 structure_name = level_Mainmenu_burn
 load_script = Load_MainMenu
@@ -7094,6 +7260,7 @@ dadmod_gfx_lists = [
 { list = gfx_padpopup names = ["Off" "On"] }
 { list = gfx_levelsfx names = ["Off" "On"] }
 { list = gfx_tricksfx names = ["Off" "On"] }
+{ list = gfx_soundlog names = ["Off" "On"] }
 { list = gfx_postfx names = ["dadmod" "ReShade"] }
 ]
 
@@ -7151,6 +7318,8 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal. Only on your screen." pdesc = "Flips the 3D view left to right and swaps steering to match. Only your screen."
     dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away."
     dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing."
+    dadmod_ui_item id = gfx_telesfx key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sounds teleporters and teleporting elevators play in some levels. 0 turns them off. Changes apply to the next teleport."
+    dadmod_ui_item id = gfx_soundlog key = "gfx_soundlog" label = "Sound logger" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_soundlog desc = "For finding sound bugs: writes every sound the game plays, and any that fail or get cut off, to dadmod/soundlog.txt. Leave it Off normally."
     dadmod_ui_item id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away."
     dadmod_ui_item id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away."
     dadmod_ui_item id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away."
@@ -8974,152 +9143,5 @@ script dadmod_hl_decorate
     case 5
         CreateScreenElement { Type = SpriteElement local_id = dadmod_hl_m parent = <id> texture = white2 Pos = ( (1.0,0.0) * ( <left> - 9.0 ) ) just = [ center center ] scale = (0.8,0.8) rot_angle = 45 rgba = <col> z_priority = 1003 }
     endswitch
-endscript
-
-script dadmod_hl_spotlight
-    p = <id>
-    RemoveParameter Parent
-    <id> : GetTags
-    if not GotParam Parent
-        return
-    endif
-    if GetScreenElementChildren id = <Parent>
-        GetArraySize <children>
-        i = 0
-        begin
-            if (<i> = <array_size>)
-                break
-            endif
-            c = ( <children> [ <i> ] )
-            if ScreenElementExists id = { <c> child = text }
-                RemoveParameter dadmod_nf
-                <c> : GetTags
-                if not GotParam dadmod_nf
-                    if (<c> = <p>)
-                        DoScreenElementMorph id = { <c> child = text } alpha = 1.0 time = 0.1
-                    else
-                        DoScreenElementMorph id = { <c> child = text } alpha = 0.2 time = 0.1
-                    endif
-                endif
-            endif
-            i = ( <i> + 1 )
-        repeat
-    endif
-endscript
-
-script dadmod_hl_hide_bar
-    wait 2 gameframes
-    DoMorph time = 0 alpha = 0.0
-    wait 6 gameframes
-    DoMorph time = 0 alpha = 0.0
-endscript
-
-script dadmod_hl_brackets
-    RemoveParameter dadmod_txt
-    RemoveParameter dadmod_plain
-    <id> : GetTags
-    if not GotParam dadmod_txt
-        return
-    endif
-    if (<on> = 1)
-        if not GotParam dadmod_plain
-            <id> : SetTags dadmod_plain = <dadmod_txt>
-            RemoveParameter dadmod_sub
-            <id> : GetTags
-            bl = <dadmod_txt>
-            if GotParam dadmod_sub
-                bl = <dadmod_sub>
-            endif
-            dadmod_hl_bracket_code
-            dadmod_hl_text_managed
-            if (<bcode> = "scan")
-                <id> : SetTags dadmod_txt = <bl> dadmod_brk = "scan"
-                RunScriptOnScreenElement id = <id> dadmod_hl_brk_scan params = { id = <id> bl = <bl> }
-                return
-            endif
-            if (<managed> = 1)
-                if (<bcode> = "")
-                    bcode = "\\cc"
-                endif
-                <id> : SetTags dadmod_txt = <bl> dadmod_brk = <bcode>
-            else
-                if (<bcode> = "")
-                    FormatText TextName = bt "> %s <" s = <bl>
-                else
-                    FormatText TextName = bt "%c> \\c0%s %c<" c = <bcode> s = <bl>
-                endif
-                <id> : SetTags dadmod_txt = <bt>
-                if ScreenElementExists id = { <id> child = text }
-                    SetScreenElementProps id = { <id> child = text } text = <bt>
-                endif
-            endif
-        endif
-    else
-        if GotParam dadmod_plain
-            <id> : SetTags dadmod_txt = <dadmod_plain> dadmod_brk = ""
-            <id> : RemoveTags tags = [ dadmod_plain ]
-            dadmod_hl_text_managed
-            if (<managed> = 0)
-                if ScreenElementExists id = { <id> child = text }
-                    SetScreenElementProps id = { <id> child = text } text = <dadmod_plain>
-                endif
-            endif
-        endif
-    endif
-endscript
-
-script dadmod_hl_text_managed
-    dadmod_ui_get key = "ui_rainbow" def = 0
-    if (<value> > 4)
-        if (<value> < 9)
-            return managed = 1
-        endif
-    endif
-    if (<value> = 0)
-        dadmod_ui_get key = "ui_colortheme" def = 0
-        if (<value> > 0)
-            dadmod_ui_get key = "ui_theme_mode" def = 0
-            if ( ( <value> = 2 ) or ( <value> = 4 ) or ( <value> = 5 ) )
-                return managed = 1
-            endif
-        endif
-    endif
-    return managed = 0
-endscript
-
-script dadmod_hl_bracket_code
-    dadmod_ui_get key = "ui_br_color" def = 10
-    switch <value>
-    case 1
-        return bcode = "\\cc"
-    case 2
-        return bcode = "\\cg"
-    case 3
-        return bcode = "\\cb"
-    case 4
-        return bcode = "\\c5"
-    case 5
-        return bcode = "\\cf"
-    case 6
-        return bcode = "\\cd"
-    case 7
-        return bcode = "\\c6"
-    case 8
-        return bcode = "\\cu"
-    case 9
-        return bcode = "\\c7"
-    case 10
-        return bcode = "scan"
-    endswitch
-    return bcode = ""
-endscript
-
-script dadmod_hl_brk_code t = 0
-    codes = [ "\\cg" "\\cb" "\\ce" "\\c5" "\\cf" "\\c4" "\\cd" "\\c6" "\\cu" "\\cs" "\\c7" "\\cl" ]
-    dadmod_ui_get key = "ui_br_speed" def = 5
-    k = ( <t> * 0.4 * <value> )
-    CastToInteger k
-    dadmod_ui_mod v = <k> m = 12
-    return brk_code = ( <codes> [ <v> ] )
 endscript
 

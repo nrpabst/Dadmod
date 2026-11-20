@@ -4203,6 +4203,8 @@ dadmod_item_catalog = [
 { name = "gfx_mirror" b = 1 p = { id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal. Only on your screen." pdesc = "Flips the 3D view left to right and swaps steering to match. Only your screen." } }
 { name = "gfx_levelsfx" b = 1 p = { id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away." } }
 { name = "gfx_tricksfx" b = 1 p = { id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing." } }
+{ name = "gfx_telesfx" b = 1 p = { id = gfx_telesfx key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sounds teleporters and teleporting elevators play in some levels. 0 turns them off. Changes apply to the next teleport." } }
+{ name = "gfx_soundlog" b = 1 p = { id = gfx_soundlog key = "gfx_soundlog" label = "Sound logger" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_soundlog desc = "For finding sound bugs: writes every sound the game plays, and any that fail or get cut off, to dadmod/soundlog.txt. Leave it Off normally." } }
 { name = "gfx_bginput" b = 1 p = { id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away." } }
 { name = "gfx_deadzone" b = 1 p = { id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away." } }
 { name = "gfx_abswap" b = 1 p = { id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away." } }
@@ -4973,6 +4975,7 @@ script dadmod_bhra_text
     endif
     return bhra_keep_text = <bhra_keep_text> bhra_easy_text = <bhra_easy_text> bhra_style_text = <bhra_style_text>
 endscript
+
 script dadmod_bhra_style_toggle
     if ScreenElementExists id = dadmod_bhra_style_item
         if dadmod_bhra_style_item : GetSingleTag bhra_lock
@@ -6269,8 +6272,10 @@ endscript
 
 script dadmod_pause_sound_menu
     dadmod_pause_sub_create name = dadmod_sound title = "sound" back_id = dadmod_pause_sound
-    dadmod_ui_item id = gfx_levelsfx_pause key = "gfx_levelsfx" label = "Level sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_levelsfx desc = "Water, crowds, machines and other sounds that come from spots in a map. Off silences them from the next map load."
-    dadmod_ui_item id = gfx_tricksfx_pause key = "gfx_tricksfx" label = "Special trick sounds" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_tricksfx desc = "The sound clips some special tricks play, like the guitar grind. Off keeps them quiet."
+    dadmod_ui_item id = gfx_levelsfx_pause key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines and other map sounds. 0 is off."
+    dadmod_ui_item id = gfx_tricksfx_pause key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of special trick clips, like the guitar grind. 0 is off."
+    dadmod_ui_item id = gfx_telesfx_pause key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of teleporter and teleporting elevator sounds. 0 is off."
+    dadmod_ui_item id = gfx_soundlog_pause key = "gfx_soundlog" label = "Sound logger" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_soundlog desc = "Writes every sound to dadmod/soundlog.txt, for finding sound bugs."
     thugpro_menu_finalize
 endscript
 
@@ -9327,172 +9332,6 @@ qb = "levels\\mainmenu_shp\\shp.qb"
 level_qb = "levels\\skateshop\\skateshop_scripts.qb"
 more_level_qbs = [
 "levels\\shp\\shp_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_si = {
-structure_name = level_Mainmenu_si
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-indoor
-DisableGoalEditor
-DisableGoalAttack
-models_in_script_prx
-level = "si"
-sky = "si_Sky"
-default_level_stuff
-pre = "si_scripts.pre"
-scnpre = "siscn.pre"
-colpre = "sicol.pre"
-overview_cam_angle = 180
-overview_cam_zoom = (-1e+03,1e+04,3.5e+03)
-overview_cam_hide_objects = [ SI_Ceiling01 SI_SmallBeam SI_BigBeam SI_BigBeam01 ]
-thugpro_prx = "mainmenu_si_scripts.pre"
-qb = "levels\\mainmenu_si\\si.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\si\\si_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_oil = {
-structure_name = level_Mainmenu_oil
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-indoor
-nosun
-models_in_script_prx
-level = "oil"
-sky = "oil_Sky"
-default_level_stuff
-pre = "oil_scripts.pre"
-scnpre = "oilscn.pre"
-colpre = "oilcol.pre"
-overview_cam_angle = 0
-overview_cam_zoom = (0.0,2.6e+04,-1e+03)
-thugpro_prx = "mainmenu_oil_scripts.pre"
-qb = "levels\\mainmenu_oil\\OIL.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\oil\\oil_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ware = {
-structure_name = level_Mainmenu_ware
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableGoalEditor
-DisableGoalAttack
-level = "ware"
-nosun
-default_level_stuff
-indoor
-pre = "ware_scripts.pre"
-scnpre = "warescn.pre"
-colpre = "warecol.pre"
-thugpro_prx = "mainmenu_ware_scripts.pre"
-qb = "levels\\mainmenu_ware\\ware.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\ware\\ware_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_ma = {
-structure_name = level_Mainmenu_z_ma
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-indoor IsBigLevel nosun
-level = "z_ma"
-sky = "thaw_Sky"
-pre = "z_ma_scripts.pre"
-scnpre = "z_mascn.pre"
-colpre = "z_macol.pre"
-thugpro_prx = "mainmenu_z_ma_scripts.pre"
-qb = "levels\\mainmenu_z_ma\\z_ma.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_ma\\z_ma_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_dn = {
-structure_name = level_Mainmenu_z_dn
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-level = "z_dn"
-nosun
-default_level_stuff
-indoor
-pre = "z_dn_scripts.pre"
-scnpre = "z_dnscn.pre"
-colpre = "z_dncol.pre"
-overview_cam_zoom = (-2e+03,1.5e+04,-2e+03)
-thugpro_prx = "mainmenu_z_dn_scripts.pre"
-qb = "levels\\mainmenu_z_dn\\z_dn.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_dn\\z_dn_scripts.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

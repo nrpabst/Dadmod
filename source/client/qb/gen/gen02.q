@@ -1,3 +1,150 @@
+script dadmod_hl_spotlight
+    p = <id>
+    RemoveParameter Parent
+    <id> : GetTags
+    if not GotParam Parent
+        return
+    endif
+    if GetScreenElementChildren id = <Parent>
+        GetArraySize <children>
+        i = 0
+        begin
+            if (<i> = <array_size>)
+                break
+            endif
+            c = ( <children> [ <i> ] )
+            if ScreenElementExists id = { <c> child = text }
+                RemoveParameter dadmod_nf
+                <c> : GetTags
+                if not GotParam dadmod_nf
+                    if (<c> = <p>)
+                        DoScreenElementMorph id = { <c> child = text } alpha = 1.0 time = 0.1
+                    else
+                        DoScreenElementMorph id = { <c> child = text } alpha = 0.2 time = 0.1
+                    endif
+                endif
+            endif
+            i = ( <i> + 1 )
+        repeat
+    endif
+endscript
+
+script dadmod_hl_hide_bar
+    wait 2 gameframes
+    DoMorph time = 0 alpha = 0.0
+    wait 6 gameframes
+    DoMorph time = 0 alpha = 0.0
+endscript
+
+script dadmod_hl_brackets
+    RemoveParameter dadmod_txt
+    RemoveParameter dadmod_plain
+    <id> : GetTags
+    if not GotParam dadmod_txt
+        return
+    endif
+    if (<on> = 1)
+        if not GotParam dadmod_plain
+            <id> : SetTags dadmod_plain = <dadmod_txt>
+            RemoveParameter dadmod_sub
+            <id> : GetTags
+            bl = <dadmod_txt>
+            if GotParam dadmod_sub
+                bl = <dadmod_sub>
+            endif
+            dadmod_hl_bracket_code
+            dadmod_hl_text_managed
+            if (<bcode> = "scan")
+                <id> : SetTags dadmod_txt = <bl> dadmod_brk = "scan"
+                RunScriptOnScreenElement id = <id> dadmod_hl_brk_scan params = { id = <id> bl = <bl> }
+                return
+            endif
+            if (<managed> = 1)
+                if (<bcode> = "")
+                    bcode = "\\cc"
+                endif
+                <id> : SetTags dadmod_txt = <bl> dadmod_brk = <bcode>
+            else
+                if (<bcode> = "")
+                    FormatText TextName = bt "> %s <" s = <bl>
+                else
+                    FormatText TextName = bt "%c> \\c0%s %c<" c = <bcode> s = <bl>
+                endif
+                <id> : SetTags dadmod_txt = <bt>
+                if ScreenElementExists id = { <id> child = text }
+                    SetScreenElementProps id = { <id> child = text } text = <bt>
+                endif
+            endif
+        endif
+    else
+        if GotParam dadmod_plain
+            <id> : SetTags dadmod_txt = <dadmod_plain> dadmod_brk = ""
+            <id> : RemoveTags tags = [ dadmod_plain ]
+            dadmod_hl_text_managed
+            if (<managed> = 0)
+                if ScreenElementExists id = { <id> child = text }
+                    SetScreenElementProps id = { <id> child = text } text = <dadmod_plain>
+                endif
+            endif
+        endif
+    endif
+endscript
+
+script dadmod_hl_text_managed
+    dadmod_ui_get key = "ui_rainbow" def = 0
+    if (<value> > 4)
+        if (<value> < 9)
+            return managed = 1
+        endif
+    endif
+    if (<value> = 0)
+        dadmod_ui_get key = "ui_colortheme" def = 0
+        if (<value> > 0)
+            dadmod_ui_get key = "ui_theme_mode" def = 0
+            if ( ( <value> = 2 ) or ( <value> = 4 ) or ( <value> = 5 ) )
+                return managed = 1
+            endif
+        endif
+    endif
+    return managed = 0
+endscript
+
+script dadmod_hl_bracket_code
+    dadmod_ui_get key = "ui_br_color" def = 10
+    switch <value>
+    case 1
+        return bcode = "\\cc"
+    case 2
+        return bcode = "\\cg"
+    case 3
+        return bcode = "\\cb"
+    case 4
+        return bcode = "\\c5"
+    case 5
+        return bcode = "\\cf"
+    case 6
+        return bcode = "\\cd"
+    case 7
+        return bcode = "\\c6"
+    case 8
+        return bcode = "\\cu"
+    case 9
+        return bcode = "\\c7"
+    case 10
+        return bcode = "scan"
+    endswitch
+    return bcode = ""
+endscript
+
+script dadmod_hl_brk_code t = 0
+    codes = [ "\\cg" "\\cb" "\\ce" "\\c5" "\\cf" "\\c4" "\\cd" "\\c6" "\\cu" "\\cs" "\\c7" "\\cl" ]
+    dadmod_ui_get key = "ui_br_speed" def = 5
+    k = ( <t> * 0.4 * <value> )
+    CastToInteger k
+    dadmod_ui_mod v = <k> m = 12
+    return brk_code = ( <codes> [ <v> ] )
+endscript
+
 script dadmod_hl_brk_scan
     k = 0
     begin

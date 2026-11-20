@@ -315,6 +315,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/balance/balancelock.inc"   // infinite balance (gfx.inc forwards gfx_balancelock); client build: offline only, enforced by the client menu scripts
 #include "../../mods/skinsync/skinsync.inc"      // live skater looks online after Load Skater (dadmod to dadmod)
 #include "../../mods/gfx/gfx.inc"                // graphics settings (dadmod\gfx.ini)
+#include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
 
 // ---- script functions
@@ -565,6 +566,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
         InstallBootSpeedHooks();
         crashlog::Install();
         gfx::Install(!safe, true);   // client: one Direct3D probe, on the game's own thread (gfx.inc PatchThread)
+        soundlog::Install();
         balancelock::Install();
 #ifdef DADMOD_DIAG
         DiagCallSite("after patch, startup loader call", kCallLoadStartup);

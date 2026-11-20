@@ -293,6 +293,9 @@ script Wallride
 endscript
 script dadmod_bhra_pivot_land
     ClearEventBuffer
+    if InAir
+        PlayAnim anim = PutDownManual BlendPeriod = 0.3 speed = 2.5
+    else
     if GotParam revert_style
         if not Held x
             PlayAnim anim = CrouchIdleToIdle BlendPeriod = 0.2 speed = 0.7
@@ -303,8 +306,10 @@ script dadmod_bhra_pivot_land
     else
         PlayAnim anim = PutDownManual BlendPeriod = 0.3 speed = 2.5
     endif
+    endif
     Obj_ClearFlag FLAG_SKATER_IN_LAND_PIVOT
     if InAir
+        ClearException Ollied
         if GoalManager_GoalShouldExpire
             OnGroundExceptions NoEndRun
             WaitAnimWhilstChecking AndManuals

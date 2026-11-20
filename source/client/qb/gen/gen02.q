@@ -1347,7 +1347,11 @@ script revert
         ResetLandedFromVert
     endif
     if GotParam bhra_pv
-        WaitAnim 60 Percent
+        if GotParam LandPivot
+            WaitAnim 100 Percent
+        else
+            WaitAnim 60 Percent
+        endif
     else
         WaitAnim 100 Percent
     endif

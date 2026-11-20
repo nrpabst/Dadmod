@@ -2965,7 +2965,50 @@ dadmod_online_levels = [
 { name = "Training (THPG)" level = Load_dadmod_THPGTraining cmds = [ "!PGTRAINING" "!THPGTRAINING" ] }
 ]
 
+script dadmod_level_online_larx
+    if ( <level> = Load_dadmod_THPGLarxPhilly )
+        scene = "Philly"
+        n1 = "Philly"
+        n2 = "PHILLY"
+        n3 = "Philadelphia"
+    endif
+    if ( <level> = Load_dadmod_THPGLarxBaltimore )
+        scene = "Baltimore"
+        n1 = "Baltimore"
+        n2 = "BALTIMORE"
+        n3 = "Baltimore"
+    endif
+    if ( <level> = Load_dadmod_THPGLarxWashington )
+        scene = "WashingtonDC"
+        n1 = "Washington, D.C."
+        n2 = "WASHINGTON, D.C."
+        n3 = "WashingtonDC"
+    endif
+    if not GotParam scene
+        return
+    endif
+    if not ScriptExists dadmod_thpg_user_level
+        return
+    endif
+    dadmod_thpg_scene_level scene = <scene>
+    if not GotParam found
+        dadmod_thpg_user_level name = <n1>
+    endif
+    if not GotParam found
+        dadmod_thpg_user_level name = <n2>
+    endif
+    if not GotParam found
+        dadmod_thpg_user_level name = <n3>
+    endif
+    if GotParam found
+        return ok = 1 online_level = <found>
+    endif
+endscript
 script dadmod_level_online_ok
+    dadmod_level_online_larx level = <level>
+    if GotParam ok
+        return ok = 1 online_level = <online_level>
+    endif
     GetArraySize dadmod_online_levels
     i = 0
     begin

@@ -177,6 +177,16 @@
  6. WHAT'S NEW IN @DADMOD_VERSION@
 ==========================================================================
 
+  FIXED
+    x Online level select: Philadelphia, Baltimore and Washington D.C.
+      in the Proving Ground tab can be picked when you host. They load
+      Larxian's map the same way the User tab does, so players without
+      dadmod who have that map can join too.
+
+
+  0.9.16
+  ------
+
   NEW
     + Pause > Graphics > Sound > Teleporter sounds (0 to 100): the
       volume of the sounds teleporters and teleporting elevators play.

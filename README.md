@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.9.12 beta · for THUG Pro**
+**0.9.17 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.9.16](#6-whats-new-in-0916)
+6. [What's new in 0.9.17](#6-whats-new-in-0917)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.9.16 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.9.17 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -129,13 +129,18 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * Faster boot.
 * A fix for a crash some skater parts cause.
 
-## 6. What's new in 0.9.16
+## 6. What's new in 0.9.17
 
-### New
+### Fixed
+* Online level select: **Philadelphia**, **Baltimore** and **Washington D.C.** in the Proving Ground tab can be picked when you host. They load Larxian's map the same way the User tab does, so players without dadmod who have that map can join too.
+
+### 0.9.16
+
+#### New
 * Pause > Graphics > Sound > **Teleporter sounds** (0 to 100): the volume of the sounds teleporters and teleporting elevators play.
 * Pause > Graphics > Sound > **Sound logger** (default Off): On writes every sound the game plays to `dadmod\soundlog.txt`, for finding sound bugs.
 
-### Fixed
+#### Fixed
 * BHRA: your skater holds the revert pose in the air again.
 * Easy BHRA: buttslaps out of a BHRA work again.
 * BHRA style Land Pivot plays the full Land Pivot animation. The Revert style keeps its shorter (60%) revert.

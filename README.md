@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.9.17 beta · for THUG Pro**
+**0.10.0 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.9.17](#6-whats-new-in-0917)
+6. [What's new in 0.10.0](#6-whats-new-in-0100)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.9.17 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.10.0 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -54,7 +54,7 @@ The dadmod-install folder stays too, so you can install again later.
 
 ### Updates
 
-From 0.9.11 the game tells you on the main menu when there's an update (see What's new). Setup.bat also checks for a newer dadmod each time it opens (and with **4) Check for updates**). If there is one, it downloads it and updates your game. Your settings stay.
+From 0.9.11 the game tells you on the main menu when there's an update (see What's new). Setup.bat also checks for a newer dadmod each time it opens, before it unpacks anything. If there is one, it asks to download it and then updates your game. Your settings stay.
 
 ## 4. Playing with Kali Mod
 
@@ -129,9 +129,37 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * Faster boot.
 * A fix for a crash some skater parts cause.
 
-## 6. What's new in 0.9.17
+## 6. What's new in 0.10.0
+
+### New
+* **Cars:** Pause > dadmod > Cars lets you drive 17 THUG Pro cars, 20 more THUG2 cars and 9 props (cone, shopping cart, robot and more) with the game's own car physics. H (L3) honks the horn. Players without dadmod see your car (the green tuner for the extra cars and props).
+* **Throwables:** Random Animal, Random Pedestrian, Random Junk, Skateboard, Bowling Ball and Mystery Box. Cars is one option now (a random car each throw) and shows on plain THUG Pro too.
+* **Bail cancel effect:** your skater flickers out with blue sparkles and flickers back in on the board, like THPS1+2.
+* Pause > dadmod > Gameplay > **Auto bail cancel** (default Off): every bail ends that way by itself. **Bail cancel effects** (default On) turns the sparkles and whoosh off.
+* **Clickable menus:** point and click any menu, click the arrows on option rows, right click or the top-left button goes back.
+* **Right click** in a level opens the pause menu.
+* **Home** opens the Change Level screen (offline, or when you host).
+* **Mouse camera** (Pause > dadmod > Gameplay, default On): on foot, hold the left button and drag to turn the camera; the wheel zooms.
+* **Alt+Enter** switches fullscreen (borderless, at your monitor's own resolution).
+* Graphics > **Display** changes right away with Apply; it switches back after 15 seconds unless you press Keep. V-sync moved here.
+* Graphics > Extras > **Frame generation** (default Off): smoother motion on 120 Hz and faster monitors. The game itself still runs at 60.
+* **Sky & weather** is one page. New: Dawn, ground mist Fog (Off, Knee high, Head high, First floor, Rooftops) and Fog intensity (1 to 10, default 5).
+* Edit Skater: **Copy Scales From** and **Copy Tricks From** another saved skater, each with an Undo.
+
+### Changed
+* Night, Evening lights and Dawn darken the whole level, not just the sky; the level's own lights stay lit.
+* The Dynamic time of day, Fog weather and the Street lights slider are gone (old settings are converted).
+* New Orleans: the manhole scream ("Into the Underworld" gap) is off.
 
 ### Fixed
+* Stuck on the main menu background with the galaxy sky on (NVIDIA cards). The sky shaders are much smaller now; a shader a card can't make only turns that one effect off.
+* The Sound logger is gone from the player build (0.9.16 and 0.9.17 shipped it switched on by mistake).
+* Skater select camera could swing behind the skater after Back.
+* Edit Skater "Copy Scales From" rows did nothing in 0.9.17.
+
+### 0.9.17
+
+#### Fixed
 * Online level select: **Philadelphia**, **Baltimore** and **Washington D.C.** in the Proving Ground tab can be picked when you host. They load Larxian's map the same way the User tab does, so players without dadmod who have that map can join too.
 
 ### 0.9.16

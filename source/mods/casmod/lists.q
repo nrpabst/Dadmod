@@ -80,6 +80,8 @@ dadmod_es_tattoo = [
 { t = "R Leg Tattoo" p = [ right_leg_tattoo right_leg_tattoo ] x = adjust xt = "Adjust R Leg Tattoo" }
 ]
 dadmod_es_scale = [
+{ text = "Copy Scales From..." pad_choose_script = dadmod_skc_scales_menu pad_choose_params = { } }
+{ text = "Undo Copy Scales" pad_choose_script = dadmod_skc_scales_undo pad_choose_params = { } }
 { hdr t = "BODY" }
 { t = "Body" sz = object_scaling cam = General cb = General }
 { t = "Chest" sz = torso_bone_group cam = torso cb = torso }

@@ -1,15 +1,97 @@
 @echo off
 rem dadmod setup: install / update, repair or uninstall dadmod. Close THUG Pro first.
-rem Everything it installs is in files.dad next to this file; the PowerShell part below unpacks it to a temp folder,
-rem runs the installer from there and deletes the temp folder again.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%~f0'; $s=[IO.File]::ReadAllText($f); $m='#'+'DADMOD-PS'; iex $s.Substring($s.LastIndexOf($m))"
-if errorlevel 1 pause
-exit /b
+rem Everything it installs is in files.dad next to this file; the PowerShell part below first checks GitHub for a newer
+rem dadmod (and can download it into this folder), then unpacks files.dad to a temp folder, runs the installer from there
+rem and deletes the temp folder again. One line on purpose: this file can be replaced by a newer Setup.bat while it runs,
+rem and cmd never reads past a line it has already started.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%~f0'; $s=[IO.File]::ReadAllText($f); $m='#'+'DADMOD-PS'; iex $s.Substring($s.LastIndexOf($m))" || pause & exit /b
 #DADMOD-PS
 $ErrorActionPreference = 'Stop'
 $pkg = Split-Path -Parent $f
 $dpk = Join-Path $pkg 'files.dad'
 if (-not (Test-Path -LiteralPath $dpk)) { Write-Host 'files.dad is missing. Unzip the whole dadmod zip again.' -ForegroundColor Red; exit 1 }
+# a newer dadmod on GitHub? Checked BEFORE unpacking (Noah 2026-11-20), so an old package isn't unpacked for nothing.
+# make_client writes the package version below. Quietly skipped with no internet, no release or GitHub busy.
+# DADMOD_UPDATE_URL overrides the API address (local tests).
+$ver = '@DADMOD_VERSION@'
+function Version-Of($t) {
+    $m = [regex]::Match("$t", '\d+(\.\d+){1,3}')
+    if (-not $m.Success) { return $null }
+    try { return [version]$m.Value } catch { return $null }
+}
+$cur = Version-Of $ver
+if ($cur) {
+    Write-Host 'Checking for a newer dadmod...'
+    $u = $null
+    try {
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+        $api = $env:DADMOD_UPDATE_URL
+        if (-not $api) { $api = 'https://api.github.com/repos/nrpabst/Dadmod/releases?per_page=30' }
+        $req = [Net.HttpWebRequest]::Create($api)
+        $req.UserAgent = 'dadmod-setup'
+        $req.Accept = 'application/vnd.github+json'
+        $req.Timeout = 8000
+        $req.ReadWriteTimeout = 8000
+        $resp = $req.GetResponse()
+        $sr = New-Object IO.StreamReader($resp.GetResponseStream())
+        $body = $sr.ReadToEnd(); $sr.Close(); $resp.Close()
+        # the highest version among the published releases (betas included) that carry a dadmod.zip
+        foreach ($rel in @($body | ConvertFrom-Json)) {
+            if (-not $rel -or $rel.draft) { continue }
+            $rv = Version-Of "$($rel.tag_name)"
+            if (-not $rv) { $rv = Version-Of "$($rel.name)" }
+            foreach ($a in @($rel.assets)) {
+                if ("$($a.name)" -ieq 'dadmod.zip' -and $rv -and (-not $u -or $rv -gt $u.v)) { $u = @{ v = $rv; tag = "$($rel.tag_name)"; url = "$($a.browser_download_url)"; size = [long]$a.size } }
+            }
+        }
+    } catch {
+        $u = $null
+        Write-Host 'Could not check for updates right now (no internet, or GitHub is busy). Using this package.'
+    }
+    if ($u -and $u.v -gt $cur) {
+        Write-Host ''
+        Write-Host "dadmod $($u.tag) is out (this package is $ver)." -ForegroundColor Green
+        $pick = 0
+        while ($pick -lt 1 -or $pick -gt 2) {
+            Write-Host 'Download it now?'
+            Write-Host '  1) Yes, download the new version'
+            Write-Host '  2) Not now, use this package'
+            Write-Host -NoNewline 'Press 1-2: '
+            if ([Console]::IsInputRedirected) { $k = [Console]::In.ReadLine(); if ($null -eq $k) { $k = '2' } } else { try { $k = [string][Console]::ReadKey($true).KeyChar } catch { $k = Read-Host } }
+            Write-Host $k
+            [void][int]::TryParse("$k".Trim(), [ref]$pick)
+        }
+        if ($pick -eq 1) {
+            $dl = Join-Path $env:TEMP ('dadmod_download_' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $dl | Out-Null
+            try {
+                $zip = Join-Path $dl 'dadmod.zip'
+                Write-Host ("Downloading dadmod $($u.tag) ({0} MB)..." -f [math]::Round($u.size / 1MB))
+                $wc = New-Object Net.WebClient
+                $wc.Headers.Add('User-Agent', 'dadmod-setup')
+                $wc.DownloadFile($u.url, $zip)
+                if ($u.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne $u.size) { throw 'wrong size' }
+                Add-Type -AssemblyName System.IO.Compression.FileSystem
+                $ux = Join-Path $dl 'zip'
+                [IO.Compression.ZipFile]::ExtractToDirectory($zip, $ux)
+                $nd = @(Get-ChildItem -LiteralPath $ux -Recurse -Filter 'files.dad')
+                if ($nd.Count -ne 1) { throw 'no files.dad' }
+                # this dadmod-install folder becomes the new version (Setup.bat too: cmd won't read this one again)
+                foreach ($n in @('files.dad', 'README.txt', 'Setup.bat')) {
+                    $src = Join-Path $nd[0].DirectoryName $n
+                    if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $pkg $n) -Force }
+                }
+                Write-Host "Downloaded dadmod $($u.tag)."
+            } catch {
+                Write-Host 'The download did not work (internet dropped?). Using this package instead.' -ForegroundColor Yellow
+            } finally {
+                Remove-Item -LiteralPath $dl -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } elseif ($u) {
+        Write-Host "This is the newest dadmod ($ver)."
+    }
+}
 $tmp = Join-Path $env:TEMP ('dadmod_setup_' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
@@ -189,7 +271,7 @@ public static class DadmodPack2 {
 }
 '@
     $zip = Join-Path $tmp 'pkg.zip'
-    try { [DadmodPack2]::Unpack($dpk, $zip) } catch { $m = $_.Exception.Message; if ($_.Exception.InnerException) { $m = $_.Exception.InnerException.Message }; Write-Host ($m + ' Unzip the whole dadmod zip again (or download it again).') -ForegroundColor Red; exit 1 }
+    try { [DadmodPack2]::Unpack($dpk, $zip) } catch { $m = $_.Exception.Message; if ($_.Exception.InnerException) { $m = $_.Exception.InnerException.Message }; if ($m -like '*from a newer dadmod*') { $m = 'Setup.bat was just updated. Run Setup.bat again.' } else { $m += ' Unzip the whole dadmod zip again (or download it again).' }; Write-Host $m -ForegroundColor Red; exit 1 }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $x = Join-Path $tmp 'x'
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x)

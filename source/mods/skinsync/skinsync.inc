@@ -29,6 +29,7 @@ static const BYTE  kMsgId          = 0xD7;      // free in THUGPro.exe (handlers
 static const BYTE  kMagic          = 0x44;      // 'D'
 static const BYTE  kSubHello       = 1;
 static const BYTE  kSubSkin        = 2;
+static const BYTE  kSubHorn        = 3;      // cars 2.0 horn (2026-11-21): a dadmod guest honked
 static const int   kMaxProfile     = 0x1000;    // the stock join code packs into 0x1000 bytes too
 static const int   kMaxSend        = 2400;      // the receive loop (0x45A830) copies a message into a 2600-byte stack buffer;
                                                 // a packed look is about 1000 bytes, bigger ones fall back to a rejoin
@@ -352,6 +353,89 @@ static Rate* RateFor(int conn) {
 static void UnmarkPlayer(char* player) {
     for (Mark& m : g_marks) if (m.player == player) m.player = nullptr;
 }
+// ---- cars 2.0 horn (Noah 2026-11-21: dadmod players hear each other's horns, from the car, on a dadmod host).
+// A dadmod guest sends kSubHorn to the host; the host (rate limited, 1 per player per second) runs the QB script
+// dadmod_cars_horn_remote id=<skater id> on the next frame, which plays the horn on that skater for the host and
+// pushes the stock Auto_SFX_Car_Horn_Stream panel block to every player (it skips a player whose horn stream is
+// already playing, so the guest who honked doesn't hear it twice). Nothing is forwarded on 0xD7 for horns.
+static const DWORD kRunScriptF = 0x475790, kStructCtorF = 0x476410, kStructDtorF = 0x477130, kAddIntF = 0x477B80;
+struct HornRate { int conn; DWORD last; };
+static HornRate g_hornRate[16];
+static int g_hornIds[4];
+static int g_hornCount = 0;
+static void HostHorn(char* sender) {
+    int conn = *(int*)(sender + kPlayerConn);
+    HornRate* r = nullptr;
+    for (HornRate& h : g_hornRate) if (h.conn == conn) { r = &h; break; }
+    if (!r) for (HornRate& h : g_hornRate) if (!h.conn) { r = &h; r->conn = conn; r->last = 0; break; }
+    if (!r) { r = &g_hornRate[0]; r->conn = conn; r->last = 0; }
+    DWORD now = GetTickCount();
+    if (r->last && now - r->last < 1000) return;
+    r->last = now;
+    int id = PlayerSkaterId(sender);
+    if (id < 0 || id > 15 || g_hornCount >= 4) return;
+    g_hornIds[g_hornCount++] = id;
+}
+static void RunHorns() {
+    for (int i = 0; i < g_hornCount; ++i) {
+        BYTE st[16] = {0};
+        typedef void (THISCALL* CtorFn)(void*);
+        typedef void (THISCALL* AddIntFn)(void*, DWORD, int);
+        typedef int (__cdecl* RunFn)(DWORD, void*, int, int, int);
+        ((CtorFn)kStructCtorF)(st);
+        ((AddIntFn)kAddIntF)(st, QbKey("id"), g_hornIds[i]);
+        ((RunFn)kRunScriptF)(QbKey("dadmod_cars_horn_remote"), st, 0, 0, 0);
+        ((CtorFn)kStructDtorF)(st);
+    }
+    g_hornCount = 0;
+}
+
+// ---- cars 2.0 horn on ANY server (Noah 2026-11-21 "lets try it"): stock message 0x39 is relayed by every stock host
+// to all other players (0x56A000, registered next to 0x89) and the stock client handler for it (0x56B7E0) only looks
+// the skater up by the first byte and returns, so plain THUG Pro / Kali players ignore it. thugpro.dll registers no
+// net handlers at all (no 0x45A5C0 call), so Kali doesn't use it either. We send { skater id, 'D', 'H', 1 } on 0x39
+// exactly like the stock 0x89 send (CF_BroadcastEnterVehicle 0x5B2260: MsgDesc +0xC queue 2, +0x10 channel 8) and add
+// our own client handler next to the stock one: on the marker it queues dadmod_cars_horn_hear id=<skater> for the
+// next frame. Short packets, other markers, our own id and more than 1 honk per second per skater are ignored.
+static const BYTE kHornMsg = 0x39;
+static DWORD g_hornHeardAt[16];
+static int g_hearIds[4];
+static int g_hearCount = 0;
+static int __cdecl HornHandler(int* ctx) {
+    if (!ctx || !ctx[0] || ctx[2] < 4) return 1;
+    const BYTE* d = (const BYTE*)ctx[0];
+    if (d[1] != 'D' || d[2] != 'H' || d[3] != 1) return 1;
+    int id = (signed char)d[0];
+    if (id < 0 || id > 15) return 1;
+    char* me = LocalPlayerInfo();
+    if (me && PlayerSkaterId(me) == id) return 1;
+    DWORD now = GetTickCount();
+    if (g_hornHeardAt[id] && now - g_hornHeardAt[id] < 900) return 1;
+    g_hornHeardAt[id] = now;
+    if (g_hearCount < 4) g_hearIds[g_hearCount++] = id;
+    return 1;
+}
+static bool HasHandler2(void* app, int id, void* fn);
+static void RegisterHorn(void* app) {
+    if (!app || HasHandler2(app, kHornMsg, (void*)&HornHandler)) return;
+    typedef void* (THISCALL* Fn)(void*, int, void*, int, int, int);
+    ((Fn)kAddHandler)((char*)app + 0xC, kHornMsg, (void*)&HornHandler, 3, 0, 0x80);
+    SLog("listening for dadmod horns (message 0x39)");
+}
+static void RunHears() {
+    for (int i = 0; i < g_hearCount; ++i) {
+        BYTE st[16] = {0};
+        typedef void (THISCALL* CtorFn)(void*);
+        typedef void (THISCALL* AddIntFn)(void*, DWORD, int);
+        typedef int (__cdecl* RunFn)(DWORD, void*, int, int, int);
+        ((CtorFn)0x476410)(st);
+        ((AddIntFn)0x477B80)(st, QbKey("id"), g_hearIds[i]);
+        ((RunFn)0x475790)(QbKey("dadmod_cars_horn_hear"), st, 0, 0, 0);
+        ((CtorFn)0x477130)(st);
+    }
+    g_hearCount = 0;
+}
+
 static int __cdecl ServerHandler(int* ctx) {
     if (!ctx || !ctx[0] || ctx[2] < 2 || !ctx[4]) return 1;
     const BYTE* d = (const BYTE*)ctx[0];
@@ -364,6 +448,7 @@ static int __cdecl ServerHandler(int* ctx) {
     if (r->player != sender) { memset(r, 0, sizeof *r); r->conn = ctx[4]; r->player = sender; }   // a new player on this connection
     if (r->blocked) return 1;
     if (d[1] == kSubHello) { MarkPlayer(sender); return 1; }
+    if (d[1] == kSubHorn) { HostHorn(sender); return 1; }
     if (d[1] != kSubSkin || ctx[2] <= 4) return 1;
     DWORD now = GetTickCount();
     if (r->last && now - r->last < kLookGap) {
@@ -404,6 +489,12 @@ static bool HasOtherHandler(void* app, void* fn) {
     char* sentinel = (char*)app + 0xC + kMsgId * 0x14;
     for (char* n = *(char**)(sentinel + 0xC); n && *(int*)(n + 4) != -1; n = *(char**)(n + 0xC))
         if (*(void**)(n + 0x14) != fn) return true;
+    return false;
+}
+static bool HasHandler2(void* app, int id, void* fn) {
+    char* sentinel = (char*)app + 0xC + id * 0x14;
+    for (char* n = *(char**)(sentinel + 0xC); n && *(int*)(n + 4) != -1; n = *(char**)(n + 0xC))
+        if (*(void**)(n + 0x14) == fn) return true;
     return false;
 }
 static void Register(void* app, void* fn, const char* what) {
@@ -492,6 +583,9 @@ static void Tick() {
     void* client = *(void**)(mgr + 8);
     if (server && OnServer()) Register(server, (void*)&ServerHandler, "host");
     if (client) Register(client, (void*)&ClientHandler, "client");
+    if (client) RegisterHorn(client);
+    RunHears();
+    if (OnServer()) RunHorns(); else g_hornCount = 0;
     for (int i = 0; i < g_pendingCount; ++i) {
         Pending& p = g_pending[i];
         char* s = SkaterById(p.id);
@@ -563,6 +657,50 @@ static bool __cdecl CF_SkinSend(void*, void*) {
     if (n <= 0 || n > kMaxSend) { SLog("Load Skater: look too big to send live (" + std::to_string(n) + " bytes)"); return false; }
     SendToServer(buf, n + 4);
     SLog("Load Skater: new look sent to the host (" + std::to_string(n) + " bytes)");
+    return true;
+}
+
+// THUGRECOMP_CarsHornSend  (cars 2.0, we honk in a net game): sends the 0x39 horn to the host, which relays it to
+// every other player on any server; dadmod players hear it from our car (HornHandler). Max one per second.
+static bool __cdecl CF_CarsHornSend(void*, void*) {
+    char* mgr = Mgr();
+    char* me = LocalPlayerInfo();
+    if (!mgr || !me) return false;
+    void* client = *(void**)(mgr + 8);
+    if (!client) return false;
+    static DWORD s_last;
+    if (s_last && GetTickCount() - s_last < 1000) return false;
+    s_last = GetTickCount();
+    int id = PlayerSkaterId(me);
+    if (id < 0 || id > 15) return false;
+    static BYTE horn[4];
+    horn[0] = (BYTE)id; horn[1] = 'D'; horn[2] = 'H'; horn[3] = 1;
+    BYTE desc[0x20];
+    typedef void (THISCALL* CtorFn)(void*);
+    memset(desc, 0, 0x20);
+    ((CtorFn)kMsgDescCtorF)(desc);
+    desc[0] = kHornMsg;
+    *(WORD*)(desc + 2) = 4;
+    *(void**)(desc + 4) = horn;
+    *(int*)(desc + 0xC) = 2;
+    desc[0x10] = 8;
+    typedef void (THISCALL* Fn)(void*, void*);
+    ((Fn)kClientSendF)(client, desc);
+    return true;
+}
+
+// THUGRECOMP_SkinHorn  (cars 2.0, a dadmod guest honks): tells a dadmod host, which plays it for everyone.
+// False (nothing sent) when we are the host or this host has not greeted us as dadmod (a stock host never gets it).
+static bool __cdecl CF_SkinHorn(void*, void*) {
+    char* mgr = Mgr();
+    if (!mgr || OnServer()) return false;
+    void* client = *(void**)(mgr + 8);
+    if (!client || client != g_greetApp) return false;
+    static DWORD s_last;
+    if (s_last && GetTickCount() - s_last < 1000) return false;
+    s_last = GetTickCount();
+    static BYTE horn[4] = { kMagic, kSubHorn, 0, 0 };
+    SendToServer(horn, 4);
     return true;
 }
 

@@ -1273,6 +1273,921 @@ static bool __cdecl CF_MenuFocus(void* params, void*) {
 
 // Called every frame while the main menu is up. `restart` = the driver just started (menu entered).
 // ctx = which screen is open (see MenuCtx); fx fy fz = the skater's facing.
+
+// ---- Edit Skater camera from keyboard and mouse (Noah 2026-11-20: every control needs a keyboard way)
+// number pad + / - zoom like RT / LT; Page Up / Page Down tilt like the right stick; holding the
+// left mouse button and dragging turns (left / right) and tilts (up / down), when the drag starts on the left
+// 55% of the window, away from the menu list on the right; the scroll wheel zooms. Only while the game window is
+// in front. The wheel is read from the game window's messages (its window procedure is chained, everything is
+// passed on unchanged).
+// ---- one shared hook of the game's main window (Noah 2026-11-20, clickable menus): counts wheel notches and
+// left / right button presses, split by where the pointer was (the left 55% of the window = the skater side in
+// Edit Skater). Everything is passed on unchanged. Re-hooks if the game window changes; never calls a null prev.
+static const DWORD kGameWnd = 0x7D6A28;     // HWND of the game window (the one thugpro.dll compares)
+static WNDPROC g_mPrev;
+static HWND g_mWnd;
+static bool g_mUni;   // chained the same way the window was made (Unicode or not), so typing isn't changed
+static volatile LONG g_wheelL, g_wheelR, g_lClickL, g_lClickR, g_rClick, g_lClickCorner, g_mClick;
+static volatile LONG g_rClickPlay;   // right clicks for pause during play (Noah 2026-11-21), taken by CF_MouseRightPause
+static const int kCornerPx = 40;   // the Back button square (34 px) and a little room: never the camera's
+static volatile DWORD g_mouseEvAt;           // last wheel / button message
+static HWND GameWnd() { HWND h = *(HWND*)kGameWnd; return (h && IsWindow(h)) ? h : nullptr; }
+static bool LeftSide(HWND h, int cx) {
+    RECT r; if (!GetClientRect(h, &r) || r.right <= 0) return false;
+    return cx < r.right * 55 / 100;
+}
+// The click that brings the game window back to the front must not press anything (Noah 2026-11-20): when the
+// window is activated, the next button press (and anything within 250 ms) is ignored by all our mouse handling.
+static volatile DWORD g_activateAt;
+static volatile LONG g_swallowClick;
+static bool ActivationClick() {
+    DWORD now = GetTickCount();
+    bool recent = g_activateAt && now - g_activateAt < 1000;   // the activating click arrives within a few ms
+    if ((InterlockedExchange(&g_swallowClick, 0) && recent) || (g_activateAt && now - g_activateAt < 250)) {
+        Log("mouse: activation click ignored");
+        return true;
+    }
+    return false;
+}
+// The dadmod wheel cursor (Noah 2026-11-20): while the mouse menus are active, the real Windows cursor over the game's
+// client area is our animated wheel (24 frames, about one turn a second, hotspot = the blue tip). Title bar, borders and
+// everything outside the window keep the normal cursor; nothing system-wide changes. Frames: cursor_frames.inc, made by
+// work/tools/make_cursor_frames.py + make_cursor_inc.py.
+#include "cursor_frames.inc"
+static volatile LONG g_hideCursor;          // 1 = our cursor is active (mouse menus in use)
+static HCURSOR g_curFrames[24];
+static volatile LONG g_curFrame;
+static int g_curShowCalls;                   // ShowCursor(TRUE) calls we made, undone when the menus go idle
+static const UINT_PTR kCurTimer = 0xDAD1;
+static HCURSOR MakeWheelCursor(const unsigned int* px, int s) {
+    BITMAPV5HEADER bi = {};
+    bi.bV5Size = sizeof bi; bi.bV5Width = s; bi.bV5Height = -s; bi.bV5Planes = 1; bi.bV5BitCount = 32;
+    bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask = 0x00FF0000; bi.bV5GreenMask = 0x0000FF00; bi.bV5BlueMask = 0x000000FF; bi.bV5AlphaMask = 0xFF000000;
+    void* bits = nullptr;
+    HDC dc = GetDC(nullptr);
+    HBITMAP col = CreateDIBSection(dc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, dc);
+    if (!col || !bits) return nullptr;
+    memcpy(bits, px, (size_t)s * s * 4);
+    HBITMAP mask = CreateBitmap(s, s, 1, 1, nullptr);
+    ICONINFO ii = {};
+    ii.fIcon = FALSE; ii.xHotspot = 0; ii.yHotspot = 0; ii.hbmMask = mask; ii.hbmColor = col;
+    HCURSOR c = (HCURSOR)CreateIconIndirect(&ii);
+    DeleteObject(col);
+    if (mask) DeleteObject(mask);
+    return c;
+}
+static void EnsureWheelCursors(HWND h) {
+    if (g_curFrames[0]) return;
+    UINT dpi = 96;
+    typedef UINT (WINAPI* DpiFn)(HWND);
+    DpiFn fn = (DpiFn)GetProcAddress(GetModuleHandleA("user32.dll"), "GetDpiForWindow");
+    if (fn && h) dpi = fn(h);
+    if (!dpi) dpi = 96;
+    int sys = GetSystemMetrics(SM_CXCURSOR);           // 32 at 100% (larger when the user enlarged the cursor)
+    int want = sys > 32 ? sys : 32;
+    if (dpi >= 120 && want < 40) want = 40;
+    if (dpi >= 144 && want < 48) want = 48;
+    if (dpi >= 192 && want < 64) want = 64;
+    int s = want >= 64 ? 64 : want >= 48 ? 48 : want >= 40 ? 40 : 32;
+    const unsigned int* base = s == 64 ? &curframes::kCur64[0][0] : s == 48 ? &curframes::kCur48[0][0]
+                             : s == 40 ? &curframes::kCur40[0][0] : &curframes::kCur32[0][0];
+    for (int i = 0; i < 24; ++i) g_curFrames[i] = MakeWheelCursor(base + (size_t)i * s * s, s);
+    Log("mouse: wheel cursor ready, %d px frames (dpi %u, system cursor %d)", s, dpi, sys);
+}
+static bool CursorInClient(HWND h) {
+    POINT p; RECT r;
+    if (!h || !GetCursorPos(&p) || WindowFromPoint(p) != h) return false;
+    ScreenToClient(h, &p);
+    return GetClientRect(h, &r) && p.x >= 0 && p.y >= 0 && p.x < r.right && p.y < r.bottom;
+}
+static void SetWheelCursorActive(HWND h, bool on) {
+    if (on) {
+        EnsureWheelCursors(h);
+        if (h) SetTimer(h, kCurTimer, 40, nullptr);
+        int n = 0;
+        while (ShowCursor(TRUE) < 0 && n < 64) ++n;   // the game may have hidden the cursor (fullscreen)
+        g_curShowCalls = n + 1;
+        if (CursorInClient(h) && g_curFrames[g_curFrame % 24]) SetCursor(g_curFrames[g_curFrame % 24]);
+    } else {
+        if (h) KillTimer(h, kCurTimer);
+        for (; g_curShowCalls > 0; --g_curShowCalls) ShowCursor(FALSE);   // back to the game's own hide state
+        if (h) SendMessageA(h, WM_SETCURSOR, (WPARAM)h, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));   // the game's cursor again
+    }
+}
+static LRESULT CALLBACK MouseWndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_SETCURSOR && LOWORD(l) == HTCLIENT && g_hideCursor) {
+        HCURSOR c = g_curFrames[g_curFrame % 24];
+        SetCursor(c);
+        return TRUE;
+    }
+    if (m == WM_TIMER && w == kCurTimer) {
+        if (g_hideCursor) {
+            LONG f = (g_curFrame + 1) % 24;
+            g_curFrame = f;
+            if (CursorInClient(h) && g_curFrames[f]) SetCursor(g_curFrames[f]);
+        }
+        return 0;
+    }
+    if (m == WM_DESTROY) {
+        KillTimer(h, kCurTimer);
+        for (int i = 0; i < 24; ++i) if (g_curFrames[i]) { DestroyCursor(g_curFrames[i]); g_curFrames[i] = nullptr; }
+    }
+    if ((m == WM_ACTIVATE && LOWORD(w) != WA_INACTIVE) || (m == WM_ACTIVATEAPP && w) || m == WM_MOUSEACTIVATE) {
+        if (GetForegroundWindow() != h || m != WM_MOUSEACTIVATE) { g_activateAt = GetTickCount(); InterlockedExchange(&g_swallowClick, 1); }
+    }
+    if ((m == WM_LBUTTONDOWN || m == WM_LBUTTONDBLCLK || m == WM_RBUTTONDOWN || m == WM_RBUTTONDBLCLK) && ActivationClick()) {
+        // swallowed: falls through to the game unchanged, our counters stay as they are
+    } else if (m == WM_MOUSEWHEEL) {
+        POINT p = { (short)LOWORD(l), (short)HIWORD(l) };
+        ScreenToClient(h, &p);
+        InterlockedExchangeAdd(LeftSide(h, p.x) ? &g_wheelL : &g_wheelR, (LONG)GET_WHEEL_DELTA_WPARAM(w));
+        g_mouseEvAt = GetTickCount();
+    } else if (m == WM_LBUTTONDOWN || m == WM_LBUTTONDBLCLK) {
+        int cx = (short)LOWORD(l), cy = (short)HIWORD(l);
+        // the Back button sits in the top-left corner, inside the Edit Skater camera's side: count it on its own so
+        // the camera never swallows it (Noah 2026-11-20: Back "worked the first time ... then it stopped working")
+        if (cx >= 0 && cy >= 0 && cx < kCornerPx && cy < kCornerPx) InterlockedIncrement(&g_lClickCorner);
+        else InterlockedIncrement(LeftSide(h, cx) ? &g_lClickL : &g_lClickR);
+        g_mouseEvAt = GetTickCount();
+    } else if (m == WM_RBUTTONDOWN || m == WM_RBUTTONDBLCLK) {
+        InterlockedIncrement(&g_rClick);
+        InterlockedIncrement(&g_rClickPlay);
+        g_mouseEvAt = GetTickCount();
+    } else if (m == WM_MBUTTONDOWN) {
+        InterlockedIncrement(&g_mClick);   // the walk camera's reset
+    }
+    WNDPROC prev = (h == g_mWnd) ? g_mPrev : (WNDPROC)GetPropA(h, "dadmod_mprev");   // each hooked window keeps its own
+    bool uni = IsWindowUnicode(h) != 0;
+    if (!prev) return uni ? DefWindowProcW(h, m, w, l) : DefWindowProcA(h, m, w, l);
+    return uni ? CallWindowProcW(prev, h, m, w, l) : CallWindowProcA(prev, h, m, w, l);
+}
+static HWND MouseHookEnsure() {
+    HWND h = GameWnd();
+    if (!h) return nullptr;
+    if (h == g_mWnd) return h;
+    bool uni = IsWindowUnicode(h) != 0;
+    LONG_PTR cur = uni ? GetWindowLongPtrW(h, GWLP_WNDPROC) : GetWindowLongPtrA(h, GWLP_WNDPROC);
+    if (!cur || cur == (LONG_PTR)MouseWndProc) return nullptr;
+    g_mUni = uni;
+    g_mPrev = (WNDPROC)cur;
+    g_mWnd = h;
+    LONG_PTR old = uni ? SetWindowLongPtrW(h, GWLP_WNDPROC, (LONG_PTR)MouseWndProc)
+                       : SetWindowLongPtrA(h, GWLP_WNDPROC, (LONG_PTR)MouseWndProc);
+    if (!old) { g_mWnd = nullptr; g_mPrev = nullptr; return nullptr; }
+    g_mPrev = (WNDPROC)old;
+    SetPropA(h, "dadmod_mprev", (HANDLE)old);
+    Log("mouse: game window hooked (wheel and clicks)");
+    return h;
+}
+static bool GameInFront(HWND h) { return h && GetForegroundWindow() == h && IsWindowVisible(h) && !IsIconic(h); }
+static volatile DWORD g_camMouseAt;
+static volatile bool g_pointerOnUi;          // the pointer is on a menu row / Back / Next (the camera must not drag)          // Edit Skater camera read the mouse (the skater side belongs to it)
+
+static volatile bool g_camDragReset;          // set while a screen without the skater camera is up (MenuTick)
+static void CamKeysMouse(float* zin, float* zout, float* tilt, float* yaw, float* el) {
+    static bool s_drag, s_btnWas = true; static POINT s_last; static DWORD s_wheelAt; static float s_wheelZ;
+    HWND fw = MouseHookEnsure();
+    DWORD nowCam = GetTickCount();
+    if (nowCam - g_camMouseAt > 2500) InterlockedExchange(&g_wheelL, 0);   // nothing left over from before
+    // back on a camera screen after another screen (2026-11-21, Noah: skater select camera swung round behind the
+    // skater after Select -> next screen -> Back): the release of the click that left this screen happened where
+    // nobody was listening, so drop any drag and treat the button as already held (only a fresh press drags)
+    if (g_camDragReset || nowCam - g_camMouseAt > 1500) { g_camDragReset = false; s_drag = false; s_btnWas = true; }
+    g_camMouseAt = nowCam;
+    if (!GameInFront(fw)) { s_drag = false; s_btnWas = true; InterlockedExchange(&g_wheelL, 0); return; }
+    auto key = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+    // zoom is on the number pad + / - only (Noah 2026-11-20: the main-row - and = are often rotate keys);
+    // Page Up / Page Down tilt unless a game action is bound to them
+    bool pgUpBound = false, pgDnBound = false;
+    const int* kb = (const int*)padhub::kKb0Binds;   // DirectInput scan codes of the 24 keyboard actions
+    for (int i = 0; i < 24; ++i) { if (kb[i] == 0xC9) pgUpBound = true; if (kb[i] == 0xD1) pgDnBound = true; }
+    if (key(VK_ADD)) *zin = 1;
+    if (key(VK_SUBTRACT)) *zout = 1;
+    *tilt = (!pgUpBound && key(VK_PRIOR) ? 1.f : 0.f) - (!pgDnBound && key(VK_NEXT) ? 1.f : 0.f);
+    // wheel: each notch zooms for a short moment (one notch = about a quarter second of a full trigger pull)
+    LONG wd = InterlockedExchange(&g_wheelL, 0);   // the wheel over the skater zooms; over the menu it scrolls
+    DWORD now = GetTickCount();
+    if (wd) { s_wheelZ = wd > 0 ? 1.f : -1.f; s_wheelAt = now + 80 * (DWORD)(wd > 0 ? wd : -wd) / WHEEL_DELTA + 170; }
+    if (s_wheelAt && (LONG)(s_wheelAt - now) > 0) { if (s_wheelZ > 0) *zin = 1; else *zout = 1; }
+    else s_wheelAt = 0;
+    POINT cp;
+    bool btn = key(VK_LBUTTON), freshPress = btn && !s_btnWas;
+    s_btnWas = btn;
+    if (btn && GetCursorPos(&cp)) {
+        if (!s_drag) {
+            if (!freshPress) return;   // a button already down when this screen opened never starts a drag
+            POINT c = cp; RECT r;
+            bool focusClick = g_activateAt && GetTickCount() - g_activateAt < 1000;   // not the click that focused the window
+            if (!focusClick && !g_pointerOnUi && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && r.right > 0 && c.x >= 0 && c.y >= 0 && c.x < r.right * 55 / 100 && c.y < r.bottom
+                && !(c.x < kCornerPx && c.y < kCornerPx)) {   // not on the Back button
+                s_drag = true; s_last = cp;
+            }
+        } else {
+            LONG dx = cp.x - s_last.x, dy = cp.y - s_last.y;
+            if (dx > 300 || dx < -300 || dy > 300 || dy < -300) { s_drag = false; return; }   // no real drag jumps that far in one frame
+            *yaw = dx * 0.4f;     // degrees per pixel
+            *el = dy * 0.3f;      // drag down raises the camera (look from above)
+            s_last = cp;
+        }
+    } else s_drag = false;
+}
+
+// ---- walk-mode mouse camera (Noah 2026-11-21). THUGRECOMP_WalkCam on sx sy sz hx hz cpx cpy cpz cdx cdy cdz
+// (QB: dadmod_walkcam_tick, mouse.q). on = 1 while the skater is on foot with nothing else owning the camera,
+// s = skater position, h = his heading (Obj_GetOrientation x/z), cp/cd = the normal skater camera's position and
+// orientation dir. Nothing changes until the left button is held and dragged over the game (or the wheel turns):
+// then the camera sits on a sphere around his chest like Edit Skater (drag = yaw all the way round, pitch -10..70
+// degrees, wheel = zoom), kept relative to his heading, and follows him while he walks. Middle click or on = 0
+// eases back to the normal camera. Returns wc_state 0 = normal camera, 1 = ours (cam_pos / cam_dir), 2 = just
+// finished easing back (QB gives the skater camera back).
+static bool __cdecl CF_WalkCam(void* params, void* script) {
+    static bool s_engaged, s_out, s_drag, s_btnWas = true, s_wasOn;
+    static float s_yaw, s_yawTo, s_el, s_elTo, s_dist, s_distTo, s_w;
+    static POINT s_last;
+    static DWORD s_at;
+    const float kLook = 50.0f, kMinD = 45.0f, kMaxD = 650.0f, kRad = 3.14159265f / 180.0f;
+    DWORD now = GetTickCount();
+    float dt = s_at ? (now - s_at) / 1000.0f : 0.016f;
+    if (dt > 0.1f) dt = 0.1f;
+    if (dt < 0) dt = 0;
+    s_at = now;
+    if (IntParam(params, "quit", 0)) {   // the skater or his camera is gone (level change): no easing, just stop
+        if (s_engaged) { s_engaged = false; s_out = false; s_w = 0; s_drag = false; s_btnWas = true; s_wasOn = false; RetInt(script, "wc_state", 2); Log("walkcam: off (no skater)"); }
+        return true;
+    }
+    bool on = IntParam(params, "on", 0) != 0;
+    Vec sk = V(FloatParam(params, "sx", 0), FloatParam(params, "sy", 0), FloatParam(params, "sz", 0));
+    float hx = FloatParam(params, "hx", 0), hz = FloatParam(params, "hz", 1);
+    Vec cp = V(FloatParam(params, "cpx", 0), FloatParam(params, "cpy", 0), FloatParam(params, "cpz", 0));
+    Vec cd = V(FloatParam(params, "cdx", 0), FloatParam(params, "cdy", 0), FloatParam(params, "cdz", 1));
+    float head = (hx * hx + hz * hz > 1e-6f) ? atan2f(hx, hz) / kRad : 0.0f;
+    Vec target = Add(sk, V(0, kLook, 0));
+    HWND fw = MouseHookEnsure();
+    if (!on || !s_wasOn) {   // nothing left over from before (menus, the board) starts a zoom or a reset
+        InterlockedExchange(&g_mClick, 0);
+        if (!on) { s_drag = false; s_btnWas = true; }
+        else { InterlockedExchange(&g_wheelL, 0); InterlockedExchange(&g_wheelR, 0); }
+    }
+    s_wasOn = on;
+    if (!s_engaged) {
+        if (!on || !GameInFront(fw)) { s_btnWas = true; return true; }
+        bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
+        s_btnWas = btn;
+        LONG wd = InterlockedExchange(&g_wheelL, 0) + InterlockedExchange(&g_wheelR, 0);
+        InterlockedExchange(&g_mClick, 0);
+        bool start = wd != 0;
+        POINT cpos;
+        if (fresh && GetCursorPos(&cpos)) {
+            POINT c = cpos; RECT r;
+            bool focusClick = g_activateAt && now - g_activateAt < 1000;
+            if (!focusClick && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && c.x >= 0 && c.y >= 0 && c.x < r.right && c.y < r.bottom
+                && !(c.x < kCornerPx && c.y < kCornerPx)) { s_drag = true; s_last = cpos; }
+        }
+        if (s_drag && btn && GetCursorPos(&cpos) && (cpos.x != s_last.x || cpos.y != s_last.y)) start = true;
+        if (!btn) s_drag = false;
+        if (!start) return true;
+        // take over from exactly where the normal camera is
+        Vec off = Sub(cp, target);
+        float flat = sqrtf(off.x * off.x + off.z * off.z), d = sqrtf(flat * flat + off.y * off.y);
+        if (d < 1.0f) { off = V(-hx, 0.3f, -hz); flat = 1; d = 150; }
+        s_dist = s_distTo = d < kMinD ? kMinD : d > kMaxD ? kMaxD : d;
+        s_el = s_elTo = atan2f(off.y, flat > 1e-3f ? flat : 1e-3f) / kRad;
+        if (s_elTo < -10) s_elTo = -10;
+        if (s_elTo > 70) s_elTo = 70;
+        s_yaw = s_yawTo = atan2f(off.x, off.z) / kRad - head;
+        if (wd) { s_distTo *= powf(0.85f, (float)wd / WHEEL_DELTA); }
+        s_engaged = true; s_out = false; s_w = 0;
+        Log("walkcam: on (dist %.0f, tilt %.0f)", s_dist, s_el);
+    }
+    if (!on || InterlockedExchange(&g_mClick, 0)) {
+        if (!s_out) Log("walkcam: back to the skater camera%s", on ? " (middle click)" : "");
+        s_out = true; s_drag = false;
+    }
+    if (!s_out && GameInFront(fw)) {
+        bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
+        s_btnWas = btn;
+        POINT cpos;
+        if (btn && GetCursorPos(&cpos)) {
+            if (!s_drag) {
+                POINT c = cpos; RECT r;
+                bool focusClick = g_activateAt && now - g_activateAt < 1000;
+                if (fresh && !focusClick && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && c.x >= 0 && c.y >= 0 && c.x < r.right && c.y < r.bottom
+                    && !(c.x < kCornerPx && c.y < kCornerPx)) { s_drag = true; s_last = cpos; }
+            } else {
+                LONG dx = cpos.x - s_last.x, dy = cpos.y - s_last.y;
+                if (dx > 300 || dx < -300 || dy > 300 || dy < -300) s_drag = false;
+                else { s_yawTo -= dx * 0.4f; s_elTo += dy * 0.3f; }
+                s_last = cpos;
+            }
+        } else s_drag = false;
+        LONG wd = InterlockedExchange(&g_wheelL, 0) + InterlockedExchange(&g_wheelR, 0);
+        if (wd) s_distTo *= powf(0.85f, (float)wd / WHEEL_DELTA);   // wheel up zooms in
+        if (s_elTo < -10) s_elTo = -10;
+        if (s_elTo > 70) s_elTo = 70;
+        s_distTo = s_distTo < kMinD ? kMinD : s_distTo > kMaxD ? kMaxD : s_distTo;
+    } else if (!GameInFront(fw)) { s_drag = false; s_btnWas = true; }
+    float k = 14.0f * dt; k = k > 1 ? 1 : k;
+    s_yaw += (s_yawTo - s_yaw) * k;
+    s_el += (s_elTo - s_el) * k;
+    s_dist += (s_distTo - s_dist) * k;
+    s_w += (s_out ? -dt / 0.3f : dt / 0.2f);   // eases in over 0.2 s, back out over 0.3 s
+    if (s_w > 1) s_w = 1;
+    if (s_out && s_w <= 0) {
+        s_engaged = false; s_out = false; s_w = 0; s_btnWas = true;
+        RetInt(script, "wc_state", 2);
+        return true;
+    }
+    float a = (head + s_yaw) * kRad, el = s_el * kRad;
+    Vec pos = Add(target, V(sinf(a) * cosf(el) * s_dist, sinf(el) * s_dist, cosf(a) * cosf(el) * s_dist));
+    Vec dir = Norm(Sub(pos, target));
+    float w = s_w < 0 ? 0 : s_w;
+    w = w * w * (3 - 2 * w);
+    if (w < 1) {
+        pos = Add(Mul(cp, 1 - w), Mul(pos, w));
+        Vec cdn = Norm(cd);
+        dir = Norm(Add(Mul(cdn, 1 - w), Mul(dir, w)));
+    }
+    RetInt(script, "wc_state", 1);
+    RetVec(script, "cam_pos", pos);
+    RetVec(script, "cam_dir", dir);
+    return true;
+}
+
+// ---- clickable menus (Noah 2026-11-20). THUGRECOMP_MouseMenu id = <menu> (QB: dadmod_mouse_tick, menuitem.q) returns
+//   hit (child index, -1 none), hit_id (that child's id), side (0 left third, 1 middle, 2 right third), x y (pointer in
+//   640x480 menu space), click, rclick, wheel (notches, + = up; all taken by this call), moved, active (the mouse is
+//   in use: moved / clicked in the last 3 s and no key or pad press since), syscursor (Windows draws its own pointer),
+//   corner_x corner_y (the window's top-left corner in menu space), px_unit px_unit_y (menu units per screen pixel),
+//   over_back (pointer on the 34 px Back button in that corner).
+// Rows are found from the engine's own on-screen (summed) transform of each child, so parents, scrolling and
+// animations are all included. Engine screen element fields (THUGPro.exe, from the transform update 0x4A9D30):
+//   +0x14 id, +0x18 type, +0x4C parent, +0x58 first child, +0x64 next sibling, +0x114 summed alpha,
+//   +0x134/+0x138 summed upper-left, +0x13C/+0x140 summed scale, +0x160/+0x164 base width/height.
+// Elements are looked up by id on every call (0x4AD1E0, like ScreenElementExists) and never kept.
+static const DWORD kElemMgr      = 0x701440;   // screen element manager
+static const DWORD kElemResolve  = 0x4AD1E0;   // thiscall(mgr, ref*, params, key, assert) -> ref*
+static const DWORD kElemRelease  = 0x4637E0;   // thiscall(elem, ref*)
+static const DWORD kWindowType   = 0xA13ADBB7; // "WindowElement" (clips its children)
+static const float kBackPx = 34.0f;            // Back button size in screen pixels
+
+// Where the 640x480 menu space lands in the backbuffer: the engine's screen struct at 0x786B90 (thugpro.dll keeps a
+// pointer to it at +0x8CC98 and changes it in THUGPRO_ToggeScreenElementScaling, 0x10010600). +0x1DC width, +0x1E0
+// height, +0x1F0 x scale, +0x1F4 y scale, +0x1F8 x offset, +0x1FC y offset (pixels): the element draw code
+// (0x5Cxxxx, "x * [+0x1F0] + [+0x1F8]") uses exactly these. Noah's 1760x990 window: 2.2 / 2.0625 / 176 / 33, so
+// menus sit 33 px lower than a plain y * H / 480 (the first build missed the y offset: pointer and Back button 33 px low).
+struct MenuSpace { float xs, ys, xo, yo; int w, h; bool ok; };
+static MenuSpace GetMenuSpace() {
+    MenuSpace s = { 1, 1, 0, 0, 0, 0, false };
+    char* p = (char*)0x786B90;
+    if (IsBadReadPtr(p + 0x1DC, 0x24)) return s;
+    int w = *(int*)(p + 0x1DC), h = *(int*)(p + 0x1E0);
+    float xs = *(float*)(p + 0x1F0), ys = *(float*)(p + 0x1F4);
+    int xo = *(int*)(p + 0x1F8), yo = *(int*)(p + 0x1FC);
+    if (w < 200 || w > 20000 || h < 150 || h > 20000) return s;
+    if (!(xs > 0.05f && xs < 50.0f) || !(ys > 0.05f && ys < 50.0f)) return s;
+    if (xo < -w || xo > w || yo < -h || yo > h) return s;
+    s.xs = xs; s.ys = ys; s.xo = (float)xo; s.yo = (float)yo; s.w = w; s.h = h; s.ok = true;
+    static int g_msLastW, g_msLastH, g_msLastXo, g_msLastYo;
+    if (w != g_msLastW || h != g_msLastH || xo != g_msLastXo || yo != g_msLastYo) {
+        g_msLastW = w; g_msLastH = h; g_msLastXo = xo; g_msLastYo = yo;
+        Log("mouse: menu space backbuffer %dx%d, scale %.4f x %.4f, offset %d,%d", w, h, xs, ys, xo, yo);
+    }
+    return s;
+}
+struct ElemRef { char* elem; void* prev; void* next; };
+static char* ResolveElem(void* params, ElemRef* ref, const char* key = "id") {
+    ref->elem = nullptr; ref->prev = ref->next = nullptr;
+    void* mgr = *(void**)kElemMgr;
+    if (!mgr) return nullptr;
+    typedef void* (__thiscall* ResolveFn)(void*, ElemRef*, void*, DWORD, int);
+    ((ResolveFn)kElemResolve)(mgr, ref, params, QbKey(key), 0);
+    return ref->elem;
+}
+static void ReleaseElem(ElemRef* ref) {
+    if (!ref->elem) return;
+    typedef void (__thiscall* ReleaseFn)(void*, ElemRef*);
+    ((ReleaseFn)kElemRelease)(ref->elem, ref);
+    ref->elem = nullptr;
+}
+static void MouseRetFloat(void* script, const char* key, float v) {
+    void* params = script ? *(void**)((char*)script + 0x14) : nullptr;
+    typedef void (__thiscall* Fn)(void*, DWORD, float);
+    if (params) ((Fn)kAddFloat)(params, QbKey(key), v);
+}
+static void MouseRetChecksum(void* script, const char* key, DWORD v) {
+    void* params = script ? *(void**)((char*)script + 0x14) : nullptr;
+    typedef void (__thiscall* Fn)(void*, DWORD, DWORD);
+    if (params) ((Fn)kAddChecksum)(params, QbKey(key), v);
+}
+struct FRect { float x0, y0, x1, y1; };
+static FRect ElemRect(const char* e) {
+    FRect r;
+    r.x0 = *(const float*)(e + 0x134);
+    r.y0 = *(const float*)(e + 0x138);
+    r.x1 = r.x0 + *(const float*)(e + 0x160) * *(const float*)(e + 0x13C);
+    r.y1 = r.y0 + *(const float*)(e + 0x164) * *(const float*)(e + 0x140);
+    if (r.x1 < r.x0) { float t = r.x0; r.x0 = r.x1; r.x1 = t; }
+    if (r.y1 < r.y0) { float t = r.y0; r.y0 = r.y1; r.y1 = t; }
+    return r;
+}
+
+// Back for the mouse (right click / the Back button): a real Esc press, sent with SendInput as a scan code so the
+// engine's DirectInput keyboard sees it exactly like the key (FireEvent pad_back on current_menu did not reach the
+// menus' back handlers, Noah 2026-11-20). Held ~80 ms so the engine's per-frame read can't miss it, then released
+// from a short thread; one press at a time, only with the game window in front.
+static volatile DWORD g_backUntil;
+static volatile LONG g_backBusy;
+static volatile WORD g_sendScan = 0x01;
+static void SendEsc(bool up) {
+    INPUT in = {};
+    in.type = INPUT_KEYBOARD;
+    in.ki.wScan = g_sendScan;   // DIK_ESCAPE (Back) or DIK_RETURN (Next)
+    in.ki.dwFlags = KEYEVENTF_SCANCODE | (up ? KEYEVENTF_KEYUP : 0);
+    SendInput(1, &in, sizeof in);
+}
+// The key is held until the engine's own keyboard state (0x7D6670, refreshed by its DirectInput read every frame)
+// shows it down, then released at once (one engine read sees it, so no menu auto-repeat): a fixed 80 ms hold missed the read whenever a frame took
+// longer than that (the main menu often has 125-900 ms frames), so Back "only worked sometimes" (Noah 2026-11-20).
+// Safety release after 1.5 s.
+static volatile DWORD g_keyDownAt;
+static volatile int g_keyStage;   // 0 idle, 1 held (waiting for the engine to see it), 2 seen (release next tick)
+static void MenuKeyTick() {     // every mouse tick (game thread)
+    if (!g_keyStage) return;
+    DWORD now = GetTickCount();
+    const BYTE* ks = (const BYTE*)0x7D6670;
+    bool seen = (ks[g_sendScan & 0xFF] & 0x80) != 0;
+    if (g_keyStage == 1 && seen) { g_keyStage = 2; Log("mouse: %s press seen by the game after %u ms", g_sendScan == 0x01 ? "Back (Esc)" : "Next (Enter)", now - g_keyDownAt); }
+    if (g_keyStage == 2 || now - g_keyDownAt > 1500) {
+        if (g_keyStage == 1) Log("mouse: %s press not seen by the game in 1.5 s, released", g_sendScan == 0x01 ? "Back (Esc)" : "Next (Enter)");
+        SendEsc(true);
+        g_keyStage = 0;
+        g_backUntil = now + 300;
+        InterlockedExchange(&g_backBusy, 0);
+    }
+}
+static volatile LONG g_keySeq;
+static DWORD WINAPI KeyWatchdog(LPVOID p) {   // releases the key even if the mouse tick stops (screen change, load)
+    LONG seq = (LONG)(INT_PTR)p;
+    Sleep(1600);
+    if (g_keySeq == seq && g_keyStage) {
+        Log("mouse: %s released by the watchdog", g_sendScan == 0x01 ? "Back (Esc)" : "Next (Enter)");
+        SendEsc(true);
+        g_keyStage = 0;
+        g_backUntil = GetTickCount() + 300;
+        InterlockedExchange(&g_backBusy, 0);
+    }
+    return 0;
+}
+static bool SendMenuKey(WORD scan) {
+    HWND h = GameWnd();
+    const char* what = scan == 0x01 ? "Back (Esc)" : "Next (Enter)";
+    if (!h || GetForegroundWindow() != h) { Log("mouse: %s skipped, game window not in front", what); return false; }
+    if (InterlockedCompareExchange(&g_backBusy, 1, 0) != 0) { Log("mouse: %s skipped, a press is still going", what); return false; }
+    g_sendScan = scan;
+    g_keyDownAt = GetTickCount();
+    g_backUntil = g_keyDownAt + 2000;
+    SendEsc(false);
+    g_keyStage = 1;
+    LONG seq = InterlockedIncrement(&g_keySeq);
+    HANDLE wd = CreateThread(nullptr, 0, KeyWatchdog, (LPVOID)(INT_PTR)seq, 0, nullptr);
+    if (wd) CloseHandle(wd);
+    Log("mouse: %s pressed", what);
+    return true;
+}
+static bool __cdecl CF_MouseBack(void*, void*) { return SendMenuKey(0x01); }    // Esc
+// Next button (Noah 2026-11-20): screens with nothing to click that wait for Accept (freeskate and the like)
+static bool __cdecl CF_MouseNext(void*, void*) { return SendMenuKey(0x1C); }    // Enter
+// Right click pauses (Noah 2026-11-21: "when in a game can you make right click pause the game"). THUGRECOMP_MouseRightPause
+// ok = 1 every frame while the skater is in play with no menu, dialog, keyboard (chat), Free Cam or noclip up (QB decides,
+// dadmod_mouse_tick); ok = 0 otherwise, which throws away clicks made then (a right click in a menu is Back, so the one
+// that closes the pause menu never pauses again). A click that only focused the window never counts (WndProc swallows
+// it). The pause is a real Esc press, so the game does exactly what it does for Esc.
+static bool __cdecl CF_MouseRightPause(void* params, void*) {
+    MenuKeyTick();
+    LONG n = InterlockedExchange(&g_rClickPlay, 0);
+    if (!IntParam(params, "ok", 0) || n <= 0) return false;
+    DWORD now = GetTickCount();
+    if (g_backUntil && (LONG)(g_backUntil - now) > 0) return false;   // our own Esc / Enter press is still going or just ended
+    HWND h = GameWnd();
+    if (!GameInFront(h) || !CursorInClient(h)) return false;
+    Log("mouse: right click in play -> pause");
+    return SendMenuKey(0x01);
+}
+
+// THUGRECOMP_MouseArrows row = <row id> left = { <row> child = left_arrow } right = { <row> child = right_arrow } x y
+// (Noah 2026-11-20: "options have arrows around them but we can't click them ... make their hitboxes generous").
+// ms_arrow = 0 the pointer is on the left arrow, 1 on the right arrow, -1 neither. Each arrow's on-screen rect is
+// widened by 12 menu units each way and covers the row's full height. Returns false when the row has no arrows.
+static bool __cdecl CF_MouseArrows(void* params, void* script) {
+    float x = FloatParam(params, "x", -1e9f), y = FloatParam(params, "y", -1e9f);
+    ElemRef rr, lr, rgr, t1r, t1ar, t2r, t2ar;
+    char* row = ResolveElem(params, &rr, "row");
+    char* la = row ? ResolveElem(params, &lr, "left") : nullptr;
+    char* ra = row ? ResolveElem(params, &rgr, "right") : nullptr;
+    // Edit Skater part rows (casmod qol.q): "color" / extra labels on the right (dadmod_tag, dadmod_tag2) with their
+    // small arrows (dadmod_tag_arrow, dadmod_tag2_arrow); clicking one opens it (Noah: "i cant click the color button")
+    char* t1 = row ? ResolveElem(params, &t1r, "tag1") : nullptr;
+    char* t1a = row ? ResolveElem(params, &t1ar, "tag1a") : nullptr;
+    char* t2 = row ? ResolveElem(params, &t2r, "tag2") : nullptr;
+    char* t2a = row ? ResolveElem(params, &t2ar, "tag2a") : nullptr;
+    int arrow = -1, tag = 0;
+    bool any = la || ra || t1 || t2;
+    if (row && any) {
+        FRect r = ElemRect(row);
+        const float pad = 12.0f;   // a little extra room (Noah: "not TOO big")
+        auto in = [&](char* e, float p) {
+            if (!e) return false;
+            FRect a = ElemRect(e);
+            return x >= a.x0 - p && x < a.x1 + p && y >= r.y0 && y < r.y1;
+        };
+        if (in(t1, 8.0f) || in(t1a, 8.0f)) tag = 1;
+        else if (in(t2, 8.0f) || in(t2a, 8.0f)) tag = 2;
+        else if (in(la, pad)) arrow = 0;
+        else if (in(ra, pad)) arrow = 1;
+    }
+    ReleaseElem(&t2ar); ReleaseElem(&t2r); ReleaseElem(&t1ar); ReleaseElem(&t1r);
+    ReleaseElem(&rgr); ReleaseElem(&lr); ReleaseElem(&rr);
+    RetInt(script, "ms_arrow", arrow);
+    RetInt(script, "ms_tag", tag);
+    return any;
+}
+
+// THUGRECOMP_FitText row text left right base min (Noah 2026-11-21: option values ran out of their box): returns
+// ms_fit = the scale that makes the value text fit between the row's arrows (or inside the row when it has none),
+// at most base, at least min * base; ms_base = the text's current scale (for the first call, to remember the base).
+static bool __cdecl CF_FitText(void* params, void* script) {
+    ElemRef rr, tr, lr, rgr;
+    char* row = ResolveElem(params, &rr, "row");
+    char* tx = row ? ResolveElem(params, &tr, "text") : nullptr;
+    char* la = row ? ResolveElem(params, &lr, "left") : nullptr;
+    char* ra = row ? ResolveElem(params, &rgr, "right") : nullptr;
+    bool ok = false;
+    float fit = 1.0f, cur = 1.0f;
+    if (tx) {
+        cur = *(const float*)(tx + 0xA4);
+        float base = FloatParam(params, "base", 0.0f), mn = FloatParam(params, "min", 0.6f);
+        if (!(base > 0.0f)) base = cur;
+        FRect t = ElemRect(tx), r = ElemRect(row);
+        float tw = t.x1 - t.x0;
+        float wAtBase = (cur > 0.001f) ? tw * base / cur : tw;
+        float avail;
+        if (la && ra) {
+            FRect a = ElemRect(la), b = ElemRect(ra);
+            float aw = a.x1 - a.x0, bw = b.x1 - b.x0;
+            float lEdge = aw > 0.5f ? a.x1 : (a.x0 + 4.0f);   // a hidden arrow (scale 0) is a point: allow for its width
+            float rEdge = bw > 0.5f ? b.x0 : (b.x0 - 4.0f);
+            avail = rEdge - lEdge - 4.0f;
+        } else {
+            avail = r.x1 - t.x0 - 4.0f;
+        }
+        fit = base;
+        if (wAtBase > 1.0f && avail > 1.0f && wAtBase > avail) fit = base * avail / wAtBase;
+        if (fit < base * mn) fit = base * mn;
+        ok = true;
+    }
+    ReleaseElem(&rgr); ReleaseElem(&lr); ReleaseElem(&tr); ReleaseElem(&rr);
+    MouseRetFloat(script, "ms_fit", fit);
+    MouseRetFloat(script, "ms_base", cur);
+    return ok;
+}
+
+// THUGRECOMP_MouseOver id = <element> x y pad -> true when the point is on the element (padded by pad menu units)
+static bool __cdecl CF_MouseOver(void* params, void*) {
+    float x = FloatParam(params, "x", -1e9f), y = FloatParam(params, "y", -1e9f), p = FloatParam(params, "pad", 0);
+    ElemRef er;
+    char* e = ResolveElem(params, &er);
+    bool in = false;
+    if (e) { FRect r = ElemRect(e); in = x >= r.x0 - p && x < r.x1 + p && y >= r.y0 - p && y < r.y1 + p; }
+    ReleaseElem(&er);
+    return in;
+}
+
+// After a hover moved the focus (which may scroll the list under a still pointer), hover is paused for 250 ms
+// so the pointer can't chase rows that slide under it. Clicks still use the row under the pointer at click time.
+// The pause is skipped as soon as the pointer has really moved (more than 8 px since that focus), so sweeping over
+// rows highlights each one at once; only small jitter while a list scrolls waits (Noah 2026-11-21: "theres a delay").
+static volatile DWORD g_hoverCoolUntil;
+static POINT g_hoverAt;
+static bool __cdecl CF_MouseHoverDone(void*, void*) {
+    g_hoverCoolUntil = GetTickCount() + 250;
+    GetCursorPos(&g_hoverAt);
+    return true;
+}
+
+static bool __cdecl CF_MouseMenu(void* params, void* script) {
+    MenuKeyTick();
+    static DWORD s_lastCall, s_mouseAt, s_otherAt;
+    static POINT s_lastPos;
+    static LONG s_lastDev = -1;
+    static bool s_keyWas;
+    DWORD now = GetTickCount();
+    // the menu wasn't being read for a while: drop what piled up. 250 ms was too short: menu frames often take
+    // 125-900 ms, so clicks and pointer moves were thrown away on slow frames (keyboard keys and Back "sometimes")
+    bool stale = now - s_lastCall > 2500;
+    s_lastCall = now;
+    HWND h = MouseHookEnsure();
+    bool camSide = now - g_camMouseAt < 1500 && !IntParam(params, "nocam", 0);   // Edit Skater: the left side belongs to the camera
+    // (nocam = 1: a screen with our own buttons on the left, the skater select, where clicks there must count)
+    LONG wheel = InterlockedExchange(&g_wheelR, 0);
+    LONG click = InterlockedExchange(&g_lClickR, 0);
+    LONG rclick = InterlockedExchange(&g_rClick, 0);
+    click += InterlockedExchange(&g_lClickCorner, 0);
+    // left-side clicks are kept apart: on the skater screens they belong to the camera unless they land on a menu
+    // row or button (decided below, once the hit test ran: Noah 2026-11-21, level select rows sit on that side)
+    LONG clickL = InterlockedExchange(&g_lClickL, 0);
+    if (!camSide) { wheel += InterlockedExchange(&g_wheelL, 0); click += clickL; clickL = 0; }
+    if (stale) { wheel = 0; click = 0; rclick = 0; clickL = 0; }
+    bool front = GameInFront(h);
+    POINT cp = { 0, 0 };
+    bool havePos = front && GetCursorPos(&cp);
+    bool moved = havePos && (cp.x != s_lastPos.x || cp.y != s_lastPos.y);
+    if (havePos) s_lastPos = cp;
+    if (stale) moved = false;
+    // key or pad use hides the pointer until the mouse is used again
+    bool keyNow = padhub::KeyAny();
+    bool ownBack = g_backUntil && (LONG)(g_backUntil - now) > 0;
+    if (keyNow && !s_keyWas && !ownBack) s_otherAt = now;   // our own Back press is not "keyboard use"
+    s_keyWas = keyNow;
+    LONG dev = padhub::g_lastDevice;
+    if (dev == 1 && s_lastDev != 1) s_otherAt = now;
+    s_lastDev = dev;
+    if (moved || click || rclick || wheel) s_mouseAt = now;
+    static DWORD s_wheelUsedAt;
+    if (wheel) s_wheelUsedAt = now;
+    bool active = front && havePos && s_mouseAt && (LONG)(s_mouseAt - s_otherAt) >= 0 && true;   // stays until a key or pad press (Noah 2026-11-20)
+    if (padhub::g_capPhase != 0) active = false;              // a key / button is being bound
+    if (!front) { click = rclick = wheel = 0; moved = false; }
+
+    RECT cr = { 0, 0, 0, 0 };
+    float fx = 0, fy = 0;
+    if (h && GetClientRect(h, &cr) && cr.right > 0 && cr.bottom > 0) {
+        POINT c = cp; ScreenToClient(h, &c);
+        fx = (float)c.x / cr.right; fy = (float)c.y / cr.bottom;
+    }
+    MenuSpace ms = GetMenuSpace();
+    float bw = ms.ok ? (float)ms.w : (cr.right > 0 ? (float)cr.right : 640.0f);    // backbuffer size (the client
+    float bh = ms.ok ? (float)ms.h : (cr.bottom > 0 ? (float)cr.bottom : 480.0f);  // window is stretched to it)
+    float xs = ms.ok ? ms.xs : bw / 640.0f, ys = ms.ok ? ms.ys : bh / 480.0f;
+    float vx = (fx * bw - ms.xo) / xs, vy = (fy * bh - ms.yo) / ys;
+    float cornerX = -ms.xo / xs, cornerY = -ms.yo / ys;      // the client's top-left corner in menu space
+    float pxu = cr.right > 0 ? (bw / cr.right) / xs : 1.0f, pyu = cr.bottom > 0 ? (bh / cr.bottom) / ys : 1.0f;
+    bool overBack = vx >= cornerX && vx < cornerX + kBackPx * pxu && vy >= cornerY && vy < cornerY + kBackPx * pyu;
+    float rightX = (bw - ms.xo) / xs;                         // the client's right edge in menu space
+    float nextX = rightX - kBackPx * pxu;
+    bool overNext = vx >= nextX && vx < rightX && vy >= cornerY && vy < cornerY + kBackPx * pyu;
+    int rows = 0;
+
+    int hit = -1, side = 1; DWORD hitId = 0, hitRow = 0;
+    bool settling = false;
+    bool hoverEdge = false;
+    FRect hitRect = { 0, 0, 0, 0 };
+    bool hitPartial = false;
+    FRect box = { 0, 0, 0, 0 };
+    bool haveBox = false;
+    ElemRef ref;
+    char* menu = havePos ? ResolveElem(params, &ref) : nullptr;
+    if (menu) {
+        FRect clip = { -1e9f, -1e9f, 1e9f, 1e9f };
+        int depth = 0;
+        char* root = menu;
+        for (char* a = menu; a && depth < 64; a = *(char**)(a + 0x4C), ++depth) {    // scrolling windows clip what they hold
+            root = a;
+            DWORD ty = *(DWORD*)(a + 0x18);
+            // WindowElement and HScrollingMenu clip. Not VScrollingMenu (Noah 2026-11-21, bottom Edit Skater options not
+            // clickable): its dims (20 per row) are shorter than the rows it shows (23 apart), and it hides rows out of
+            // its window by alpha, which the row loop already treats as hidden
+            if (ty != kWindowType && ty != 0x2900E3D0) continue;
+            FRect w = ElemRect(a);
+            if (w.x0 > clip.x0) clip.x0 = w.x0; if (w.y0 > clip.y0) clip.y0 = w.y0;
+            if (w.x1 < clip.x1) clip.x1 = w.x1; if (w.y1 < clip.y1) clip.y1 = w.y1;
+        }
+        float best = 1e30f;
+        int i = 0;
+        // hover must never scroll a list (Noah 2026-11-21): in a list that has rows out of view, the first and last rows
+        // in view would scroll it when focused, so they are click-only (ms_hover_edge = 1)
+        int firstVis = -1, lastVis = -1, minHidden = 1 << 30, maxHidden = -1;
+        // which lists recenter on focus (Noah 2026-11-21, level select "should work like every other menu"): a list
+        // with rows out of view still focuses on hover, like the main menu; only when hovering a fully visible row
+        // made the list itself move (Load Skater keeps the focus centered) is that list learned as click-only
+        static DWORD s_refMenu, s_refAt, s_refHitId; static int s_refIdx = -1, s_refFirst = -1; static float s_refMid, s_refH;
+        static DWORD s_recenter[32]; static int s_nRecenter;
+        DWORD curMenuId = *(DWORD*)(menu + 0x14);
+        bool refFound = false; float refMidNow = 0;
+        // grid = 1 (the on-screen keyboard, Noah 2026-11-20): the menu holds rows (hmenus) and the keys are their
+        // children, so the keys are tested and ms_hit_row gives the key's row
+        bool grid = IntParam(params, "grid", 0) != 0;
+        char* rowIt = grid ? *(char**)(menu + 0x58) : nullptr;
+        char* c = grid ? (rowIt ? *(char**)(rowIt + 0x58) : nullptr) : *(char**)(menu + 0x58);
+        for (int guard = 0; guard < 2048; ++guard) {
+            if (!c) {
+                if (!grid || !rowIt) break;
+                rowIt = *(char**)(rowIt + 0x64);
+                if (!rowIt) break;
+                c = *(char**)(rowIt + 0x58);
+                continue;
+            }
+            char* cur = c;
+            c = *(char**)(c + 0x64);
+            int idx = i++;
+            if (*(const float*)(cur + 0x114) <= 0.01f) {   // hidden (a scrolling list hides rows out of view)
+                if (idx < minHidden) minHidden = idx;
+                if (idx > maxHidden) maxHidden = idx;
+                continue;
+            }
+            FRect r = ElemRect(cur);
+            if (r.x1 - r.x0 < 1 || r.y1 - r.y0 < 1) {   // a row with no size of its own: use what it holds
+                bool got = false; int n = 0;
+                for (char* k = *(char**)(cur + 0x58); k && n < 64; k = *(char**)(k + 0x64), ++n) {
+                    FRect kr = ElemRect(k);
+                    if (kr.x1 - kr.x0 < 1 || kr.y1 - kr.y0 < 1) continue;
+                    if (!got) { r = kr; got = true; }
+                    else { if (kr.x0 < r.x0) r.x0 = kr.x0; if (kr.y0 < r.y0) r.y0 = kr.y0; if (kr.x1 > r.x1) r.x1 = kr.x1; if (kr.y1 > r.y1) r.y1 = kr.y1; }
+                }
+                if (!got) continue;
+            } else {
+                // what a row holds can reach past its own box (the option arrows sit outside it, and rows grow / shrink
+                // when they gain or lose focus): widen it sideways to its children so arrow clicks always land on the row
+                int n = 0;
+                for (char* k = *(char**)(cur + 0x58); k && n < 64; k = *(char**)(k + 0x64), ++n) {
+                    FRect kr = ElemRect(k);
+                    if (kr.x1 - kr.x0 < 1 || kr.y1 - kr.y0 < 1) continue;
+                    if (kr.y1 < r.y0 || kr.y0 > r.y1) continue;       // only things beside the row, not above / below
+                    if (kr.x0 < r.x0) r.x0 = kr.x0;
+                    if (kr.x1 > r.x1) r.x1 = kr.x1;
+                }
+            }
+            ++rows;
+            if (idx == s_refIdx && curMenuId == s_refMenu) { refFound = true; refMidNow = (r.y0 + r.y1) * 0.5f; }
+            {
+                bool inView = clip.y0 < -1e8f || (r.y0 >= clip.y0 - 0.5f && r.y1 <= clip.y1 + 0.5f);
+                if (inView) {
+                    if (firstVis < 0) firstVis = idx;
+                    lastVis = idx;
+                    if (!haveBox) { box = r; haveBox = true; }      // the list's on-screen box (rows in view)
+                    else { if (r.x0 < box.x0) box.x0 = r.x0; if (r.y0 < box.y0) box.y0 = r.y0; if (r.x1 > box.x1) box.x1 = r.x1; if (r.y1 > box.y1) box.y1 = r.y1; }
+                }
+                else { if (idx < minHidden) minHidden = idx; if (idx > maxHidden) maxHidden = idx; }
+            }
+            // rows get 4 menu units of extra height above and below (Noah 2026-11-21 "sometimes my clicks dont register":
+            // clicks on the gap between rows or right on a row's top edge hit nothing); the nearest row still wins
+            const float kPadY = 4.0f;
+            if (vx < r.x0 || vx >= r.x1 || vy < r.y0 - kPadY || vy >= r.y1 + kPadY) continue;
+            if (vx < clip.x0 || vx >= clip.x1 || vy < clip.y0 - kPadY || vy >= clip.y1 + kPadY) continue;
+            // a row partly cut off by a scrolling window can be clicked on its visible part but never takes hover focus
+            // (Noah 2026-11-21: "i cant click the bottom" options of Edit Skater lists); where rows overlap, the one whose
+            // middle is nearest the pointer wins
+            bool partial = clip.y0 > -1e8f && (r.y0 < clip.y0 - 0.5f || r.y1 > clip.y1 + 0.5f);
+            float midY = (r.y0 + r.y1) * 0.5f;
+            float area = fabsf(vy - midY) * 1000.0f + (r.x1 - r.x0) * (r.y1 - r.y0) * 0.001f;
+            if (area < best) {
+                best = area; hit = idx; hitId = *(DWORD*)(cur + 0x14);
+                hitRow = grid && rowIt ? *(DWORD*)(rowIt + 0x14) : 0;
+                hitRect = r;
+                hitPartial = partial;
+                float t = (vx - r.x0) / (r.x1 - r.x0);
+                side = t < 1.0f / 3 ? 0 : t > 2.0f / 3 ? 2 : 1;
+            }
+        }
+        if (!grid) {
+            // per row (Noah 2026-11-21, "every menu like the main menu"): in a list with rows out of view, the first
+            // row in view (when rows are hidden above it) and the last (when rows are hidden below it) would scroll the
+            // list when focused, so hover leaves them alone; a click still picks them. Every other row in view focuses.
+            static DWORD s_openMenu, s_openAt;
+            if (s_openMenu != curMenuId) { s_openMenu = curMenuId; s_openAt = now; }
+            bool edgeRow = hit >= 0 && (hitPartial || (hit == firstVis && minHidden < firstVis) || (hit == lastVis && maxHidden > lastVis));
+            bool learned = false;
+            for (int k = 0; k < s_nRecenter; ++k) if (s_recenter[k] == curMenuId) learned = true;
+            // the list scrolled = a different first row in view (Noah 2026-11-21: Edit Skater rows grow when focused and
+            // push their neighbours, which the old "row moved" check took for a scroll)
+            if (!learned && s_refIdx >= 0 && s_refMenu == curMenuId && now - s_refAt < 700 && s_refFirst >= 0 && firstVis >= 0
+                && firstVis != s_refFirst && (LONG)(s_otherAt - s_refAt) < 0 && (LONG)(s_wheelUsedAt - s_refAt) < 0) {
+                if (s_nRecenter < 32) s_recenter[s_nRecenter++] = curMenuId;
+                learned = true;
+                Log("mouse: menu %08X scrolled (first row in view %d -> %d) when row %d was focused: hover is click only there", curMenuId, s_refFirst, firstVis, s_refIdx);
+            }
+            if (learned) { hoverEdge = maxHidden >= 0; s_refIdx = -1; }
+            else {
+                hoverEdge = edgeRow;
+                // a list that moves although a row well inside the view was focused recenters on every focus
+                // (Load Skater): learned as click-only. Not while the menu is still sliding in after opening.
+                if (edgeRow || now - s_openAt < 1500) s_refIdx = -1;
+                else if (hit >= 0 && moved && hitId != s_refHitId) {
+                s_refIdx = hit; s_refMenu = curMenuId; s_refAt = now; s_refHitId = hitId; s_refFirst = firstVis;
+                s_refMid = (hitRect.y0 + hitRect.y1) * 0.5f; s_refH = hitRect.y1 - hitRect.y0;
+                }
+            }
+        }
+        {
+            static DWORD s_logMenu; static int s_logScroll = -1;
+            DWORD mid = *(DWORD*)(menu + 0x14);
+            if (mid != s_logMenu) {   // once per menu (hover now changes per row)
+                s_logMenu = mid; s_logScroll = hoverEdge;
+                Log("mouse: menu %08X type %08X: %d rows, in view %d-%d, hidden %d..%d -> hover %s", mid, *(DWORD*)(menu + 0x18),
+                    rows, firstVis, lastVis, minHidden == (1 << 30) ? -1 : minHidden, maxHidden, hoverEdge ? "click only (scrolling list)" : "focuses");
+            }
+        }
+        static DWORD s_loggedMenu;
+        DWORD menuId = *(DWORD*)(menu + 0x14);
+        // a new menu is only clickable once it has stayed the same menu for a few frames (it may still be building)
+        static DWORD s_stableMenu; static int s_stableN;
+        if (s_stableMenu != menuId) { s_stableMenu = menuId; s_stableN = 0; }
+        else if (s_stableN < 1000) ++s_stableN;
+        if (s_stableN < 6) { hit = -1; settling = true; }
+        if (s_loggedMenu != menuId && *(char**)(menu + 0x58)) {   // one line per new menu, to check the rects
+            s_loggedMenu = menuId;
+            char* c0 = *(char**)(menu + 0x58);
+            FRect r = ElemRect(c0), m = ElemRect(menu);
+            Log("mouse: menu %08X at %.0f,%.0f-%.0f,%.0f, first row %08X at %.0f,%.0f-%.0f,%.0f alpha %.2f; pointer %.0f,%.0f",
+                menuId, m.x0, m.y0, m.x1, m.y1, *(DWORD*)(c0 + 0x14), r.x0, r.y0, r.x1, r.y1, *(const float*)(c0 + 0x114), vx, vy);
+            Log("mouse: window client %dx%d (menu space %s); root %08X origin %.1f,%.1f scale %.3f,%.3f; back button at %.1f,%.1f size %.1fx%.1f menu units",
+                (int)cr.right, (int)cr.bottom, ms.ok ? "from the engine" : "fallback 640x480", *(DWORD*)(root + 0x14), *(const float*)(root + 0x134), *(const float*)(root + 0x138),
+                *(const float*)(root + 0x13C), *(const float*)(root + 0x140), cornerX, cornerY, kBackPx * pxu, kBackPx * pyu);
+        }
+        ReleaseElem(&ref);
+    }
+    // no menu: clicks still count (Next / click-anywhere screens decide in QB)
+    if (overBack || overNext) hit = -1;
+    if (clickL && (hit >= 0 || overBack || overNext)) click += clickL;   // on our UI: a click, not a camera drag
+    g_pointerOnUi = hit >= 0 || overBack || overNext || IntParam(params, "nodrag", 0) != 0;
+    if (settling && !overBack && !overNext) { click = 0; wheel = 0; }      // nothing to click yet: drop clicks and scrolls
+    {   // hide / show the Windows arrow over the game while our pointer is up (hidecur from QB = a mouse screen)
+        LONG want = (active && IntParam(params, "hidecur", 0)) ? 1 : 0;
+        if (InterlockedExchange(&g_hideCursor, want) != want) SetWheelCursorActive(h, want != 0);
+    }
+    CURSORINFO ci = { sizeof(ci) };
+    bool sys = GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING) && ci.hCursor;   // Windows draws its own arrow
+    if (sys && h) { POINT c = ci.ptScreenPos; ScreenToClient(h, &c); sys = c.x >= 0 && c.y >= 0 && c.x < cr.right && c.y < cr.bottom; }
+    if (click && hit < 0 && !overBack && !overNext) {   // a click on nothing: list what the screen holds, to tune detection
+        ElemRef rootRef;
+        char* rootEl = ResolveElem(params, &rootRef, "root");
+        if (rootEl) {
+            int n = 0;
+            for (char* k = *(char**)(rootEl + 0x58); k && n < 40; k = *(char**)(k + 0x64), ++n) {
+                FRect kr = ElemRect(k);
+                Log("mouse:   screen part %08X type %08X at %.0f,%.0f-%.0f,%.0f alpha %.2f", *(DWORD*)(k + 0x14), *(DWORD*)(k + 0x18),
+                    kr.x0, kr.y0, kr.x1, kr.y1, *(const float*)(k + 0x114));
+            }
+        }
+        ReleaseElem(&rootRef);
+        ElemRef mr2;
+        char* m2 = ResolveElem(params, &mr2);
+        if (m2) {
+            int n = 0;
+            for (char* k = *(char**)(m2 + 0x58); k && n < 16; k = *(char**)(k + 0x64), ++n) {
+                FRect kr = ElemRect(k);
+                Log("mouse:   menu row %08X type %08X at %.0f,%.0f-%.0f,%.0f alpha %.2f", *(DWORD*)(k + 0x14), *(DWORD*)(k + 0x18),
+                    kr.x0, kr.y0, kr.x1, kr.y1, *(const float*)(k + 0x114));
+            }
+        }
+        ReleaseElem(&mr2);
+    }
+    if (click && !IntParam(params, "grid", 0))
+        Log("mouse: click at %.0f,%.0f -> row %d, %d rows, menu %s, back %d next %d%s", vx, vy, hit, rows,
+            menu ? "found" : "none", overBack ? 1 : 0, overNext ? 1 : 0, active ? "" : " (mouse not active)");
+    if (click && IntParam(params, "grid", 0)) Log("mouse: keyboard click at %.0f,%.0f -> key %d (%08X, row %08X), %d keys", vx, vy, hit, hitId, hitRow, rows);
+    RetInt(script, "ms_hit", hit);
+    RetInt(script, "ms_hover_edge", hoverEdge ? 1 : 0);
+    MouseRetFloat(script, "ms_hx0", hitRect.x0);   // the row under the pointer, for a hover-only highlight
+    MouseRetFloat(script, "ms_hy0", hitRect.y0);
+    MouseRetFloat(script, "ms_hx1", hitRect.x1);
+    MouseRetFloat(script, "ms_hy1", hitRect.y1);
+    RetInt(script, "ms_box", haveBox ? 1 : 0);
+    MouseRetFloat(script, "ms_bx0", box.x0);
+    MouseRetFloat(script, "ms_by0", box.y0);
+    MouseRetFloat(script, "ms_bx1", box.x1);
+    MouseRetFloat(script, "ms_by1", box.y1);
+    if (hit >= 0) MouseRetChecksum(script, "ms_hit_id", hitId);
+    if (hit >= 0 && hitRow) MouseRetChecksum(script, "ms_hit_row", hitRow);
+    RetInt(script, "ms_side", side);
+    MouseRetFloat(script, "ms_x", vx);
+    MouseRetFloat(script, "ms_y", vy);
+    RetInt(script, "ms_click", active ? (int)click : 0);
+    RetInt(script, "ms_rclick", active ? (int)rclick : 0);
+    RetInt(script, "ms_wheel", active ? (int)(wheel / WHEEL_DELTA) : 0);
+    RetInt(script, "ms_moved", moved ? 1 : 0);
+    {
+        bool hoverOk = (LONG)(now - g_hoverCoolUntil) >= 0;
+        if (!hoverOk && havePos) {
+            int dx = cp.x - g_hoverAt.x, dy = cp.y - g_hoverAt.y;
+            if (dx * dx + dy * dy > 8 * 8) hoverOk = true;
+        }
+        RetInt(script, "ms_hover_ok", hoverOk ? 1 : 0);
+    }
+    RetInt(script, "ms_active", active ? 1 : 0);
+    RetInt(script, "ms_syscursor", sys ? 1 : 0);
+    MouseRetFloat(script, "ms_corner_x", cornerX);
+    MouseRetFloat(script, "ms_corner_y", cornerY);
+    MouseRetFloat(script, "ms_px_unit", pxu);
+    MouseRetFloat(script, "ms_px_unit_y", pyu);
+    RetInt(script, "ms_over_back", overBack ? 1 : 0);
+    RetInt(script, "ms_over_next", overNext ? 1 : 0);
+    RetInt(script, "ms_rows", rows);
+    MouseRetFloat(script, "ms_next_x", nextX);
+    return true;
+}
+
 static bool __cdecl CF_MenuTick(void* params, void* script) {
     DWORD now = GetTickCount();
     {   // THUGPro Manager (Menu Poses) edits mainmenu.ini while the menu is up: pick the change up within a second
@@ -1511,7 +2426,7 @@ static bool __cdecl CF_MenuTick(void* params, void* script) {
         s_padAt = now;
         static int s_ctxSeen = -1;
         if (s_ctxSeen != ctx) { s_ctxSeen = ctx; s_zoomTo = 1; }  // each screen frames its own body part; your turn and tilt stay
-        if (!shop) { s_yaw = s_yawTo = 0; s_el = s_elTo = 0; s_zoom = s_zoomTo = 1; s_shotSet = false; }
+        if (!shop) { s_yaw = s_yawTo = 0; s_el = s_elTo = 0; s_zoom = s_zoomTo = 1; s_shotSet = false; g_camDragReset = true; }
         else {
             const DIJOYSTATE2* js = (const DIJOYSTATE2*)0x7D60F8;  // player 1, as padhub fills it (axes +-1000)
             auto ax = [](LONG v) { float f = v / 1000.0f; f = f > 1 ? 1 : f < -1 ? -1 : f; return fabsf(f) < 0.2f ? 0.0f : f; };
@@ -1519,6 +2434,10 @@ static bool __cdecl CF_MenuTick(void* params, void* script) {
             float zin = lz < -0.1f ? -lz : 0, zout = lz > 0.1f ? lz : 0;
             if (js->rgbButtons[11] & 0x80) zin = zin > 0.5f ? zin : 1;   // R2 as a button
             if (js->rgbButtons[10] & 0x80) zout = zout > 0.5f ? zout : 1; // L2 as a button
+            float kTilt = 0, mYaw = 0, mTilt = 0;
+            CamKeysMouse(&zin, &zout, &kTilt, &mYaw, &mTilt);   // keyboard and mouse (Noah 2026-11-20)
+            s_yawTo -= mYaw;
+            s_elTo += kTilt * 60.0f * dt + mTilt;
             s_yawTo -= ax(js->lRx) * 140.0f * dt;
             s_elTo -= ax(js->lRy) * 90.0f * dt;                      // stick up looks up (the camera drops)
             if (s_baseEl + s_elTo < -10) s_elTo = -10 - s_baseEl;      // whole tilt stays -10..70 degrees
@@ -2797,7 +3716,8 @@ static bool __cdecl CF_MenuDelete(void* params, void* script) {
 }
 
 // ---- main screen item order (F9 reorder mode)
-// THUGRECOMP_KeyPressed key="F9"          -> true once per press (only while the game window is in front); key="Alt+F12" needs Alt
+// THUGRECOMP_KeyPressed key="F9"          -> true once per press (only while the game window is in front); key="Alt+F12" needs Alt; key="Home" too
+//                       key="Shift"       -> true while Shift is held
 // THUGRECOMP_MenuOrder count=N pos=i       -> idx: which item goes at position i (main_order in [menu])
 // THUGRECOMP_MenuOrderMove count=N from=i to=j  moves the item at position i to position j and saves
 
@@ -2805,6 +3725,27 @@ static bool __cdecl CF_KeyPressed(void* params, void*) {
     const char* key = nullptr;
     GetStringParam(params, "key", &key);
     if (!key) return false;
+    // key="Shift": true while Shift is held (not once per press), game window in front. Edit Skater sliders use it
+    // for fast steps on keyboard (Noah 2026-11-20). Older DLLs return false for it.
+    if (_stricmp(key, "Shift") == 0) {
+        DWORD spid = 0;
+        HWND sfg = GetForegroundWindow();
+        if (sfg) GetWindowThreadProcessId(sfg, &spid);
+        return spid == GetCurrentProcessId() && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    }
+    // key="Home": true once per press, game window in front, Alt/Ctrl not held (Noah 2026-11-21: Home = level select
+    // in free skate, mods/homelevel). Older DLLs return false for it.
+    if (_stricmp(key, "Home") == 0) {
+        static bool homeWas = false;
+        DWORD hpid = 0;
+        HWND hfg = GetForegroundWindow();
+        if (hfg) GetWindowThreadProcessId(hfg, &hpid);
+        bool hnow = hpid == GetCurrentProcessId() && (GetAsyncKeyState(VK_HOME) & 0x8000) != 0 &&
+                    (GetAsyncKeyState(VK_MENU) & 0x8000) == 0 && (GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0;
+        bool hfresh = hnow && !homeWas;
+        homeWas = hnow;
+        return hfresh;
+    }
     // "Alt+F12" needs Alt held; a plain "F12" ignores the press while Alt is held (Noah 2026-11-02: Alt+F12 = Chat Art)
     bool alt = _strnicmp(key, "alt+", 4) == 0;
     if (alt) key += 4;
@@ -3257,11 +4198,13 @@ static const char kLayoutDefault[] =
 "    item|mui_c_reset|||\n"
 "  item|mui_edit_theme|||\n"
 "  item|mui_reset|||\n"
-"menu||Graphics||Make the game look better: filtering, anti-aliasing, lighting effects, color, retro looks, sky and time of day\n"
+"menu||Graphics||Make the game look better: filtering, anti-aliasing, lighting effects, color and retro looks\n"
 "  item|gfx_postfx|||\n"
-"  menu||Display||Windowed or fullscreen and the resolution (shows after a restart)\n"
+"  menu||Display||Windowed or fullscreen, the resolution and v-sync, applied with Apply\n"
 "    item|gfx_windowed|||\n"
 "    item|gfx_res|||\n"
+"    item|gfx_vsync|||\n"
+"    item|gfx_dispapply|||\n"
 "  menu||Textures||Texture filtering and sharpness\n"
 "    item|gfx_aniso|||\n"
 "    item|gfx_lodbias|||\n"
@@ -3292,38 +4235,28 @@ static const char kLayoutDefault[] =
 "    item|gfx_grain|||\n"
 "    item|gfx_chroma|||\n"
 "    item|gfx_vignette|||\n"
-"  menu||Sky||Sky style (galaxy, Matrix, aurora, synthwave and more), time of day, and sky boost\n"
-"    item|gfx_galaxy|||\n"
-"    item|gfx_tod|||\n"
-"    item|gfx_daylen|||\n"
-"    item|gfx_lamps|||\n"
-"    item|gfx_lampadd|||\n"
-"    item|gfx_lampdel|||\n"
-"    item|gfx_skypop|||\n"
-"    item|gfx_skydef|||\n"
-"  menu||Extras||FPS counter, screenshots, v-sync and mirror mode\n"
+"  menu||Extras||FPS counter, screenshots and frame generation\n"
 "    item|gfx_fps|||\n"
 "    item|gfx_shotkey|||\n"
 "    item|gfx_shothud|||\n"
-"    item|gfx_vsync|||\n"
-"    item|gfx_mirror|||\n"
+"    item|gfx_framegen|||\n"
 "  menu||Sound||Level sounds, special trick sounds, teleporter sounds and the sound logger\n"
 "    item|gfx_levelsfx|||\n"
 "    item|gfx_tricksfx|||\n"
 "    item|gfx_telesfx|||\n"
 "    item|gfx_soundlog|||\n"
 "  item|gfx_reset|||\n"
-"menu||Weather||Rain, thunderstorms, snow, fog and fireworks\n"
+"menu||Sky & weather||Sky, fog, time of day, weather and fireworks\n"
+"  item|gfx_galaxy|||\n"
+"  item|gfx_todfog|||\n"
+"  item|gfx_fogamt|||\n"
+"  item|gfx_tod|||\n"
+"  item|gfx_skypop|||\n"
 "  item|gfx_weather|||\n"
-"  item|gfx_wxclear|||\n"
-"  item|gfx_wxrain|||\n"
-"  item|gfx_wxstorm|||\n"
-"  item|gfx_wxsnow|||\n"
-"  item|gfx_wxfog|||\n"
 "  item|gfx_wxamt|||\n"
 "  item|gfx_fireworks|||\n"
-"  item|gfx_fwevery|||\n"
 "  item|gfx_fwnow|||\n"
+"  item|gfx_skydef|||\n"
 "menu||Controls||Controller settings: background input, stick dead zone, button swap, launcher layout, key and button bindings, controller popups\n"
 "  item|gfx_bginput|||\n"
 "  item|gfx_deadzone|||\n"

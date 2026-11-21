@@ -1,3 +1,5 @@
+dadmod_gen00_names = [ IsTrue GotParam ScreenElementExists ]
+
 ped_f_torso = [
 {
 desc_id = Ped_F_NO_Torso01
@@ -956,6 +958,7 @@ script dadmod_noclip_watch
                 CreateScreenElement type = ContainerElement parent = root_window id = dadmod_hasmod Pos = (0.0,0.0)
             endif
         endif
+        dadmod_homelevel_tick
         if THUGRECOMP_KeyPressed key = "F6"
             dadmod_noclip_toggle
         endif
@@ -1737,6 +1740,56 @@ script dadmod_noclip_void_watch
     endif
 endscript
 
+script dadmod_homelevel_tick
+    if THUGRECOMP_KeyPressed key = "Home"
+        if not LevelIs Load_MainMenu
+            KillSpawnedScript Name = dadmod_homelevel_open
+            SpawnScript dadmod_homelevel_open NotSessionSpecific = 1
+        endif
+    endif
+endscript
+
+script dadmod_homelevel_open
+    if ( is_changing_levels = 1 )
+        return
+    endif
+    if InNetGame
+        if not IsHost
+            return
+        endif
+    endif
+    if ScreenElementExists id = keyboard_anchor
+        return
+    endif
+    if ScreenElementExists id = dialog_box_anchor
+        return
+    endif
+    if ScreenElementExists id = level_select_panel_container
+        return
+    endif
+    root_window : GetSingleTag menu_state
+    if ( <menu_state> = on )
+        return
+    endif
+    if ScreenElementExists id = current_menu_anchor
+        return
+    endif
+    handle_start_pressed device_num = 0
+    wait 8 gameframes
+    root_window : GetSingleTag menu_state
+    if not ( <menu_state> = on )
+        return
+    endif
+    if not ScreenElementExists id = current_menu_anchor
+        return
+    endif
+    if InNetGame
+        launch_level_select_menu show_warning
+    else
+        launch_level_select_menu
+    endif
+endscript
+
 script dadmod_speed_boot
     KillSpawnedScript Name = dadmod_speed_watch
     SpawnScript dadmod_speed_watch NotSessionSpecific = 1
@@ -1948,6 +2001,47 @@ script dadmod_speed_tick
         return
     endif
     SetSlomo <mult>
+endscript
+
+script dadmod_disp_rows
+    if ScreenElementExists id = gfx_windowed
+        THUGRECOMP_DisplayLive key = "mode" step = 0
+        thugpro_menu_item_update_extra_text id = gfx_windowed text = <text>
+    endif
+    if ScreenElementExists id = gfx_res
+        THUGRECOMP_DisplayLive key = "res" step = 0
+        thugpro_menu_item_update_extra_text id = gfx_res text = <text>
+    endif
+    if ScreenElementExists id = gfx_vsync
+        THUGRECOMP_DisplayLive key = "vsync" step = 0
+        thugpro_menu_item_update_extra_text id = gfx_vsync text = <text>
+    endif
+    THUGRECOMP_DisplayLive key = "apply" step = 0
+    if ScreenElementExists id = gfx_dispapply
+        thugpro_menu_item_update_extra_text id = gfx_dispapply text = <text>
+    endif
+    return disp_wait = <wait>
+endscript
+
+script dadmod_disp_apply
+    THUGRECOMP_DisplayLive key = "apply" step = 1
+    dadmod_disp_rows
+    if (<disp_wait> > 0)
+        KillSpawnedScript Name = dadmod_disp_countdown
+        SpawnScript dadmod_disp_countdown
+    endif
+endscript
+
+script dadmod_disp_countdown
+    begin
+        wait 0.5 seconds
+        dadmod_disp_rows
+        if (<disp_wait> = 0)
+            wait 0.5 seconds
+            dadmod_disp_rows
+            break
+        endif
+    repeat
 endscript
 
 script dadmod_anim_play
@@ -3049,639 +3143,6 @@ script dadmod_chatkeep_restore
     endif
 endscript
 
-dadmod_veh_note = "Pause > dadmod > Vehicles (Noah, 2026-10-28), right under Animations. Drive: the stock THUG drivable car path (goal_initialize_skater: MakeSkaterGoto Switch_OnGroundAi NewScript = TransAm, Exitable) with the stock VehicleSetup; the stock game itself shows that car on your skater to every other player, mod or not (BroadcastEnterVehicle + NonLocalClientInVehicle build it from VehicleSetupMapping), so only setups whose model this level's own nodes use are offered (mods/vehicles/gen_vehicles.py), or a player's game could be asked for a model it never loaded. Park: a still copy of one of this level's own cars, made by the host on itself and on every player with the hidden panel block -> generic_menu_pad_choose -> CreateFromStructure route of mods/cars/traffic.q, so players without the mod see it too; removed the same way with RunScriptOnObject KillElement3d. Non-host menus send !car N; anyone can type !car (next car), !car N or !car clear. Players who join later don't get cars parked before they joined. 2026-10-28: parking is switched off (menu items removed, thugpro_vehicle_chat empty so !car is not handled) until it is tested on a test copy against an unmodded game: the same panel block CreateFromStructure route crashed an unmodded client on 2026-10-10. Driving offers the same 7 stock setups on every level (dadmod_veh_drivelist): their models ship loose in every Kali v2 install (User/Data/Models/veh) and load mid-level; tested driving on SF in a test copy. Mini Baja crashed there; TransAm, taxi, police, carts, El Camino, Lada, Taurus, Forklift, RC car have no model file at all."
-
-dadmod_veh_n = 0
-
-dadmod_veh_first = 1
-
-dadmod_veh_next = 0
-
-dadmod_veh_level = none
-
-dadmod_veh_max = 10
-
-dadmod_veh_ids = [ #"0x00000000" #"0x00000001" #"0x00000002" #"0x00000003" #"0x00000004" #"0x00000005" #"0x00000006" #"0x00000007" #"0x00000008" #"0x00000009" #"0x0000000a" #"0x0000000b" #"0x0000000c" #"0x0000000d" #"0x0000000e" #"0x0000000f" ]
-
-script dadmod_veh_drivelist
-    return list = [
-    { t = "Rally car" d = RallyCar }
-    { t = "Impala" d = ImpalaCar }
-    { t = "Pickup truck" d = PickupTruck }
-    { t = "Sports car" d = SportsCar }
-    { t = "Limo" d = LimoCar }
-    { t = "Blimp" d = Blimp }
-    { t = "Offroad truck" d = OffroadCar }
-    ]
-endscript
-
-script dadmod_veh_menu
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_veh
-    scrolling
-    num_items_to_show = 13
-    menu_title = "vehicles"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_menu
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    dadmod_veh_drivelist
-    GetArraySize <list>
-    n = <array_size>
-    dadmod_vdrv = 0
-    if ObjectExists id = skater
-        if skater : Driving
-            dadmod_vdrv = 1
-        endif
-    endif
-    if ( <dadmod_vdrv> = 1 )
-        make_thugpro_menu_item {
-        text = "Get out of the car"
-        description_text = "Stop driving and get back on your board right where the car is"
-        pad_choose_script = dadmod_veh_exit
-        }
-    endif
-    if InNetGame
-        n = 0
-        make_thugpro_menu_item {
-        text = "Vehicles are offline only for now"
-        description_text = "Vehicles are offline only for now. Players without Kali v2 would crash."
-        pad_choose_script = dadmod_menu
-        }
-    endif
-    if ( <n> > 0 )
-        make_thugpro_menu_item {
-        text = "Online: DadMod players see these"
-        not_focusable
-        }
-        i = 0
-        begin
-            e = ( <list> [ <i> ] )
-            FormatText TextName = t "Drive: %s  (online)" s = ( <e> . t )
-            make_thugpro_menu_item {
-            text = <t>
-            description_text = "Drive it (\\b0 to get out). Stock car: other DadMod players see it"
-            pad_choose_script = dadmod_veh_drive
-            pad_choose_params = { i = <i> }
-            }
-            i = ( <i> + 1 )
-        repeat <n>
-        dadmod_veh_morelist
-        GetArraySize <list>
-        n = <array_size>
-        make_thugpro_menu_item {
-        text = "Only you see these"
-        not_focusable
-        }
-        i = 0
-        begin
-            e = ( <list> [ <i> ] )
-            FormatText TextName = t "Drive: %s  (just you)" s = ( <e> . t )
-            make_thugpro_menu_item {
-            text = <t>
-            description_text = "Drive it (\\b0 to get out). Only you see it. Handles like the pickup truck"
-            pad_choose_script = dadmod_veh_drive_more
-            pad_choose_params = { i = <i> }
-            }
-            i = ( <i> + 1 )
-        repeat <n>
-    endif
-    thugpro_menu_finalize
-endscript
-
-script dadmod_veh_more_menu
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_veh_more
-    scrolling
-    num_items_to_show = 13
-    menu_title = "more cars"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_veh_menu
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    dadmod_veh_morelist
-    GetArraySize <list>
-    n = <array_size>
-    if InNetGame
-        n = 0
-        make_thugpro_menu_item {
-        text = "Vehicles are offline only for now"
-        description_text = "Vehicles are offline only for now. Players without Kali v2 would crash."
-        pad_choose_script = dadmod_veh_menu
-        }
-    endif
-    if ( <n> > 0 )
-        i = 0
-        begin
-            e = ( <list> [ <i> ] )
-            FormatText TextName = t "Drive: %s" s = ( <e> . t )
-            make_thugpro_menu_item {
-            text = <t>
-            description_text = "Drive it (\\b0 to get out). Handles like the pickup truck"
-            pad_choose_script = dadmod_veh_drive_more
-            pad_choose_params = { i = <i> }
-            }
-            i = ( <i> + 1 )
-        repeat <n>
-    endif
-    thugpro_menu_finalize
-endscript
-
-script dadmod_veh_drive_more
-    dadmod_veh_morelist
-    GetArraySize <list>
-    if not ( <i> < <array_size> )
-        return
-    endif
-    e = ( <list> [ <i> ] )
-    exit_pause_menu
-    KillSpawnedScript Name = dadmod_veh_drive_go
-    SpawnScript dadmod_veh_drive_go params = { ct = PickupTruck dadmod_vm = ( <e> . m ) } NotSessionSpecific = 1
-endscript
-
-script dadmod_veh_can_drive
-    if InNetGame
-        return no = "Vehicles are offline only for now. Players without Kali v2 would crash."
-    endif
-    if not ObjectExists id = skater
-        return no = "No skater"
-    endif
-    if InNetGame
-        if not GameModeEquals is_lobby
-            return no = "Cars are for free skate, not during a game"
-        endif
-    endif
-    if ChangeLevelPending
-        return no = "The level is changing"
-    endif
-    return ok = 1
-endscript
-
-script dadmod_veh_drive
-    dadmod_veh_drivelist
-    GetArraySize <list>
-    if not ( <i> < <array_size> )
-        return
-    endif
-    e = ( <list> [ <i> ] )
-    if not StructureContains structure = <e> d
-        return
-    endif
-    exit_pause_menu
-    KillSpawnedScript Name = dadmod_veh_drive_go
-    SpawnScript dadmod_veh_drive_go params = { ct = ( <e> . d ) } NotSessionSpecific = 1
-endscript
-
-script dadmod_veh_drive_go
-    wait 5 gameframes
-    dadmod_veh_can_drive
-    if GotParam no
-        create_panel_message id = dadmod_veh_msg text = <no> time = 2500
-        return
-    endif
-    if skater : Driving
-        dadmod_veh_exit_now
-        wait 10 gameframes
-        if not ObjectExists id = skater
-            return
-        endif
-    endif
-    if skater : InAir
-        create_panel_message id = dadmod_veh_msg text = "Land first, then pick the car" time = 2500
-        return
-    endif
-    GetVehicleSetup control_type = <ct>
-    skater : Obj_GetPosition
-    VehicleSetup = { <VehicleSetup> Pos = ( <Pos> + (0.0,20.0,0.0) ) }
-    if GotParam dadmod_vm
-        VehicleSetup = { <VehicleSetup> model = <dadmod_vm> }
-    endif
-    THUGRECOMP_Log text = "vehicles: drive"
-    MakeSkaterGoto Switch_OnGroundAi params = { NewScript = TransAm VehicleSetup = <VehicleSetup> Exitable }
-    k = 0
-    begin
-        if ObjectExists id = PlayerVehicleCamera
-            break
-        endif
-        if ( <k> > 30 )
-            THUGRECOMP_Log text = "vehicles: no PlayerVehicleCamera after 30 frames"
-            create_panel_message id = dadmod_veh_msg text = "The car didn't start" time = 2500
-            return
-        endif
-        k = ( <k> + 1 )
-        wait 1 gameframe
-    repeat
-    PlayerVehicleCamera : VehicleCamera_Reset
-    SetActiveCamera id = PlayerVehicleCamera
-    create_panel_block id = current_goal text = "\\b3 = Accelerate\\n\\b1 = Brake/Reverse\\n\\b0 = Get out" style = panel_message_goal
-    KillSpawnedScript Name = dadmod_veh_wait_exit
-    SpawnScript dadmod_veh_wait_exit NotSessionSpecific = 1
-    KillSpawnedScript Name = dadmod_veh_watch
-    SpawnScript dadmod_veh_watch NotSessionSpecific = 1
-endscript
-
-script dadmod_veh_wait_exit
-    wait 0.5 seconds
-    WaitForEvent Type = ExitVehicleRequest
-    KillSpawnedScript Name = dadmod_veh_watch
-    dadmod_veh_exit_now
-endscript
-
-script dadmod_veh_watch
-    wait 0.5 seconds
-    begin
-        wait 5 gameframes
-        if not ObjectExists id = skater
-            break
-        endif
-        if not skater : Driving
-            break
-        endif
-        dadmod_veh_can_drive
-        if GotParam no
-            KillSpawnedScript Name = dadmod_veh_wait_exit
-            dadmod_veh_exit_now
-            break
-        endif
-    repeat
-endscript
-
-script dadmod_veh_exit
-    exit_pause_menu
-    KillSpawnedScript Name = dadmod_veh_exit_go
-    SpawnScript dadmod_veh_exit_go NotSessionSpecific = 1
-endscript
-
-script dadmod_veh_exit_go
-    wait 3 gameframes
-    KillSpawnedScript Name = dadmod_veh_wait_exit
-    KillSpawnedScript Name = dadmod_veh_watch
-    dadmod_veh_exit_now
-endscript
-
-script dadmod_veh_exit_now
-    if ObjectExists id = current_goal
-        DestroyScreenElement id = current_goal
-    endif
-    if not ObjectExists id = skater
-        return
-    endif
-    if not skater : Driving
-        return
-    endif
-    THUGRECOMP_Log text = "vehicles: get out"
-    ToggleUserControlledVehicleMode
-    Skater : UnpausePhysics
-    MakeSkaterGoto OnGroundAi
-endscript
-
-script dadmod_veh_park
-    if InNetGame
-        if not IsHost
-            FormatText TextName = cmd "!car %i" i = <i>
-            SendChatMessage String = <cmd>
-            create_panel_message id = dadmod_veh_msg text = "Asked the server to park it" time = 2000
-            return
-        endif
-    endif
-    dadmod_veh_park_for i = <i> local = 1
-endscript
-
-script dadmod_veh_clear
-    if InNetGame
-        if not IsHost
-            SendChatMessage String = "!car clear"
-            create_panel_message id = dadmod_veh_msg text = "Asked the server to remove the parked cars" time = 2000
-            return
-        endif
-    endif
-    dadmod_veh_clear_all
-    create_panel_message id = dadmod_veh_msg text = "Parked cars removed" time = 2000
-endscript
-
-script dadmod_veh_park_for
-    if ChangeLevelPending
-        return
-    endif
-    if InNetGame
-        if NetworkGamePending
-            return
-        endif
-    endif
-    dadmod_veh_get
-    if not GotParam list
-        return
-    endif
-    GetArraySize <list>
-    if ( <array_size> = 0 )
-        return
-    endif
-    if GotParam next
-        i = ( dadmod_veh_next )
-        if not ( <i> < <array_size> )
-            i = 0
-        endif
-        Change dadmod_veh_next = ( <i> + 1 )
-    endif
-    if not ( <i> < <array_size> )
-        return
-    endif
-    if GotParam local
-        if not ObjectExists id = skater
-            return
-        endif
-        skater : Obj_GetPosition
-        skater : Obj_GetOrientation
-    else
-        if not THUGRECOMP_PlayerSkaterId name = <name>
-            return
-        endif
-        if ( <local> = 1 )
-            if not ObjectExists id = skater
-                return
-            endif
-            skater : Obj_GetPosition
-            skater : Obj_GetOrientation
-        else
-            if not ( <id> < 16 )
-                return
-            endif
-            cid = ( dadmod_veh_ids [ <id> ] )
-            if not ObjectExists id = <cid>
-                return
-            endif
-            <cid> : Obj_GetPosition
-            <cid> : Obj_GetOrientation
-        endif
-    endif
-    dir = ( <x> * (1.0,0.0,0.0) + <z> * (0.0,0.0,1.0) )
-    dadmod_veh_park_at e = ( <list> [ <i> ] ) Pos = ( <Pos> + <dir> * 250.0 )
-endscript
-
-script dadmod_veh_park_at
-    GetLevelStructureName
-    if not ( <level_structure_name> = ( dadmod_veh_level ) )
-        Change dadmod_veh_level = <level_structure_name>
-        Change dadmod_veh_first = ( dadmod_veh_n + 1 )
-    endif
-    k = ( dadmod_veh_n + 1 )
-    Change dadmod_veh_n = <k>
-    FormatText ChecksumName = car_id "dadmod_vcar_%k" k = <k>
-    cs = { Pos = <Pos> Angles = (0.0,0.0,0.0) Name = <car_id> Class = Vehicle model = ( <e> . m ) CollisionMode = Geometry NeverSuspend }
-    if StructureContains structure = <e> sk
-        cs = { <cs> skeletonName = ( <e> . sk ) }
-    endif
-    if StructureContains structure = <e> ty
-        cs = { <cs> Type = ( <e> . ty ) }
-    endif
-    if not ObjectExists id = <car_id>
-        CreateFromStructure <cs>
-    endif
-    if InNetGame
-        FormatText ChecksumName = block_id "dadmod_vcar_b%k" k = <k>
-        p = { id = <block_id> text = " " Pos = (-1000.0,-1000.0) style = generic_menu_pad_choose params = { callback = CreateFromStructure <cs> } }
-        THUGRECOMP_AllPlayersScript run = create_panel_block params = <p> ready_only
-    endif
-    FormatText TextName = dbg "vehicles: parked %k (%m)" k = <k> m = ( <e> . t )
-    THUGRECOMP_Log text = <dbg>
-    if ( ( <k> - ( dadmod_veh_first ) ) > ( ( dadmod_veh_max ) - 1 ) )
-        dadmod_veh_remove k = ( dadmod_veh_first )
-        Change dadmod_veh_first = ( ( dadmod_veh_first ) + 1 )
-    endif
-endscript
-
-script dadmod_veh_remove
-    FormatText ChecksumName = car_id "dadmod_vcar_%k" k = <k>
-    if ObjectExists id = <car_id>
-        <car_id> : Die
-    endif
-    if InNetGame
-        FormatText ChecksumName = block_id "dadmod_vcar_r%k" k = <k>
-        p = { id = <block_id> text = " " Pos = (-1000.0,-1000.0) style = generic_menu_pad_choose params = { callback = RunScriptOnObject id = <car_id> KillElement3d } }
-        THUGRECOMP_AllPlayersScript run = create_panel_block params = <p> ready_only
-    endif
-endscript
-
-script dadmod_veh_clear_all
-    GetLevelStructureName
-    if not ( <level_structure_name> = ( dadmod_veh_level ) )
-        return
-    endif
-    k = ( dadmod_veh_first )
-    begin
-        if ( <k> > ( dadmod_veh_n ) )
-            break
-        endif
-        dadmod_veh_remove k = <k>
-        k = ( <k> + 1 )
-    repeat
-    Change dadmod_veh_first = ( ( dadmod_veh_n ) + 1 )
-    THUGRECOMP_Log text = "vehicles: parked cars removed"
-endscript
-
-script thugpro_vehicle_chat
-endscript
-
-dadmod_veh_data_note = "generated by mods/vehicles/gen_vehicles.py from the decompiled level node arrays: m model, t title, sk skeletonName, cm CollisionMode, ty Type (each only when the level node has it), d drivable control_type"
-
-script dadmod_veh_get
-    GetLevelStructureName
-    switch <level_structure_name>
-    case Level_NJ
-        return list = [ { m = "veh\\nj\\veh_policecar_nj\\veh_policecar_nj.mdl" t = "Police car (NJ)" sk = car ty = PoliceCar_NJ } { m = "veh\\veh_custom\\veh_custom.mdl" t = "Rally car" sk = car ty = Custom_Ricer d = RallyCar } { m = "veh\\veh_suv_drg\\veh_suv_drg.mdl" t = "SUV" sk = car ty = SUV_DRG } { m = "veh\\veh_suv_musk\\veh_suv_musk.mdl" t = "SUV (2)" sk = car ty = SUV_MUSK } ]
-    case Level_NY
-        return list = [ { m = "veh\\veh_dcshoetruck\\veh_dcshoetruck.mdl" t = "Dcshoetruck" sk = car ty = DCShoeTruck } { m = "veh\\veh_chevy_impala\\veh_chevy_impala.mdl" t = "Impala" sk = car ty = ChevyImpala d = ImpalaCar } { m = "veh\\ny\\veh_cab_ny\\veh_cab_ny.mdl" t = "NY taxi" sk = car ty = Cab_NY } { m = "veh\\ny\\veh_policecar_ny\\veh_policecar_ny.mdl" t = "Policecar ny" sk = car ty = PoliceCar_NY } ]
-    case Level_FL
-        return list = [ { m = "veh\\veh_minivan\\veh_minivan.mdl" t = "Minivan" sk = car ty = Minivan } { m = "veh\\veh_pickup\\veh_pickup.mdl" t = "Pickup truck" sk = car ty = pickup d = PickupTruck } { m = "veh\\fl\\veh_policecar_fl\\veh_policecar_fl.mdl" t = "Police car (Tampa)" sk = car ty = PoliceCar_FL } { m = "veh\\veh_smallsportscar\\veh_smallsportscar.mdl" t = "Sports car" sk = car ty = SmallSportscar d = SportsCar } { m = "veh\\veh_taurustype\\veh_taurustype.mdl" t = "Taurus" sk = car ty = TaurusType } ]
-    case Level_SD
-        return list = [ { m = "veh\\veh_sdkart_gardens\\veh_sdkart_gardens.mdl" t = "Gardener cart" sk = car ty = SDKart_Gardens } { m = "veh\\veh_minivan\\veh_minivan.mdl" t = "Minivan" sk = car ty = Minivan } { m = "veh\\veh_oldvan\\veh_oldvan.mdl" t = "Oldvan" sk = car ty = OldVan } { m = "veh\\veh_pickup\\veh_pickup.mdl" t = "Pickup truck" sk = car ty = pickup d = PickupTruck } { m = "veh\\veh_sdkart_security\\veh_sdkart_security.mdl" t = "Security cart" sk = car ty = SDKart_Security } ]
-    case Level_HI
-        return list = [ { m = "veh\\hi\\veh_bus_hi\\veh_bus_hi.mdl" t = "Bus hi" sk = car_6 ty = Bus_HI } { m = "veh\\veh_camino\\veh_camino.mdl" t = "El Camino" sk = car ty = ElCamino } { m = "veh\\veh_minivan\\veh_minivan.mdl" t = "Minivan" sk = car ty = Minivan } { m = "veh\\veh_neontype\\veh_neontype.mdl" t = "Neontype" sk = car ty = NeonType } { m = "veh\\veh_pickup\\veh_pickup.mdl" t = "Pickup truck" sk = car ty = pickup d = PickupTruck } { m = "veh\\veh_woodie\\veh_woodie.mdl" t = "Woodie" sk = car ty = Woodie } ]
-    case Level_VC
-        return list = [ { m = "veh\\veh_limo\\veh_limo.mdl" t = "Limo" sk = car ty = Limo d = LimoCar } { m = "veh\\veh_neontype\\veh_neontype.mdl" t = "Neontype" sk = car ty = NeonType } { m = "veh\\veh_sdkart_security\\veh_sdkart_security.mdl" t = "Security cart" sk = car ty = SDKart_Security } { m = "veh\\veh_slamcitytruck\\veh_slamcitytruck.mdl" t = "Slamcitytruck" sk = car ty = SlamCityTruck } { m = "veh\\veh_suv_thug\\veh_suv_thug.mdl" t = "Suv thug" sk = car ty = SUV_THUG } { m = "veh\\veh_tourbus\\veh_tourbus.mdl" t = "Tourbus" sk = car_6 ty = TourBus } ]
-    case Level_RU
-        return list = [ { m = "veh\\veh_lada\\veh_lada.mdl" t = "Lada" sk = car ty = Lada } ]
-    case Level_HH
-        return list = [ { m = "veh\\veh_minibaja\\veh_minibaja.mdl" t = "Mini Baja" sk = car ty = MiniBaja } ]
-    case Level_z_dn
-        return list = [ { m = "veh\\veh_wrangler\\veh_wrangler.mdl" t = "Wrangler" sk = car ty = Commander } ]
-    endswitch
-    return
-endscript
-
-script dadmod_veh_morelist
-    return list = [ { t = "Duck Tour Boat" m = "veh\\Veh_Duck\\Veh_Duck.mdl" } { t = "Hearse" m = "veh\\Veh_Hearse\\Veh_Hearse.mdl" } { t = "Hearse (old)" m = "veh\\veh_hearseB\\veh_hearseB.mdl" } { t = "Van" m = "veh\\Veh_Van\\Veh_Van.mdl" } { t = "Old Van" m = "veh\\Veh_OldVan\\Veh_OldVan.mdl" } { t = "Minivan" m = "veh\\Veh_Minivan\\Veh_Minivan.mdl" } { t = "Focus" m = "veh\\Veh_Focus\\Veh_Focus.mdl" } { t = "Galaxie" m = "veh\\Veh_Galaxie\\Veh_Galaxie.mdl" } { t = "PT Cruiser" m = "veh\\Veh_PTCruiser\\Veh_PTCruiser.mdl" } { t = "Slam City Truck" m = "veh\\Veh_SlamCityTruck\\Veh_SlamCityTruck.mdl" } { t = "DC Truck" m = "veh\\Veh_DCShoeTruck\\Veh_DCShoeTruck.mdl" } { t = "Tour Bus" m = "veh\\Veh_TourBus\\Veh_TourBus.mdl" } { t = "Hawaii Bus" m = "veh\\Veh_Bus_HI\\Veh_Bus_HI.mdl" } { t = "Half Pipe Truck" m = "veh\\Veh_Half_Pipe\\Veh_Half_Pipe.mdl" } { t = "ATV" m = "veh\\Veh_ATV\\Veh_ATV.mdl" } { t = "Liberty Car" m = "veh\\veh_liberty\\veh_liberty.mdl" } { t = "Rust Bucket" m = "veh\\veh_rust\\veh_rust.mdl" } { t = "Mini Baja" m = "veh\\Veh_MiniBaja\\Veh_MiniBaja.mdl" } ]
-endscript
-
-script dadmod_throw_menu
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_throw
-    scrolling
-    num_items_to_show = 13
-    menu_title = "throwables"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_menu
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    make_thugpro_menu_item {
-    text = "Stop throwing"
-    description_text = "Drop your ammo so Square goes back to normal"
-    pad_choose_script = dadmod_throw_pick
-    pad_choose_params = { dadmod_tstop }
-    }
-    make_thugpro_menu_item {
-    text = "Everyone sees these"
-    not_focusable
-    }
-    dadmod_throw_item t = "COMBO letter O" a = none d = "The COMBO O. \\b1 throws it, it works in any server and everyone sees it"
-    dadmod_throw_item t = "Tomatoes" a = tomato d = "Story mode tomatoes. No tomato model in THUG Pro, so they look like a COMBO O"
-    dadmod_throw_item t = "Apples" a = apple d = "Story mode apples. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Beads" a = beads d = "Story mode beads. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Shrimp" a = shrimp d = "Story mode shrimp. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Smoke bombs" a = smokebomb d = "Story mode smoke bombs. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Paint cans" a = PaintCan d = "Story mode paint cans. They look like a COMBO O, everyone sees it"
-    make_thugpro_menu_item {
-    text = "DadMod players see these"
-    not_focusable
-    }
-    dadmod_throw_item t = "Cars" a = dadmod_throw_car d = "Throw cars. DadMod players see the car, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Limos" a = dadmod_throw_limo d = "Throw limos. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Trucks" a = dadmod_throw_truck d = "Throw pickup trucks. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Vans" a = dadmod_throw_van d = "Throw vans. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Hearses" a = dadmod_throw_hearse d = "Throw hearses. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Buses" a = dadmod_throw_bus d = "Throw tour buses. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Blimps" a = dadmod_throw_blimp d = "Throw blimps. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Duck boats" a = dadmod_throw_boat d = "Throw duck boats. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Sleighs" a = dadmod_throw_sleigh d = "Throw sleighs. DadMod players see it, everyone else sees a COMBO O"
-    dadmod_throw_item t = "Half pipes" a = dadmod_throw_halfpipe d = "Throw half pipes. DadMod players see it, everyone else sees a COMBO O"
-    thugpro_menu_finalize
-endscript
-
-script dadmod_throw_item
-    make_thugpro_menu_item {
-    text = <t>
-    description_text = <d>
-    pad_choose_script = dadmod_throw_pick
-    pad_choose_params = { a = <a> t = <t> }
-    }
-endscript
-
-script dadmod_throw_pick
-    exit_pause_menu
-    KillSpawnedScript Name = dadmod_throw_go
-    SpawnScript dadmod_throw_go params = { <...> } NotSessionSpecific = 1
-endscript
-
-script dadmod_throw_msg_clear
-    wait 2.5 seconds
-    if ScreenElementExists id = dadmod_throw_msg
-        DestroyScreenElement id = dadmod_throw_msg
-    endif
-endscript
-
-script dadmod_throw_label
-    switch <ammo_type>
-    case tomato
-        return dadmod_tl = "Tomatoes"
-    case apple
-        return dadmod_tl = "Apples"
-    case beads
-        return dadmod_tl = "Beads"
-    case shrimp
-        return dadmod_tl = "Shrimp"
-    case smokebomb
-        return dadmod_tl = "Smoke bombs"
-    case PaintCan
-        return dadmod_tl = "Paint cans"
-    case dadmod_throw_car
-        return dadmod_tl = "Cars"
-    case dadmod_throw_limo
-        return dadmod_tl = "Limos"
-    case dadmod_throw_truck
-        return dadmod_tl = "Trucks"
-    case dadmod_throw_van
-        return dadmod_tl = "Vans"
-    case dadmod_throw_hearse
-        return dadmod_tl = "Hearses"
-    case dadmod_throw_bus
-        return dadmod_tl = "Buses"
-    case dadmod_throw_blimp
-        return dadmod_tl = "Blimps"
-    case dadmod_throw_boat
-        return dadmod_tl = "Duck boats"
-    case dadmod_throw_sleigh
-        return dadmod_tl = "Sleighs"
-    case dadmod_throw_halfpipe
-        return dadmod_tl = "Half pipes"
-    endswitch
-    return dadmod_tl = "COMBO O"
-endscript
-
-script dadmod_ammo_hud_start
-    KillSpawnedScript Name = dadmod_ammo_hud_watch
-    SpawnScript dadmod_ammo_hud_watch NotSessionSpecific = 1
-endscript
-
-script dadmod_ammo_hud_watch
-    wait 10 gameframes
-    begin
-        if not ObjectExists id = skater
-            break
-        endif
-        skater : GetAmmo
-        if not ( <ammo> > 0 )
-            break
-        endif
-        skater : GetAmmoType
-        dadmod_throw_label ammo_type = <ammo_type>
-        FormatText TextName = dadmod_tt "%l: %a" l = <dadmod_tl> a = <ammo>
-        if ScreenElementExists id = dadmod_ammo_hud
-            SetScreenElementProps id = dadmod_ammo_hud text = <dadmod_tt>
-        else
-            SetScreenElementLock id = root_window off
-            CreateScreenElement {
-            Type = TextElement
-            parent = root_window
-            id = dadmod_ammo_hud
-            font = dialog
-            text = <dadmod_tt>
-            Pos = (6.2e+02,3.9e+02)
-            just = [ right center ]
-            scale = 0.8
-            rgba = [ 128 128 128 128 ]
-            z_priority = 900
-            }
-        endif
-        dadmod_ta = 1.0
-        root_window : GetSingleTag menu_state
-        if GotParam menu_state
-            if ( <menu_state> = on )
-                dadmod_ta = 0.0
-            endif
-        endif
-        DoScreenElementMorph id = dadmod_ammo_hud alpha = <dadmod_ta> time = 0
-        wait 0.15 seconds
-    repeat
-    if ScreenElementExists id = dadmod_ammo_hud
-        DestroyScreenElement id = dadmod_ammo_hud
-    endif
-endscript
-
 dadmod_titlefx_block = "Menu UI Title effect (Noah, 2026-11-03). Lives in ButtonScripts.q because procrastination.qb is at its 512 KB limit"
 
 script dadmod_ui_title_rgb lmode = 0
@@ -4071,6 +3532,1530 @@ script dadmod_binds_back
     endif
 endscript
 
+dadmod_cg_layout = -1
+
+script dadmod_char_guide_tick
+    if not ScreenElementExists id = char_guide_l2
+        Change dadmod_cg_layout = -1
+        return
+    endif
+    cg_lay = 1
+    if ( ( GLOBAL_CtrlLayout ) = 0 )
+        cg_lay = 0
+    endif
+    if (<cg_lay> = ( dadmod_cg_layout ))
+        return
+    endif
+    Change dadmod_cg_layout = <cg_lay>
+    dadmod_kb_label row = keyboard_row_4 idx = 6 lay = <cg_lay> glyph = '\\m9' scale = (0.85,0.75) small = (0.68,0.75) shrink = 0.8
+    dadmod_kb_label row = keyboard_row_5 idx = 2 lay = <cg_lay> glyph = '\\m8'
+    dadmod_kb_label row = keyboard_row_6 idx = 1 lay = <cg_lay> glyph = '\\m1'
+    if (<cg_lay> = 0)
+        SetScreenElementProps id = char_guide_l2 text = ""
+        if ScreenElementExists id = char_guide_r2
+            SetScreenElementProps id = char_guide_r2 text = ""
+        endif
+    else
+        SetScreenElementProps id = char_guide_l2 text = '\\mf'
+        if ScreenElementExists id = char_guide_r2
+            SetScreenElementProps id = char_guide_r2 text = '\\mg'
+        endif
+    endif
+endscript
+
+script dadmod_kb_label
+    if not ScreenElementExists id = { <row> child = { <idx> child = 31 } }
+        return
+    endif
+    if not ScreenElementExists id = { <row> child = { <idx> child = 30 } }
+        return
+    endif
+    if (<lay> = 0)
+        SetScreenElementProps id = { <row> child = { <idx> child = 30 } } text = ""
+        mm_kw = 40.0
+        GetScreenElementDims id = { <row> child = { <idx> child = 31 } }
+        mm_kw = <width>
+        if GotParam small
+            DoScreenElementMorph id = { <row> child = { <idx> child = 31 } } scale = <small> time = 0
+            mm_kw = ( <mm_kw> * <shrink> )
+        endif
+        mm_kx = ( 62.0 - ( <mm_kw> / 2.0 ) )
+        SetScreenElementProps id = { <row> child = { <idx> child = 31 } } pos = ( (1.0,0.0) * <mm_kx> + (0.0,10.0) )
+    else
+        SetScreenElementProps id = { <row> child = { <idx> child = 30 } } text = <glyph>
+        if GotParam scale
+            DoScreenElementMorph id = { <row> child = { <idx> child = 31 } } scale = <scale> time = 0
+        endif
+        SpawnScript dadmod_kb_label_place params = { row = <row> idx = <idx> }
+    endif
+endscript
+
+script dadmod_kb_label_place
+    wait 1 gameframe
+    if not ScreenElementExists id = { <row> child = { <idx> child = 31 } }
+        return
+    endif
+    if not ScreenElementExists id = { <row> child = { <idx> child = 30 } }
+        return
+    endif
+    GetStackedScreenElementPos x id = { <row> child = { <idx> child = 30 } } offset = (3.0,0.0)
+    SetScreenElementProps id = { <row> child = { <idx> child = 31 } } pos = <pos>
+endscript
+
+dadmod_mouse_last = none
+
+dadmod_mouse_pxu = 0.0
+
+dadmod_mouse_pyu = 0.0
+
+dadmod_mouse_back_hl = -1
+
+dadmod_mouse_next_hl = -1
+
+script dadmod_mouse_rpause
+    rp_ok = 0
+    if not LevelIs Load_MainMenu
+        if ObjectExists id = skater
+            rp_ok = 1
+        endif
+    endif
+    if (<rp_ok> = 1)
+        if ScreenElementExists id = current_menu_anchor
+            rp_ok = 0
+        endif
+        if ScreenElementExists id = current_menu
+            rp_ok = 0
+        endif
+        if ScreenElementExists id = dialog_box_anchor
+            rp_ok = 0
+        endif
+        if ScreenElementExists id = keyboard_anchor
+            rp_ok = 0
+        endif
+        if IsTrue view_mode
+            rp_ok = 0
+        endif
+        if root_window : GetSingleTag dadmod_noclip
+            if (<dadmod_noclip> > 0)
+                rp_ok = 0
+            endif
+        endif
+    endif
+    THUGRECOMP_MouseRightPause ok = <rp_ok>
+endscript
+
+script dadmod_mouse_tick
+    dadmod_mouse_rpause
+    if ScreenElementExists id = keyboard_anchor
+        if ScreenElementExists id = keyboard_vmenu
+            dadmod_mouse_kb_tick
+            return
+        endif
+    endif
+    Change dadmod_mouse_kb_row = none
+    mm_menu = 0
+    mm_mid = current_menu
+    mm_dialog = 0
+    if ScreenElementExists id = dialog_box_vmenu
+        mm_menu = 1
+        mm_mid = dialog_box_vmenu
+        mm_dialog = 1
+    else
+        if ScreenElementExists id = <mm_mid>
+            mm_menu = 1
+        endif
+    endif
+    if ScreenElementExists id = keyboard_anchor
+        mm_menu = 0
+    endif
+    mm_screen = <mm_menu>
+    if ScreenElementExists id = helper_text_anchor
+        if LevelIs Load_MainMenu
+            mm_screen = 1
+        endif
+    endif
+    mm_accept = 0
+    if (<mm_dialog> = 0)
+        if ScreenElementExists id = select_skater_anchor
+            mm_accept = 1
+            mm_screen = 1
+        endif
+    endif
+    if ScreenElementExists id = keyboard_anchor
+        mm_screen = 0
+    endif
+    mm_lvl = 0
+    if (<mm_dialog> = 0)
+        if ScreenElementExists id = level_select_logo
+            mm_lvl = 1
+        endif
+        if ScreenElementExists id = level_select_panel_container
+            mm_lvl = 1
+        endif
+    endif
+    mm_nocam = <mm_accept>
+    if (<mm_dialog> = 1)
+        mm_nocam = 1
+    endif
+    if (<mm_lvl> = 1)
+        mm_nocam = 1
+    endif
+    if (<mm_menu> = 1)
+        THUGRECOMP_MouseMenu id = <mm_mid> root = root_window nocam = <mm_nocam> hidecur = <mm_screen> nodrag = <mm_lvl>
+    else
+        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_screen>
+    endif
+    if (<mm_screen> = 0)
+        ms_active = 0
+    endif
+    if (<ms_active> = 0)
+        dadmod_mouse_hide
+        Change dadmod_mouse_last = none
+        return
+    endif
+    if not (<ms_px_unit> = ( dadmod_mouse_pxu ))
+        dadmod_mouse_hide
+    endif
+    if not (<ms_px_unit_y> = ( dadmod_mouse_pyu ))
+        dadmod_mouse_hide
+    endif
+    Change dadmod_mouse_pxu = <ms_px_unit>
+    Change dadmod_mouse_pyu = <ms_px_unit_y>
+    dadmod_mouse_pointer
+    if ScreenElementExists id = startup_menu
+        ms_over_back = 0
+        if ScreenElementExists id = dadmod_mouse_back
+            DestroyScreenElement id = dadmod_mouse_back
+        endif
+    else
+        dadmod_mouse_back_button x = <ms_corner_x> y = <ms_corner_y> mm_hl = <ms_over_back>
+    endif
+    mm_next = 0
+    mm_side_l = 0
+    mm_side_r = 0
+    mm_over_sel = 0
+    mm_over_load = 0
+    if (<mm_accept> = 1)
+        ms_hit = -1
+        mm_next = 1
+        dadmod_mouse_ss_arrows x = <ms_x> y = <ms_y>
+        dadmod_mouse_ss_buttons x = <ms_x> y = <ms_y> cx = <ms_corner_x> cy = <ms_corner_y>
+        dadmod_mouse_skin_pill x = <ms_x> y = <ms_y>
+    else
+        dadmod_mouse_ss_off
+    endif
+    if (<mm_menu> = 0)
+        mm_next = 1
+    else
+        if (<ms_rows> = 0)
+            mm_next = 1
+        endif
+    endif
+    if (<mm_accept> = 1)
+        mm_next_btn = 0
+    else
+        mm_next_btn = <mm_next>
+    endif
+    if (<mm_next_btn> = 1)
+        dadmod_mouse_next_button x = <ms_next_x> y = <ms_corner_y> mm_hl = <ms_over_next>
+    else
+        ms_over_next = 0
+        if ScreenElementExists id = dadmod_mouse_next
+            DestroyScreenElement id = dadmod_mouse_next
+        endif
+        Change dadmod_mouse_next_hl = -1
+    endif
+    mm_scroll = <ms_hover_edge>
+    dadmod_mouse_hover_bar_off
+    if (<ms_hit> > -1)
+        if not (<ms_hit_id> = ( dadmod_mouse_last ))
+            mm_hov = 0
+            if (<ms_click> > 0)
+                mm_hov = 1
+            endif
+            if (<ms_moved> = 1)
+                if (<mm_scroll> = 0)
+                    mm_hov = 1
+                endif
+            endif
+            if (<mm_hov> = 1)
+                if ScreenElementExists id = <ms_hit_id>
+                    FireEvent type = unfocus target = <mm_mid>
+                    FireEvent type = focus target = <mm_mid> data = { child_id = <ms_hit_id> }
+                    Change dadmod_mouse_last = <ms_hit_id>
+                    Change dadmod_mouse_tagside = 0
+                endif
+            endif
+        endif
+        if (<ms_moved> = 1)
+            if (<ms_hit_id> = ( dadmod_mouse_last ))
+                dadmod_mouse_tag_hover id = <ms_hit_id> x = <ms_x> y = <ms_y>
+            endif
+        endif
+    endif
+    mm_lv_l = 0
+    mm_lv_r = 0
+    if (<mm_lvl> = 1)
+        if (<ms_box> = 1)
+            dadmod_mouse_lvl_arrows x = <ms_x> y = <ms_y> bx0 = <ms_bx0> by0 = <ms_by0> bx1 = <ms_bx1> by1 = <ms_by1> cx = <ms_corner_x> rx = ( <ms_next_x> + ( 34.0 * <ms_px_unit> ) )
+        endif
+    else
+        dadmod_mouse_lvl_off
+    endif
+    if (<ms_click> > 0)
+        if (<ms_over_back> = 1)
+            dadmod_mouse_back_press
+            return
+        endif
+        if (<mm_lv_l> = 1)
+            SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_ll child = arr_c } x = 28.0 y = 28.0 dx = -8.0 }
+            if ScreenElementExists id = current_menu
+                FireEvent type = pad_left target = current_menu
+            endif
+            return
+        endif
+        if (<mm_lv_r> = 1)
+            SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_lr child = arr_c } x = 28.0 y = 28.0 dx = 8.0 }
+            if ScreenElementExists id = current_menu
+                FireEvent type = pad_right target = current_menu
+            endif
+            return
+        endif
+        if (<mm_over_load> = 1)
+            SpawnScript dadmod_mouse_press params = { id = { dadmod_mouse_ssb child = load_box } flash = { dadmod_mouse_ssb child = { load_box child = load_bg } } fill = [ 50 50 50 128 ] }
+            Change dadmod_mouse_last = none
+            generic_menu_pad_choose_sound
+            ss_overwrite_warning
+            return
+        endif
+        if GotParam mm_skin_l
+            if (<mm_skin_l> = 1)
+                SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_skin child = skin_l } x = -94.0 y = 0.0 dx = -6.0 }
+                if ScreenElementExists id = <mm_skin_item>
+                    FireEvent type = pad_up target = <mm_skin_item>
+                endif
+                return
+            endif
+            if (<mm_skin_r> = 1)
+                SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_skin child = skin_r } x = 94.0 y = 0.0 dx = 6.0 }
+                if ScreenElementExists id = <mm_skin_item>
+                    FireEvent type = pad_down target = <mm_skin_item>
+                endif
+                return
+            endif
+        endif
+        if (<mm_side_l> = 1)
+            SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_sl child = arr_c } x = 28.0 y = 28.0 dx = -8.0 }
+            if ScreenElementExists id = <mm_mid>
+                FireEvent type = pad_left target = <mm_mid>
+            endif
+            return
+        endif
+        if (<mm_side_r> = 1)
+            SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_sr child = arr_c } x = 28.0 y = 28.0 dx = 8.0 }
+            if ScreenElementExists id = <mm_mid>
+                FireEvent type = pad_right target = <mm_mid>
+            endif
+            return
+        endif
+        if (<mm_next> = 1)
+            if (<mm_over_sel> = 1)
+                SpawnScript dadmod_mouse_press params = { id = { dadmod_mouse_ssb child = sel_box } flash = { dadmod_mouse_ssb child = { sel_box child = sel_bg } } fill = [ 60 60 60 128 ] }
+                mm_kx = ( ( ( dadmod_mouse_selw ) / 2.0 ) - 30.0 )
+                SpawnScript dadmod_mouse_kick params = { id = { dadmod_mouse_ssb child = { sel_box child = sel_chev } } x = <mm_kx> y = 0.0 dx = 8.0 }
+            endif
+            Change dadmod_mouse_last = none
+            THUGRECOMP_MouseNext
+            return
+        endif
+        if (<ms_hit> > -1)
+            dadmod_mouse_click id = <ms_hit_id> x = <ms_x> y = <ms_y>
+            return
+        endif
+    endif
+    if (<ms_rclick> > 0)
+        dadmod_mouse_back_press
+        return
+    endif
+    if (<mm_accept> = 1)
+        if (<ms_wheel> > 0)
+            begin
+                if ScreenElementExists id = <mm_mid>
+                    FireEvent type = pad_left target = <mm_mid>
+                endif
+            repeat <ms_wheel>
+        endif
+        if (<ms_wheel> < 0)
+            n = (0 - <ms_wheel>)
+            begin
+                if ScreenElementExists id = <mm_mid>
+                    FireEvent type = pad_right target = <mm_mid>
+                endif
+            repeat <n>
+        endif
+        return
+    endif
+    if (<ms_wheel> > 0)
+        Change dadmod_mouse_last = none
+        begin
+            if ScreenElementExists id = <mm_mid>
+                FireEvent type = pad_up target = <mm_mid>
+            endif
+        repeat <ms_wheel>
+    endif
+    if (<ms_wheel> < 0)
+        Change dadmod_mouse_last = none
+        n = (0 - <ms_wheel>)
+        begin
+            if ScreenElementExists id = <mm_mid>
+                FireEvent type = pad_down target = <mm_mid>
+            endif
+        repeat <n>
+    endif
+endscript
+
+dadmod_mouse_kb_row = none
+
+script dadmod_mouse_kb_tick
+    THUGRECOMP_MouseMenu id = keyboard_vmenu grid = 1 hidecur = 1
+    if (<ms_active> = 0)
+        dadmod_mouse_hide
+        Change dadmod_mouse_last = none
+        Change dadmod_mouse_kb_row = none
+        return
+    endif
+    if not (<ms_px_unit> = ( dadmod_mouse_pxu ))
+        dadmod_mouse_hide
+    endif
+    if not (<ms_px_unit_y> = ( dadmod_mouse_pyu ))
+        dadmod_mouse_hide
+    endif
+    Change dadmod_mouse_pxu = <ms_px_unit>
+    Change dadmod_mouse_pyu = <ms_px_unit_y>
+    dadmod_mouse_pointer
+    if ScreenElementExists id = dadmod_mouse_next
+        DestroyScreenElement id = dadmod_mouse_next
+    endif
+    Change dadmod_mouse_next_hl = -1
+    dadmod_mouse_back_button x = <ms_corner_x> y = <ms_corner_y> mm_hl = <ms_over_back>
+    if (<ms_hit> > -1)
+        if GotParam ms_hit_row
+            if not (<ms_hit_id> = ( dadmod_mouse_last ))
+                if ( (<ms_moved> = 1) or (<ms_click> > 0) )
+                    if ScreenElementExists id = <ms_hit_row>
+                        if ScreenElementExists id = <ms_hit_id>
+                            if not (<ms_hit_row> = ( dadmod_mouse_kb_row ))
+                                FireEvent type = unfocus target = keyboard_vmenu
+                                FireEvent type = focus target = keyboard_vmenu data = { child_id = <ms_hit_row> }
+                                Change dadmod_mouse_kb_row = <ms_hit_row>
+                            endif
+                            FireEvent type = unfocus target = <ms_hit_row>
+                            FireEvent type = focus target = <ms_hit_row> data = { child_id = <ms_hit_id> }
+                            Change dadmod_mouse_last = <ms_hit_id>
+                        endif
+                    endif
+                endif
+            endif
+        endif
+    endif
+    if (<ms_click> > 0)
+        if (<ms_over_back> = 1)
+            dadmod_mouse_back_press
+            return
+        endif
+        if THUGRECOMP_MouseOver id = char_guide_left_arrow x = <ms_x> y = <ms_y> pad = 8.0
+            FireEvent type = pad_l1 target = keyboard_vmenu
+            return
+        endif
+        if THUGRECOMP_MouseOver id = char_guide_right_arrow x = <ms_x> y = <ms_y> pad = 8.0
+            FireEvent type = pad_r1 target = keyboard_vmenu
+            return
+        endif
+        if (<ms_hit> > -1)
+            if ScreenElementExists id = <ms_hit_id>
+                SpawnScript dadmod_kb_click_anim params = { id = <ms_hit_id> }
+                FireEvent type = pad_choose target = <ms_hit_id>
+            endif
+            return
+        endif
+    endif
+    if (<ms_rclick> > 0)
+        dadmod_mouse_back_press
+    endif
+endscript
+
+script dadmod_mouse_click
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    if THUGRECOMP_MouseArrows row = <id> left = { <id> child = left_arrow } right = { <id> child = right_arrow } tag1 = { <id> child = dadmod_tag } tag1a = { <id> child = dadmod_tag_arrow } tag2 = { <id> child = dadmod_tag2 } tag2a = { <id> child = dadmod_tag2_arrow } x = <x> y = <y>
+        if (<ms_tag> > 0)
+            dadmod_mouse_es_tag id = <id> n = <ms_tag>
+            return
+        endif
+        if (<ms_arrow> = 0)
+            FireEvent type = pad_left target = <id>
+            return
+        endif
+        if (<ms_arrow> = 1)
+            FireEvent type = pad_right target = <id>
+            return
+        endif
+    endif
+    FireEvent type = pad_choose target = <id>
+endscript
+
+dadmod_mouse_tagside = 0
+
+script dadmod_mouse_tag_hover
+    if not ScreenElementExists id = { <id> child = dadmod_tag }
+        return
+    endif
+    mm_want = 0
+    if THUGRECOMP_MouseArrows row = <id> tag1 = { <id> child = dadmod_tag } tag1a = { <id> child = dadmod_tag_arrow } tag2 = { <id> child = dadmod_tag2 } tag2a = { <id> child = dadmod_tag2_arrow } x = <x> y = <y>
+        mm_want = <ms_tag>
+    endif
+    if (<mm_want> = ( dadmod_mouse_tagside ))
+        return
+    endif
+    Change dadmod_mouse_tagside = <mm_want>
+    if (<mm_want> = 0)
+        SetScreenElementProps id = <id> tags = { dadmod_side = 1 }
+        FireEvent type = pad_left target = <id>
+        return
+    endif
+    SetScreenElementProps id = <id> tags = { dadmod_side = 0 }
+    FireEvent type = pad_right target = <id>
+    if (<mm_want> = 2)
+        if ScreenElementExists id = <id>
+            FireEvent type = pad_right target = <id>
+        endif
+    endif
+endscript
+
+script dadmod_mouse_es_tag
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    SetScreenElementProps id = <id> tags = { dadmod_side = 0 }
+    FireEvent type = pad_right target = <id>
+    if (<n> = 2)
+        FireEvent type = pad_right target = <id>
+    endif
+    Change dadmod_mouse_tagside = <n>
+    if ScreenElementExists id = <id>
+        FireEvent type = pad_choose target = <id>
+    endif
+endscript
+
+script dadmod_mouse_back_press
+    Change dadmod_mouse_last = none
+    if ScreenElementExists id = startup_menu
+        return
+    endif
+    THUGRECOMP_MouseBack
+endscript
+
+script dadmod_mouse_hide
+    if ScreenElementExists id = dadmod_mouse_ptr
+        DestroyScreenElement id = dadmod_mouse_ptr
+    endif
+    if ScreenElementExists id = dadmod_mouse_back
+        DestroyScreenElement id = dadmod_mouse_back
+    endif
+    if ScreenElementExists id = dadmod_mouse_next
+        DestroyScreenElement id = dadmod_mouse_next
+    endif
+    Change dadmod_mouse_back_hl = -1
+    Change dadmod_mouse_next_hl = -1
+    dadmod_mouse_ss_off
+    dadmod_mouse_lvl_off
+    dadmod_mouse_hover_bar_off
+endscript
+
+script dadmod_mouse_px parent = dadmod_mouse_ptr x = 0 y = 0 w = 1 h = 1 rgba = [ 128 128 128 128 ] z = 9000 a = 1.0
+    if GotParam lid
+        CreateScreenElement {
+        type = SpriteElement
+        parent = <parent>
+        local_id = <lid>
+        texture = white
+        just = [ left top ]
+        pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) )
+        scale = ( (1.0,0.0) * ( <w> * ( dadmod_mouse_pxu ) / 4.0 ) + (0.0,1.0) * ( <h> * ( dadmod_mouse_pyu ) / 4.0 ) )
+        rgba = <rgba>
+        alpha = <a>
+        z_priority = <z>
+        }
+        return
+    endif
+    CreateScreenElement {
+    type = SpriteElement
+    parent = <parent>
+    texture = white
+    just = [ left top ]
+    pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) )
+    scale = ( (1.0,0.0) * ( <w> * ( dadmod_mouse_pxu ) / 4.0 ) + (0.0,1.0) * ( <h> * ( dadmod_mouse_pyu ) / 4.0 ) )
+    rgba = <rgba>
+    alpha = <a>
+    z_priority = <z>
+    }
+endscript
+
+script dadmod_mouse_pointer
+    if ScreenElementExists id = dadmod_mouse_ptr
+        DestroyScreenElement id = dadmod_mouse_ptr
+    endif
+endscript
+
+dadmod_mouse_sl_hl = -1
+
+dadmod_mouse_sr_hl = -1
+
+script dadmod_mouse_tri parent = dadmod_mouse_sl x = 0 y = 0 n = 14 dir = 0 rgba = [ 128 128 128 128 ] z = 8993 sh = 1
+    mm_ti = 0
+    begin
+        if (<dir> = 0)
+            mm_tx = ( <x> + <mm_ti> )
+        else
+            mm_tx = ( <x> + <n> - 1 - <mm_ti> )
+        endif
+        if (<sh> = 1)
+            dadmod_mouse_px parent = <parent> x = ( <mm_tx> + 2 ) y = ( <y> - <mm_ti> + 2 ) w = 1 h = ( 2 * <mm_ti> + 1 ) rgba = [ 0 0 0 128 ] a = 0.35 z = ( <z> - 1 )
+        endif
+        dadmod_mouse_px parent = <parent> x = <mm_tx> y = ( <y> - <mm_ti> ) w = 1 h = ( 2 * <mm_ti> + 1 ) rgba = <rgba> z = <z>
+        dadmod_mouse_px parent = <parent> x = <mm_tx> y = ( <y> - <mm_ti> - 1 ) w = 1 h = 1 rgba = <rgba> a = 0.45 z = <z>
+        dadmod_mouse_px parent = <parent> x = <mm_tx> y = ( <y> + <mm_ti> + 1 ) w = 1 h = 1 rgba = <rgba> a = 0.45 z = <z>
+        mm_ti = ( <mm_ti> + 1 )
+    repeat <n>
+endscript
+
+script dadmod_mouse_frame parent = dadmod_mouse_ssb x = 0 y = 0 w = 100 h = 30 th = 2 rgba = [ 128 128 128 128 ] fill = [ 0 0 0 128 ] fa = 0.8 z = 8992 lid = none
+    dadmod_mouse_px parent = <parent> x = ( <x> + 4 ) y = ( <y> + 4 ) w = <w> h = <h> rgba = [ 0 0 0 128 ] a = 0.3 z = ( <z> - 2 )
+    if (<lid> = none)
+        dadmod_mouse_px parent = <parent> x = ( <x> + 1 ) y = ( <y> + 1 ) w = ( <w> - 2 ) h = ( <h> - 2 ) rgba = <fill> a = <fa> z = ( <z> - 1 )
+    else
+        dadmod_mouse_px parent = <parent> lid = <lid> x = ( <x> + 1 ) y = ( <y> + 1 ) w = ( <w> - 2 ) h = ( <h> - 2 ) rgba = <fill> a = <fa> z = ( <z> - 1 )
+    endif
+    dadmod_mouse_px parent = <parent> x = ( <x> + 2 ) y = <y> w = ( <w> - 4 ) h = <th> rgba = <rgba> z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + 2 ) y = ( <y> + <h> - <th> ) w = ( <w> - 4 ) h = <th> rgba = <rgba> z = <z>
+    dadmod_mouse_px parent = <parent> x = <x> y = ( <y> + 2 ) w = <th> h = ( <h> - 4 ) rgba = <rgba> z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + <w> - <th> ) y = ( <y> + 2 ) w = <th> h = ( <h> - 4 ) rgba = <rgba> z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + 1 ) y = ( <y> + 1 ) w = 1 h = 1 rgba = <rgba> a = 0.6 z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + <w> - 2 ) y = ( <y> + 1 ) w = 1 h = 1 rgba = <rgba> a = 0.6 z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + 1 ) y = ( <y> + <h> - 2 ) w = 1 h = 1 rgba = <rgba> a = 0.6 z = <z>
+    dadmod_mouse_px parent = <parent> x = ( <x> + <w> - 2 ) y = ( <y> + <h> - 2 ) w = 1 h = 1 rgba = <rgba> a = 0.6 z = <z>
+endscript
+
+script dadmod_mouse_arrow_build bid = dadmod_mouse_sl x = 0.0 y = 0.0 mm_hl = 0 dir = 0 phl = 0
+    if ScreenElementExists id = <bid>
+        DestroyScreenElement id = <bid>
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = <bid>
+    pos = ( (1.0,0.0) * <x> + (0.0,1.0) * <y> )
+    just = [ left top ]
+    z_priority = 8990
+    }
+    dadmod_mouse_px parent = <bid> x = 0 y = 0 w = 56 h = 56 rgba = [ 0 0 0 0 ] z = 8991
+    mm_s0 = 1.0
+    if (<phl> = 1)
+        mm_s0 = 1.1
+    endif
+    dadmod_mouse_box parent = <bid> lid = arr_c x = 28.0 y = 28.0 sc = <mm_s0>
+    mm_col = [ 128 128 128 128 ]
+    if (<mm_hl> = 1)
+        mm_col = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+    endif
+    dadmod_mouse_tri parent = { <bid> child = arr_c } x = -8 y = 0 n = 16 dir = <dir> rgba = <mm_col> z = 8993
+    mm_dx = -4.0
+    if (<dir> = 1)
+        mm_dx = 4.0
+    endif
+    if (<mm_hl> = 1)
+        DoScreenElementMorph id = { <bid> child = arr_c } scale = 1.1 time = 0.12
+        SpawnScript dadmod_mouse_nudge params = { id = { <bid> child = arr_c } x = 28.0 y = 28.0 dx = <mm_dx> }
+    else
+        if (<phl> = 1)
+            DoScreenElementMorph id = { <bid> child = arr_c } scale = 1.0 time = 0.12
+        endif
+    endif
+endscript
+
+script dadmod_mouse_ss_arrows
+    mm_size = ( 56.0 * ( dadmod_mouse_pxu ) )
+    mm_sizey = ( 56.0 * ( dadmod_mouse_pyu ) )
+    mm_ly = ( 205.0 - ( <mm_sizey> / 2.0 ) )
+    mm_lx = ( 74.0 - <mm_size> )
+    mm_rx = 230.0
+    mm_l = 0
+    mm_r = 0
+    if ScreenElementExists id = { dadmod_mouse_sl child = 0 }
+        if THUGRECOMP_MouseOver id = { dadmod_mouse_sl child = 0 } x = <x> y = <y> pad = 0.0
+            mm_l = 1
+        endif
+    endif
+    if ScreenElementExists id = { dadmod_mouse_sr child = 0 }
+        if THUGRECOMP_MouseOver id = { dadmod_mouse_sr child = 0 } x = <x> y = <y> pad = 0.0
+            mm_r = 1
+        endif
+    endif
+    if not ScreenElementExists id = dadmod_mouse_sl
+        Change dadmod_mouse_sl_hl = -1
+    endif
+    if not ScreenElementExists id = dadmod_mouse_sr
+        Change dadmod_mouse_sr_hl = -1
+    endif
+    if not (<mm_l> = ( dadmod_mouse_sl_hl ))
+        FormatText TextName = mm_msg "mouse: skater arrows hover left %a right %b" a = <mm_l> b = <mm_r>
+        THUGRECOMP_Log text = <mm_msg>
+        mm_p = 0
+        if (( dadmod_mouse_sl_hl ) = 1)
+            mm_p = 1
+        endif
+        if (<mm_l> = 1)
+            generic_menu_up_or_down_sound
+        endif
+        Change dadmod_mouse_sl_hl = <mm_l>
+        dadmod_mouse_arrow_build bid = dadmod_mouse_sl x = <mm_lx> y = <mm_ly> mm_hl = <mm_l> dir = 0 phl = <mm_p>
+    endif
+    if not (<mm_r> = ( dadmod_mouse_sr_hl ))
+        mm_p = 0
+        if (( dadmod_mouse_sr_hl ) = 1)
+            mm_p = 1
+        endif
+        if (<mm_r> = 1)
+            generic_menu_up_or_down_sound
+        endif
+        Change dadmod_mouse_sr_hl = <mm_r>
+        dadmod_mouse_arrow_build bid = dadmod_mouse_sr x = <mm_rx> y = <mm_ly> mm_hl = <mm_r> dir = 1 phl = <mm_p>
+    endif
+    return mm_side_l = <mm_l> mm_side_r = <mm_r>
+endscript
+
+dadmod_mouse_sel_hl = -1
+
+dadmod_mouse_load_hl = -1
+
+script dadmod_mouse_txt parent = dadmod_mouse_ssb x = 0 y = 0 text = "" font = crillee scale = 0.2 rgba = [ 128 128 128 128 ] z = 8995 lid = dadmod_t
+    CreateScreenElement {
+    type = TextElement
+    parent = <parent>
+    local_id = <lid>
+    font = <font>
+    text = <text>
+    just = [ left center ]
+    pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) )
+    scale = <scale>
+    rgba = <rgba>
+    z_priority = <z>
+    }
+endscript
+
+script dadmod_mouse_box parent = dadmod_mouse_ssb lid = sel_box x = 0.0 y = 0.0 sc = 1.0
+    CreateScreenElement {
+    type = ContainerElement
+    parent = <parent>
+    local_id = <lid>
+    pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) )
+    just = [ left top ]
+    scale = <sc>
+    }
+endscript
+
+script dadmod_mouse_measure parent = dadmod_mouse_ssb text = "" scale = 0.2
+    dadmod_mouse_txt parent = <parent> lid = dadmod_measure text = <text> font = crillee scale = <scale> rgba = [ 0 0 0 0 ]
+    mm_w = 100.0
+    if ScreenElementExists id = { <parent> child = dadmod_measure }
+        GetScreenElementDims id = { <parent> child = dadmod_measure }
+        mm_w = ( <width> / ( dadmod_mouse_pxu ) )
+        DestroyScreenElement id = { <parent> child = dadmod_measure }
+    endif
+    return mm_w = <mm_w>
+endscript
+
+script dadmod_mouse_ss_build bid = dadmod_mouse_ssb x = 0.0 y = 0.0 sel = 0 load = 0 psel = 0 pload = 0
+    if ScreenElementExists id = <bid>
+        DestroyScreenElement id = <bid>
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = <bid>
+    pos = ( (1.0,0.0) * <x> + (0.0,1.0) * <y> )
+    just = [ left top ]
+    z_priority = 8990
+    }
+    dadmod_mouse_measure parent = <bid> text = "SELECT SKATER" scale = 0.2
+    mm_selw = ( <mm_w> + 76.0 )
+    dadmod_mouse_measure parent = <bid> text = "LOAD SKATER" scale = 0.125
+    mm_loadw = ( <mm_w> + 30.0 )
+    Change dadmod_mouse_selw = <mm_selw>
+    Change dadmod_mouse_loadw = <mm_loadw>
+    mm_line = [ 128 128 128 128 ]
+    mm_seltxt = ( ( THUGPRO_GlobalThemeInfo ) . MENU_TITLE_COLOR )
+    mm_selfill = [ 0 0 0 128 ]
+    mm_selfa = 0.78
+    if (<sel> = 1)
+        mm_line = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_seltxt = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_selfill = [ 60 60 60 128 ]
+        mm_selfa = 0.88
+    endif
+    mm_gray = [ 90 90 90 100 ]
+    mm_loadtxt = ( ( THUGPRO_GlobalThemeInfo ) . UNHIGHLIGHTED_TEXT_COLOR )
+    mm_loadfill = [ 0 0 0 128 ]
+    mm_loadfa = 0.6
+    if (<load> = 1)
+        mm_gray = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_loadtxt = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_loadfill = [ 50 50 50 128 ]
+        mm_loadfa = 0.8
+    endif
+    mm_scx = ( 78.0 + ( <mm_selw> / 2.0 ) )
+    mm_s0 = 1.0
+    if (<psel> = 1)
+        mm_s0 = 1.04
+    endif
+    dadmod_mouse_box parent = <bid> lid = sel_box x = <mm_scx> y = 198.0 sc = <mm_s0>
+    mm_sb = { <bid> child = sel_box }
+    mm_hx = ( 0.0 - ( <mm_selw> / 2.0 ) )
+    dadmod_mouse_frame parent = <mm_sb> lid = sel_bg x = <mm_hx> y = -32 w = <mm_selw> h = 64 th = 2 rgba = <mm_line> fill = <mm_selfill> fa = <mm_selfa> z = 8992
+    dadmod_mouse_px parent = <mm_sb> x = ( <mm_hx> + 10 ) y = -22 w = 6 h = 44 rgba = ( ( THUGPRO_GlobalThemeInfo ) . MENU_TITLE_COLOR ) z = 8993
+    dadmod_mouse_txt parent = <mm_sb> lid = sel_text x = ( <mm_hx> + 28 ) y = 0 text = "SELECT SKATER" font = crillee scale = 0.2 rgba = <mm_seltxt> z = 8995
+    mm_chx = ( ( <mm_selw> / 2.0 ) - 30.0 )
+    dadmod_mouse_box parent = <mm_sb> lid = sel_chev x = <mm_chx> y = 0.0
+    if (<sel> = 1)
+        dadmod_mouse_tri parent = { <bid> child = { sel_box child = sel_chev } } x = 2 y = 0 n = 11 dir = 1 rgba = <mm_line> z = 8996 sh = 0
+    else
+        dadmod_mouse_tri parent = { <bid> child = { sel_box child = sel_chev } } x = 0 y = 0 n = 9 dir = 1 rgba = <mm_line> z = 8996 sh = 0
+    endif
+    mm_lcx = ( 78.0 + ( <mm_loadw> / 2.0 ) )
+    mm_l0 = 1.0
+    if (<pload> = 1)
+        mm_l0 = 1.04
+    endif
+    dadmod_mouse_box parent = <bid> lid = load_box x = <mm_lcx> y = 259.0 sc = <mm_l0>
+    mm_lb = { <bid> child = load_box }
+    mm_lhx = ( 0.0 - ( <mm_loadw> / 2.0 ) )
+    dadmod_mouse_frame parent = <mm_lb> lid = load_bg x = <mm_lhx> y = -17 w = <mm_loadw> h = 34 th = 1 rgba = <mm_gray> fill = <mm_loadfill> fa = <mm_loadfa> z = 8992
+    dadmod_mouse_txt parent = <mm_lb> lid = load_text x = ( <mm_lhx> + 14 ) y = 0 text = "LOAD SKATER" font = crillee scale = 0.125 rgba = <mm_loadtxt> z = 8995
+    if (<sel> = 1)
+        DoScreenElementMorph id = <mm_sb> scale = 1.04 time = 0.12
+        SpawnScript dadmod_mouse_pulse params = { id = <mm_sb> }
+        SpawnScript dadmod_mouse_nudge params = { id = { <bid> child = { sel_box child = sel_chev } } x = <mm_chx> dx = 4.0 }
+    else
+        if (<psel> = 1)
+            DoScreenElementMorph id = <mm_sb> scale = 1.0 time = 0.12
+        endif
+    endif
+    if (<load> = 1)
+        DoScreenElementMorph id = <mm_lb> scale = 1.04 time = 0.12
+        SpawnScript dadmod_mouse_pulse params = { id = <mm_lb> }
+    else
+        if (<pload> = 1)
+            DoScreenElementMorph id = <mm_lb> scale = 1.0 time = 0.12
+        endif
+    endif
+endscript
+
+script dadmod_mouse_pulse
+    wait 0.15 seconds
+    begin
+        if not ScreenElementExists id = <id>
+            return
+        endif
+        DoScreenElementMorph id = <id> alpha = 0.8 time = 0.5
+        wait 0.5 seconds
+        if not ScreenElementExists id = <id>
+            return
+        endif
+        DoScreenElementMorph id = <id> alpha = 1.0 time = 0.5
+        wait 0.5 seconds
+    repeat
+endscript
+
+script dadmod_mouse_nudge x = 0.0 y = 0.0 dx = 4.0
+    begin
+        if not ScreenElementExists id = <id>
+            return
+        endif
+        DoScreenElementMorph id = <id> pos = ( (1.0,0.0) * ( ( <x> + <dx> ) * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) ) time = 0.3
+        wait 0.3 seconds
+        if not ScreenElementExists id = <id>
+            return
+        endif
+        DoScreenElementMorph id = <id> pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) ) time = 0.3
+        wait 0.3 seconds
+    repeat
+endscript
+
+script dadmod_mouse_press scale = 1.04
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    DoScreenElementMorph id = <id> scale = 0.94 time = 0.06
+    if GotParam flash
+        if ScreenElementExists id = <flash>
+            DoScreenElementMorph id = <flash> rgba = [ 128 128 128 128 ] time = 0
+            DoScreenElementMorph id = <flash> rgba = <fill> time = 0.15
+        endif
+    endif
+    wait 0.06 seconds
+    if ScreenElementExists id = <id>
+        DoScreenElementMorph id = <id> scale = <scale> time = 0.09
+    endif
+endscript
+
+script dadmod_mouse_kick x = 0.0 y = 0.0 dx = 8.0
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    DoScreenElementMorph id = <id> pos = ( (1.0,0.0) * ( ( <x> + <dx> ) * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) ) time = 0.06
+    wait 0.06 seconds
+    if ScreenElementExists id = <id>
+        DoScreenElementMorph id = <id> pos = ( (1.0,0.0) * ( <x> * ( dadmod_mouse_pxu ) ) + (0.0,1.0) * ( <y> * ( dadmod_mouse_pyu ) ) ) time = 0.12
+    endif
+endscript
+
+dadmod_mouse_selw = 300.0
+
+dadmod_mouse_loadw = 150.0
+
+script dadmod_mouse_ss_buttons x = 0.0 y = 0.0 cx = 0.0 cy = 0.0
+    mm_px = ( ( <x> - <cx> ) / ( dadmod_mouse_pxu ) )
+    mm_py = ( ( <y> - <cy> ) / ( dadmod_mouse_pyu ) )
+    mm_sel = 0
+    mm_load = 0
+    if (<mm_px> > 77.0)
+        if (<mm_px> < ( 78.0 + ( dadmod_mouse_selw ) ))
+            if (<mm_py> > 165.0)
+                if (<mm_py> < 230.0)
+                    mm_sel = 1
+                endif
+            endif
+        endif
+        if (<mm_px> < ( 78.0 + ( dadmod_mouse_loadw ) ))
+            if (<mm_py> > 241.0)
+                if (<mm_py> < 276.0)
+                    mm_load = 1
+                endif
+            endif
+        endif
+    endif
+    if not ScreenElementExists id = dadmod_mouse_ssb
+        Change dadmod_mouse_sel_hl = -1
+    endif
+    mm_redo = 0
+    if not (<mm_sel> = ( dadmod_mouse_sel_hl ))
+        mm_redo = 1
+    endif
+    if not (<mm_load> = ( dadmod_mouse_load_hl ))
+        mm_redo = 1
+    endif
+    if (<mm_redo> = 1)
+        FormatText TextName = mm_msg "mouse: skater select hover sel %a load %b (pointer px %c,%d, select width %e)" a = <mm_sel> b = <mm_load> c = <mm_px> d = <mm_py> e = ( dadmod_mouse_selw )
+        THUGRECOMP_Log text = <mm_msg>
+        mm_psel = 0
+        if (( dadmod_mouse_sel_hl ) = 1)
+            mm_psel = 1
+        endif
+        mm_pload = 0
+        if (( dadmod_mouse_load_hl ) = 1)
+            mm_pload = 1
+        endif
+        if ( (<mm_sel> = 1) or (<mm_load> = 1) )
+            if ( (<mm_psel> = 0) and (<mm_pload> = 0) )
+                generic_menu_up_or_down_sound
+            endif
+        endif
+        Change dadmod_mouse_sel_hl = <mm_sel>
+        Change dadmod_mouse_load_hl = <mm_load>
+        dadmod_mouse_ss_build x = <cx> y = <cy> sel = <mm_sel> load = <mm_load> psel = <mm_psel> pload = <mm_pload>
+    endif
+    return mm_over_sel = <mm_sel> mm_over_load = <mm_load>
+endscript
+
+dadmod_skin_state = -1
+
+script dadmod_mouse_skin_off
+    if ScreenElementExists id = dadmod_mouse_skin
+        DestroyScreenElement id = dadmod_mouse_skin
+    endif
+    Change dadmod_skin_state = -1
+endscript
+
+script dadmod_mouse_skin_pill x = 0.0 y = 0.0
+    mm_item = ( LAST_SELECTED_SKATER_MENU_ID )
+    mm_n = 0
+    mm_i = 0
+    if ScreenElementExists id = <mm_item>
+        if <mm_item> : GetSingleTag number_of_skins
+            mm_n = <number_of_skins>
+        endif
+        if <mm_item> : GetSingleTag selected_skin_index
+            mm_i = <selected_skin_index>
+        endif
+    endif
+    if (<mm_n> < 2)
+        dadmod_mouse_skin_off
+        return mm_skin_l = 0 mm_skin_r = 0
+    endif
+    mm_cx = 156.0
+    mm_cy = 382.0
+    mm_px = ( ( <x> - <mm_cx> ) / ( dadmod_mouse_pxu ) )
+    mm_py = ( ( <y> - <mm_cy> ) / ( dadmod_mouse_pyu ) )
+    mm_l = 0
+    mm_r = 0
+    if (<mm_py> > -18.0)
+        if (<mm_py> < 18.0)
+            if (<mm_px> > -115.0)
+                if (<mm_px> < -55.0)
+                    mm_l = 1
+                endif
+            endif
+            if (<mm_px> > 55.0)
+                if (<mm_px> < 115.0)
+                    mm_r = 1
+                endif
+            endif
+        endif
+    endif
+    mm_state = ( ( <mm_n> * 10000 ) + ( <mm_i> * 10 ) + <mm_l> + ( 2 * <mm_r> ) )
+    if not ScreenElementExists id = dadmod_mouse_skin
+        Change dadmod_skin_state = -1
+    endif
+    if not (<mm_state> = ( dadmod_skin_state ))
+        Change dadmod_skin_state = <mm_state>
+        dadmod_mouse_skin_build cx = <mm_cx> cy = <mm_cy> n = <mm_n> i = <mm_i> l = <mm_l> r = <mm_r>
+    endif
+    return mm_skin_l = <mm_l> mm_skin_r = <mm_r> mm_skin_item = <mm_item>
+endscript
+
+script dadmod_mouse_skin_build cx = 0.0 cy = 0.0 n = 1 i = 0 l = 0 r = 0
+    if ScreenElementExists id = dadmod_mouse_skin
+        DestroyScreenElement id = dadmod_mouse_skin
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = dadmod_mouse_skin
+    pos = ( (1.0,0.0) * <cx> + (0.0,1.0) * <cy> )
+    just = [ left top ]
+    z_priority = 8990
+    }
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -98.2 y = -15.0 w = 202.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.2 y = -14.0 w = 208.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -103.2 y = -13.0 w = 212.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.7 y = -12.0 w = 215.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -105.9 y = -11.0 w = 217.8 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.0 y = -10.0 w = 219.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.8 y = -9.0 w = 221.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.6 y = -8.0 w = 223.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.3 y = -7.0 w = 224.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.9 y = -6.0 w = 225.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.4 y = -5.0 w = 226.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.8 y = -4.0 w = 227.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.1 y = -3.0 w = 228.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.4 y = -2.0 w = 228.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.7 y = -1.0 w = 229.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.8 y = 0.0 w = 229.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.9 y = 1.0 w = 229.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.0 y = 2.0 w = 230.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.0 y = 3.0 w = 230.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.9 y = 4.0 w = 229.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.8 y = 5.0 w = 229.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.7 y = 6.0 w = 229.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.4 y = 7.0 w = 228.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.1 y = 8.0 w = 228.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.8 y = 9.0 w = 227.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.4 y = 10.0 w = 226.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.9 y = 11.0 w = 225.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.3 y = 12.0 w = 224.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.6 y = 13.0 w = 223.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.8 y = 14.0 w = 221.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.0 y = 15.0 w = 219.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -105.9 y = 16.0 w = 217.8 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.7 y = 17.0 w = 215.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -103.2 y = 18.0 w = 212.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.2 y = 19.0 w = 208.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -98.2 y = 20.0 w = 202.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.30 z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.2 y = -18.0 w = 202.4 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.2 y = -17.0 w = 208.4 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -106.2 y = -16.0 w = 212.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.7 y = -15.0 w = 215.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.9 y = -14.0 w = 217.8 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.0 y = -13.0 w = 219.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.8 y = -12.0 w = 221.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.6 y = -11.0 w = 223.2 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.3 y = -10.0 w = 224.6 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.9 y = -9.0 w = 225.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.4 y = -8.0 w = 226.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.8 y = -7.0 w = 227.6 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.1 y = -6.0 w = 228.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.4 y = -5.0 w = 228.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.7 y = -4.0 w = 229.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.8 y = -3.0 w = 229.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.9 y = -2.0 w = 229.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -115.0 y = -1.0 w = 230.0 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -115.0 y = 0.0 w = 230.0 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.9 y = 1.0 w = 229.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.8 y = 2.0 w = 229.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.7 y = 3.0 w = 229.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.4 y = 4.0 w = 228.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.1 y = 5.0 w = 228.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.8 y = 6.0 w = 227.6 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.4 y = 7.0 w = 226.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.9 y = 8.0 w = 225.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.3 y = 9.0 w = 224.6 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.6 y = 10.0 w = 223.2 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.8 y = 11.0 w = 221.7 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.0 y = 12.0 w = 219.9 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.9 y = 13.0 w = 217.8 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.7 y = 14.0 w = 215.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -106.2 y = 15.0 w = 212.3 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.2 y = 16.0 w = 208.4 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.2 y = 17.0 w = 202.4 h = 1 rgba = [ 100 100 100 128 ] a = 1.00 z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.1 y = -17.0 w = 202.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.0 y = -16.0 w = 208.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -105.9 y = -15.0 w = 211.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.3 y = -14.0 w = 214.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.5 y = -13.0 w = 217.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.5 y = -12.0 w = 219.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.4 y = -11.0 w = 220.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.1 y = -10.0 w = 222.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.7 y = -9.0 w = 223.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.3 y = -8.0 w = 224.5 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.7 y = -7.0 w = 225.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.1 y = -6.0 w = 226.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.4 y = -5.0 w = 226.8 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.6 y = -4.0 w = 227.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.8 y = -3.0 w = 227.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.9 y = -2.0 w = 227.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.0 y = -1.0 w = 228.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -114.0 y = 0.0 w = 228.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.9 y = 1.0 w = 227.9 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.8 y = 2.0 w = 227.6 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.6 y = 3.0 w = 227.3 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.4 y = 4.0 w = 226.8 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -113.1 y = 5.0 w = 226.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.7 y = 6.0 w = 225.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -112.3 y = 7.0 w = 224.5 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.7 y = 8.0 w = 223.4 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -111.1 y = 9.0 w = 222.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -110.4 y = 10.0 w = 220.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -109.5 y = 11.0 w = 219.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -108.5 y = 12.0 w = 217.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -107.3 y = 13.0 w = 214.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -105.9 y = 14.0 w = 211.7 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -104.0 y = 15.0 w = 208.0 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    dadmod_mouse_px parent = dadmod_mouse_skin x = -101.1 y = 16.0 w = 202.2 h = 1 rgba = [ 0 0 0 128 ] a = 0.75 z = 8993
+    FormatText TextName = mm_label "SKIN  %a / %b" a = ( <i> + 1 ) b = <n>
+    dadmod_mouse_measure parent = dadmod_mouse_skin text = <mm_label> scale = 0.13
+    mm_tx = ( 0.0 - ( <mm_w> / 2.0 ) )
+    dadmod_mouse_txt parent = dadmod_mouse_skin lid = skin_text x = <mm_tx> y = 0 text = <mm_label> font = crillee scale = 0.13 rgba = [ 100 100 100 128 ] z = 8995
+    mm_lc = [ 128 128 128 128 ]
+    if (<l> = 1)
+        mm_lc = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+    endif
+    mm_rc = [ 128 128 128 128 ]
+    if (<r> = 1)
+        mm_rc = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+    endif
+    dadmod_mouse_box parent = dadmod_mouse_skin lid = skin_l x = -94.0 y = 0.0
+    dadmod_mouse_box parent = dadmod_mouse_skin lid = skin_r x = 94.0 y = 0.0
+    if (<l> = 1)
+        dadmod_mouse_tri parent = { dadmod_mouse_skin child = skin_l } x = -5 y = 0 n = 10 dir = 0 rgba = <mm_lc> z = 8996 sh = 0
+        SpawnScript dadmod_mouse_nudge params = { id = { dadmod_mouse_skin child = skin_l } x = -94.0 y = 0.0 dx = -3.0 }
+    else
+        dadmod_mouse_tri parent = { dadmod_mouse_skin child = skin_l } x = -4 y = 0 n = 8 dir = 0 rgba = <mm_lc> z = 8996 sh = 0
+    endif
+    if (<r> = 1)
+        dadmod_mouse_tri parent = { dadmod_mouse_skin child = skin_r } x = -5 y = 0 n = 10 dir = 1 rgba = <mm_rc> z = 8996 sh = 0
+        SpawnScript dadmod_mouse_nudge params = { id = { dadmod_mouse_skin child = skin_r } x = 94.0 y = 0.0 dx = 3.0 }
+    else
+        dadmod_mouse_tri parent = { dadmod_mouse_skin child = skin_r } x = -4 y = 0 n = 8 dir = 1 rgba = <mm_rc> z = 8996 sh = 0
+    endif
+endscript
+
+script dadmod_mouse_ss_off
+    dadmod_mouse_skin_off
+    if ScreenElementExists id = dadmod_mouse_ssb
+        DestroyScreenElement id = dadmod_mouse_ssb
+    endif
+    Change dadmod_mouse_sel_hl = -1
+    Change dadmod_mouse_load_hl = -1
+    if ScreenElementExists id = dadmod_mouse_sl
+        DestroyScreenElement id = dadmod_mouse_sl
+    endif
+    if ScreenElementExists id = dadmod_mouse_sr
+        DestroyScreenElement id = dadmod_mouse_sr
+    endif
+    Change dadmod_mouse_sl_hl = -1
+    Change dadmod_mouse_sr_hl = -1
+endscript
+
+script dadmod_mouse_back_button x = 0.0 y = 0.0 mm_hl = 0
+    if ScreenElementExists id = dadmod_mouse_back
+        if (<mm_hl> = ( dadmod_mouse_back_hl ))
+            return
+        endif
+        DestroyScreenElement id = dadmod_mouse_back
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    Change dadmod_mouse_back_hl = <mm_hl>
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = dadmod_mouse_back
+    pos = ( (1.0,0.0) * <x> + (0.0,1.0) * <y> )
+    just = [ left top ]
+    z_priority = 8990
+    }
+    mm_line = [ 128 128 128 128 ]
+    mm_fill = [ 0 0 0 83 ]
+    if (<mm_hl> = 1)
+        mm_line = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_fill = [ 12 24 56 90 ]
+    endif
+    dadmod_mouse_px parent = dadmod_mouse_back x = 0 y = 0 w = 34 h = 34 rgba = <mm_fill> z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_back x = 0 y = 0 w = 34 h = 2 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_back x = 0 y = 32 w = 34 h = 2 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_back x = 0 y = 2 w = 2 h = 30 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_back x = 32 y = 2 w = 2 h = 30 rgba = <mm_line> z = 8992
+    mm_col = 0
+    begin
+        dadmod_mouse_px parent = dadmod_mouse_back x = ( 8 + <mm_col> ) y = ( 16 - <mm_col> ) w = 1 h = ( 2 + ( 2 * <mm_col> ) ) rgba = <mm_line> z = 8993
+        mm_col = ( <mm_col> + 1 )
+    repeat 8
+    dadmod_mouse_px parent = dadmod_mouse_back x = 16 y = 15 w = 10 h = 4 rgba = <mm_line> z = 8993
+endscript
+
+script dadmod_mouse_next_button x = 0.0 y = 0.0 mm_hl = 0
+    if ScreenElementExists id = dadmod_mouse_next
+        if (<mm_hl> = ( dadmod_mouse_next_hl ))
+            return
+        endif
+        DestroyScreenElement id = dadmod_mouse_next
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    Change dadmod_mouse_next_hl = <mm_hl>
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = dadmod_mouse_next
+    pos = ( (1.0,0.0) * <x> + (0.0,1.0) * <y> )
+    just = [ left top ]
+    z_priority = 8990
+    }
+    mm_line = [ 128 128 128 128 ]
+    mm_fill = [ 0 0 0 83 ]
+    if (<mm_hl> = 1)
+        mm_line = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+        mm_fill = [ 12 24 56 90 ]
+    endif
+    dadmod_mouse_px parent = dadmod_mouse_next x = 0 y = 0 w = 34 h = 34 rgba = <mm_fill> z = 8991
+    dadmod_mouse_px parent = dadmod_mouse_next x = 0 y = 0 w = 34 h = 2 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_next x = 0 y = 32 w = 34 h = 2 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_next x = 0 y = 2 w = 2 h = 30 rgba = <mm_line> z = 8992
+    dadmod_mouse_px parent = dadmod_mouse_next x = 32 y = 2 w = 2 h = 30 rgba = <mm_line> z = 8992
+    mm_col = 0
+    begin
+        dadmod_mouse_px parent = dadmod_mouse_next x = ( 25 - <mm_col> ) y = ( 16 - <mm_col> ) w = 1 h = ( 2 + ( 2 * <mm_col> ) ) rgba = <mm_line> z = 8993
+        mm_col = ( <mm_col> + 1 )
+    repeat 8
+    dadmod_mouse_px parent = dadmod_mouse_next x = 8 y = 15 w = 10 h = 4 rgba = <mm_line> z = 8993
+endscript
+
+script dadmod_kb_click_anim
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    mm_org = (1.0,1.6)
+    if <id> : GetSingleTag tag_txt_offset
+        mm_org = (1.0,1.05)
+    endif
+    DoScreenElementMorph id = <id> time = 0.05 scale = ( <mm_org> * 1.15 )
+    wait 0.06 seconds
+    if ScreenElementExists id = <id>
+        DoScreenElementMorph id = <id> time = 0.06 scale = ( <mm_org> * 0.95 )
+    endif
+    wait 0.06 seconds
+    if ScreenElementExists id = <id>
+        DoScreenElementMorph id = <id> time = 0.08 scale = ( <mm_org> * 1.05 )
+    endif
+endscript
+
+script dadmod_fit_extra
+    if not ScreenElementExists id = <id>
+        return
+    endif
+    if not ScreenElementExists id = { <id> child = extra_text }
+        return
+    endif
+    mm_base = 0.0
+    if <id> : GetSingleTag dadmod_xbase
+        mm_base = <dadmod_xbase>
+    endif
+    if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_base> min = 0.6
+        if (<mm_base> = 0.0)
+            <id> : SetTags dadmod_xbase = <ms_base>
+        endif
+        DoScreenElementMorph id = { <id> child = extra_text } scale = <ms_fit> time = 0
+    endif
+endscript
+
+script dadmod_fit_all
+    wait 2 gameframes
+    if not ScreenElementExists id = current_menu
+        return
+    endif
+    if GetScreenElementChildren id = current_menu
+        GetArraySize <children>
+        mm_k = 0
+        begin
+            dadmod_fit_extra id = ( <children> [ <mm_k> ] )
+            mm_k = ( <mm_k> + 1 )
+        repeat <array_size>
+    endif
+endscript
+
+script dadmod_mouse_is_scroll_list
+    if not ScreenElementExists id = <id>
+        return mm_scroll_list = 0
+    endif
+    mm_show = 0
+    mm_count = 0
+    if <id> : GetSingleTag num_items_to_show
+        mm_show = <num_items_to_show>
+    endif
+    if <id> : GetSingleTag menu_item_count
+        mm_count = <menu_item_count>
+    endif
+    if (<mm_show> > 0)
+        if (<mm_count> > <mm_show>)
+            return mm_scroll_list = 1
+        endif
+    endif
+    return mm_scroll_list = 0
+endscript
+
+dadmod_lvl_state = -1
+
+script dadmod_mouse_lvl_off
+    if ScreenElementExists id = dadmod_mouse_ll
+        DestroyScreenElement id = dadmod_mouse_ll
+    endif
+    if ScreenElementExists id = dadmod_mouse_lr
+        DestroyScreenElement id = dadmod_mouse_lr
+    endif
+    Change dadmod_lvl_state = -1
+endscript
+
+script dadmod_mouse_lvl_arrows x = 0.0 y = 0.0 bx0 = 0.0 by0 = 0.0 bx1 = 0.0 by1 = 0.0 cx = 0.0 rx = 640.0
+    mm_sz = ( 56.0 * ( dadmod_mouse_pxu ) )
+    mm_szy = ( 56.0 * ( dadmod_mouse_pyu ) )
+    mm_gap = ( 12.0 * ( dadmod_mouse_pxu ) )
+    mm_lx = ( <bx0> - <mm_gap> - <mm_sz> )
+    if (<mm_lx> < <cx>)
+        mm_lx = <cx>
+    endif
+    mm_rxx = ( <bx1> + <mm_gap> )
+    if (( <mm_rxx> + <mm_sz> ) > <rx>)
+        mm_rxx = ( <rx> - <mm_sz> )
+    endif
+    mm_ly = ( ( ( <by0> + <by1> ) / 2.0 ) - ( <mm_szy> / 2.0 ) )
+    mm_l = 0
+    mm_r = 0
+    if (<y> > <mm_ly>)
+        if (<y> < ( <mm_ly> + <mm_szy> ))
+            if (<x> > <mm_lx>)
+                if (<x> < ( <mm_lx> + <mm_sz> ))
+                    mm_l = 1
+                endif
+            endif
+            if (<x> > <mm_rxx>)
+                if (<x> < ( <mm_rxx> + <mm_sz> ))
+                    mm_r = 1
+                endif
+            endif
+        endif
+    endif
+    mm_state = ( ( <mm_lx> * 1000.0 ) + ( <mm_ly> * 10.0 ) + ( <mm_rxx> * 0.001 ) + <mm_l> + ( 2 * <mm_r> ) )
+    if not ScreenElementExists id = dadmod_mouse_ll
+        Change dadmod_lvl_state = -1
+    endif
+    if not (<mm_state> = ( dadmod_lvl_state ))
+        Change dadmod_lvl_state = <mm_state>
+        dadmod_mouse_arrow_build bid = dadmod_mouse_ll x = <mm_lx> y = <mm_ly> mm_hl = <mm_l> dir = 0
+        dadmod_mouse_arrow_build bid = dadmod_mouse_lr x = <mm_rxx> y = <mm_ly> mm_hl = <mm_r> dir = 1
+    endif
+    return mm_lv_l = <mm_l> mm_lv_r = <mm_r>
+endscript
+
+dadmod_hbar_state = -1.0
+
+script dadmod_mouse_hover_bar_off
+    if ScreenElementExists id = dadmod_mouse_hbar
+        DestroyScreenElement id = dadmod_mouse_hbar
+    endif
+    Change dadmod_hbar_state = -1.0
+endscript
+
+script dadmod_mouse_hover_bar x0 = 0.0 y0 = 0.0 x1 = 0.0 y1 = 0.0
+    mm_state = ( ( <x0> * 1000.0 ) + ( <y0> * 10.0 ) + ( <x1> * 0.01 ) + ( <y1> * 0.0001 ) )
+    if ScreenElementExists id = dadmod_mouse_hbar
+        if (<mm_state> = ( dadmod_hbar_state ))
+            return
+        endif
+        DestroyScreenElement id = dadmod_mouse_hbar
+    endif
+    if not ScreenElementExists id = root_window
+        return
+    endif
+    Change dadmod_hbar_state = <mm_state>
+    mm_w = ( <x1> - <x0> )
+    mm_h = ( <y1> - <y0> )
+    CreateScreenElement {
+    type = ContainerElement
+    parent = root_window
+    id = dadmod_mouse_hbar
+    pos = ( (1.0,0.0) * <x0> + (0.0,1.0) * <y0> )
+    just = [ left top ]
+    z_priority = 1001
+    }
+    mm_col = ( ( THUGPRO_GlobalThemeInfo ) . HIGHLIGHTED_TEXT_COLOR )
+    CreateScreenElement {
+    type = SpriteElement
+    parent = dadmod_mouse_hbar
+    texture = white
+    just = [ left top ]
+    pos = (0.0,0.0)
+    scale = ( (1.0,0.0) * ( <mm_w> / 4.0 ) + (0.0,1.0) * ( <mm_h> / 4.0 ) )
+    rgba = <mm_col>
+    alpha = 0.22
+    z_priority = 1001
+    }
+    CreateScreenElement {
+    type = SpriteElement
+    parent = dadmod_mouse_hbar
+    texture = white
+    just = [ left top ]
+    pos = (0.0,0.0)
+    scale = ( (1.0,0.0) * ( 3.0 * ( dadmod_mouse_pxu ) / 4.0 ) + (0.0,1.0) * ( <mm_h> / 4.0 ) )
+    rgba = <mm_col>
+    alpha = 0.9
+    z_priority = 1001
+    }
+endscript
+
+dadmod_walkcam_opt = 1
+
+dadmod_walkcam_n = 0
+
+script dadmod_walkcam_tick
+    Change dadmod_walkcam_n = ( ( dadmod_walkcam_n ) + 1 )
+    if (( dadmod_walkcam_n ) > 15)
+        Change dadmod_walkcam_n = 0
+        wc_opt = 1
+        if THUGRECOMP_SettingLoad key = "mouse_camera"
+            wc_opt = <value>
+        endif
+        Change dadmod_walkcam_opt = <wc_opt>
+    endif
+    wc_on = 0
+    wc_quit = 1
+    if not LevelIs Load_MainMenu
+        if ObjectExists id = skater
+            if ObjectExists id = skatercam0
+                wc_quit = 0
+                if (( dadmod_walkcam_opt ) = 1)
+                    if Skater : Walking
+                        wc_on = 1
+                    endif
+                endif
+            endif
+        endif
+    endif
+    if (<wc_on> = 1)
+        if Skater : Driving
+            wc_on = 0
+        endif
+        if IsTrue view_mode
+            wc_on = 0
+        endif
+        if IsObserving
+            wc_on = 0
+        endif
+        if ScreenElementExists id = current_menu_anchor
+            wc_on = 0
+        endif
+        if ScreenElementExists id = current_menu
+            wc_on = 0
+        endif
+        if ScreenElementExists id = dialog_box_anchor
+            wc_on = 0
+        endif
+        if ScreenElementExists id = keyboard_anchor
+            wc_on = 0
+        endif
+        if root_window : GetSingleTag dadmod_noclip
+            if (<dadmod_noclip> > 0)
+                wc_on = 0
+            endif
+        endif
+        if GetCurrentSkaterCamAnimName
+            if GotParam CurrentSkaterCamAnimName
+                wc_on = 0
+            endif
+        endif
+    endif
+    if (<wc_quit> = 1)
+        THUGRECOMP_WalkCam quit = 1
+    else
+        Skater : Obj_GetPosition
+        wc_sp = <Pos>
+        Skater : Obj_GetOrientation
+        wc_hx = <x>
+        wc_hz = <z>
+        skatercam0 : Obj_GetPosition
+        wc_cp = <Pos>
+        skatercam0 : Obj_GetOrientation
+        THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+    endif
+    if GotParam wc_state
+        if (<wc_state> = 1)
+            if not ObjectExists id = dadmod_orbit_cam
+                CreateCompositeObject {
+                Components = menucam_composite_structure
+                params = { Name = dadmod_orbit_cam }
+                }
+            endif
+            dadmod_orbit_cam : Obj_SetPosition position = <cam_pos>
+            dadmod_orbit_cam : Obj_SetOrientation dir = <cam_dir>
+            SetActiveCamera id = dadmod_orbit_cam
+        endif
+        if (<wc_state> = 2)
+            restore_skater_camera
+        endif
+    endif
+endscript
+
 dadmod_item_catalog = [
 { name = "mmopt_scene" b = 0 p = { id = mmopt_scene key = "menu_scene" label = "Menu scene" desc = "The stock Skate Shop (normal or Halloween), your custom menu, or Starred: each start shows one of the menus you starred in Custom menus. Loads right away" } }
 { name = "mmopt_saved" b = 0 p = { id = mmopt_saved key = "saved_menu" label = "Custom menus" desc = "Main menus you saved while skating (Quick Menu > Set Main Menu Here). Pick one to load it. Right stars menus for Menu scene Starred. F8 (or X / Square on a controller) twice deletes one" } }
@@ -4150,8 +5135,9 @@ dadmod_item_catalog = [
 { name = "mui_itemfx5" b = 1 p = { id = mui_itemfx5 key = "ui_item5_fx" label = "Kalimod Features" kind = fx min = 0 max = 5 def = 0 desc = "Effect for Kalimod Features on the main screen when it is not highlighted: fade, flash, scan or matrix" } }
 { name = "mui_itemfx6" b = 1 p = { id = mui_itemfx6 key = "ui_item6_fx" label = "Dadmod" kind = fx min = 0 max = 5 def = 0 desc = "Effect for Dadmod on the main screen when it is not highlighted: fade, flash, scan or matrix" } }
 { name = "mui_itemfx7" b = 1 p = { id = mui_itemfx7 key = "ui_item7_fx" label = "Quit Game" kind = fx min = 0 max = 5 def = 0 desc = "Effect for Quit Game on the main screen when it is not highlighted: fade, flash, scan or matrix" } }
-{ name = "gfx_windowed" b = 1 p = { id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen. THUG Pro's own setting, the same one its launcher changes. Shows after you restart the game." pdesc = "Window or fullscreen. Shows after you restart the game." } }
-{ name = "gfx_res" b = 1 p = { id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The game's size: the sizes your monitor supports (in a window, the ones that fit the screen). Sets the window and fullscreen size together. Shows after you restart the game." pdesc = "The game's size. Shows after you restart the game." } }
+{ name = "gfx_windowed" b = 1 p = { id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen (a borderless window that fills the screen). Pick it, then press Apply. Alt+Enter switches it anytime." pdesc = "Window or fullscreen. Pick, then press Apply. Alt+Enter switches anytime." } }
+{ name = "gfx_res" b = 1 p = { id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The window size the game draws at (the sizes that fit your screen). Fullscreen always uses your monitor's own size. Pick it, then press Apply." pdesc = "Window size. Fullscreen always uses your monitor's size. Pick, then Apply." } }
+{ name = "gfx_dispapply" b = 1 p = { id = gfx_dispapply key = "none" label = "Apply" kind = dispapply min = 0 max = 0 def = 0 desc = "Makes the picked display mode and resolution happen now. Press it again within 15 seconds to keep them, or they go back." pdesc = "Apply the picks. Press again within 15 seconds to keep them." } }
 { name = "gfx_postfx" b = 1 p = { id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show." } }
 { name = "gfx_aniso" b = 1 p = { id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little." } }
 { name = "gfx_lodbias" b = 1 p = { id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer." } }
@@ -4179,32 +5165,26 @@ dadmod_item_catalog = [
 { name = "gfx_chroma" b = 1 p = { id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens." } }
 { name = "gfx_vignette" b = 1 p = { id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away." } }
 { name = "gfx_galaxy" b = 1 p = { id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more." } }
-{ name = "gfx_tod" b = 1 p = { id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen), even when the server changes it." } }
-{ name = "gfx_skypop" b = 1 p = { id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 5 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off." } }
-{ name = "gfx_lamps" b = 1 p = { id = gfx_lamps key = "gfx_lamps" label = "Street lights" kind = num min = 0 max = 10 def = 6 desc = "Lamps glow and light up around them in the evening and at night. 0 turns them off." } }
+{ name = "gfx_tod" b = 1 p = { id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it." } }
+{ name = "gfx_skypop" b = 1 p = { id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off." } }
 { name = "gfx_lampadd" b = 1 p = { id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp." } }
 { name = "gfx_lampdel" b = 1 p = { id = gfx_lampdel key = "gfx_lampdel" label = "Remove nearest street light" kind = gfxact min = 0 max = 0 def = 0 desc = "Removes the street light closest to the camera." } }
-{ name = "gfx_skydef" b = 1 p = { id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts the sky back to default: the level's own sky, the level's own time of day and sky boost 5." pdesc = "Back to the level's own sky and time of day, sky boost 5." } }
-{ name = "gfx_daylen" b = 1 p = { id = gfx_daylen key = "gfx_daylen" label = "Day length" kind = gfxlist min = 0 max = 4 def = 2 list = gfx_daylen desc = "How long a full day takes when Time of day is Dynamic." } }
-{ name = "gfx_weather" b = 1 p = { id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_weather desc = "Rain, a thunderstorm, snow or fog over every level, or Dynamic. Only on your screen." } }
-{ name = "gfx_wxclear" b = 1 p = { id = gfx_wxclear key = "gfx_wxclear" label = "Dynamic: clear skies" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "Whether Dynamic weather can pick clear skies. Turn off the ones you do not want." } }
-{ name = "gfx_wxrain" b = 1 p = { id = gfx_wxrain key = "gfx_wxrain" label = "Dynamic: rain" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "Whether Dynamic weather can pick rain. Turn off the ones you do not want." } }
-{ name = "gfx_wxstorm" b = 1 p = { id = gfx_wxstorm key = "gfx_wxstorm" label = "Dynamic: thunderstorms" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "Whether Dynamic weather can pick thunderstorms. Turn off the ones you do not want." } }
-{ name = "gfx_wxsnow" b = 1 p = { id = gfx_wxsnow key = "gfx_wxsnow" label = "Dynamic: snow" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "Whether Dynamic weather can pick snow. Turn off the ones you do not want." } }
-{ name = "gfx_wxfog" b = 1 p = { id = gfx_wxfog key = "gfx_wxfog" label = "Dynamic: fog" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "Whether Dynamic weather can pick fog. Turn off the ones you do not want." } }
-{ name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain, snow or fog is." } }
-{ name = "gfx_fireworks" b = 1 p = { id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fireworks desc = "Fireworks over the level when a game ends. Auto also fires them every few minutes." } }
-{ name = "gfx_fwevery" b = 1 p = { id = gfx_fwevery key = "gfx_fwevery" label = "Auto fireworks every" kind = gfxlist min = 0 max = 3 def = 2 list = gfx_fwevery desc = "How often Auto fireworks go off." } }
+{ name = "gfx_skydef" b = 1 p = { id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default." } }
+{ name = "gfx_weather" b = 1 p = { id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)." } }
+{ name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is." } }
+{ name = "gfx_todfog" b = 1 p = { id = gfx_todfog key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default." } }
+{ name = "gfx_fogamt" b = 1 p = { id = gfx_fogamt key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is." } }
+{ name = "gfx_fireworks" b = 1 p = { id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes." } }
 { name = "gfx_fwnow" b = 1 p = { id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now." } }
 { name = "gfx_fps" b = 1 p = { id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number." } }
 { name = "gfx_shotkey" b = 1 p = { id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder." } }
 { name = "gfx_shothud" b = 1 p = { id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture." } }
-{ name = "gfx_vsync" b = 1 p = { id = gfx_vsync key = "gfx_vsync" label = "V-sync (restart)" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_vsync desc = "Locks frames to your monitor to stop tearing. Needs a restart of the game." } }
-{ name = "gfx_mirror" b = 1 p = { id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal. Only on your screen." pdesc = "Flips the 3D view left to right and swaps steering to match. Only your screen." } }
+{ name = "gfx_vsync" b = 1 p = { id = gfx_vsync key = "gfx_vsync" label = "V-sync" kind = dispvsync min = 0 max = 0 def = 0 desc = "Locks frames to your monitor to stop tearing. Pick it, then press Apply." pdesc = "Locks frames to your monitor. Pick, then press Apply." } }
+{ name = "gfx_framegen" b = 1 p = { id = gfx_framegen key = "gfx_framegen" label = "Frame generation" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_framegen desc = "Adds smooth in-between frames for a 120 to 240 Hz monitor (the game itself still runs at 60). Auto matches your monitor, or pick a rate. Never goes faster than your monitor. Adds a tiny bit of input lag. Changes show right away." pdesc = "In-between frames. Auto matches your monitor, or pick 120 to 240 Hz." } }
+{ name = "gfx_mirror" b = 1 p = { id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal." pdesc = "Flips the 3D view left to right and swaps steering to match." } }
 { name = "gfx_levelsfx" b = 1 p = { id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away." } }
 { name = "gfx_tricksfx" b = 1 p = { id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing." } }
 { name = "gfx_telesfx" b = 1 p = { id = gfx_telesfx key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sounds teleporters and teleporting elevators play in some levels. 0 turns them off. Changes apply to the next teleport." } }
-{ name = "gfx_soundlog" b = 1 p = { id = gfx_soundlog key = "gfx_soundlog" label = "Sound logger" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_soundlog desc = "For finding sound bugs: writes every sound the game plays, and any that fail or get cut off, to dadmod/soundlog.txt. Leave it Off normally." } }
 { name = "gfx_bginput" b = 1 p = { id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away." } }
 { name = "gfx_deadzone" b = 1 p = { id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away." } }
 { name = "gfx_abswap" b = 1 p = { id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away." } }
@@ -4218,7 +5198,8 @@ dadmod_item_catalog = [
 
 script dadmod_square_getup
     dadmod_sqget_get
-    if ( <sqget_on> = 0 )
+    dadmod_abc_get
+    if ( ( <sqget_on> = 0 ) and ( <abc_on> = 0 ) )
         return
     endif
     if IsTrue THUGPRO_ObserveOn
@@ -4227,40 +5208,67 @@ script dadmod_square_getup
     if ( ( GameModeEquals is_firefight ) or ( GameModeEquals is_king ) or ( GameModeEquals is_ctf ) or ( IsTrue AlreadyEndedRun ) )
         return
     endif
-    begin
-        if not IsInBail
-            return
-        endif
-        if not Held Square
-            break
-        endif
-        wait 1 gameframe
-    repeat
-    begin
-        if not IsInBail
-            return
-        endif
-        if Held Square
-            dadmod_square_getup_blocked
-            if ( <blocked> = 0 )
+    if ( <abc_on> = 1 )
+        begin
+            if not IsInBail
+                return
+            endif
+            if not InAir
                 break
             endif
-        endif
-        wait 1 gameframe
-    repeat
-    begin
-        if not IsInBail
-            return
-        endif
-        if not InAir
-            break
-        endif
-        wait 1 gameframe
-    repeat
+            wait 1 gameframe
+        repeat
+        abc_frames = 0
+        begin
+            if not IsInBail
+                return
+            endif
+            if ( <abc_frames> > 20 )
+                break
+            endif
+            abc_frames = ( <abc_frames> + 1 )
+            wait 1 gameframe
+        repeat
+    else
+        begin
+            if not IsInBail
+                return
+            endif
+            if not Held Square
+                break
+            endif
+            wait 1 gameframe
+        repeat
+        begin
+            if not IsInBail
+                return
+            endif
+            if Held Square
+                dadmod_square_getup_blocked
+                if ( <blocked> = 0 )
+                    break
+                endif
+            endif
+            wait 1 gameframe
+        repeat
+        begin
+            if not IsInBail
+                return
+            endif
+            if not InAir
+                break
+            endif
+            wait 1 gameframe
+        repeat
+    endif
     if IsTrue AlreadyEndedRun
         return
     endif
     SetCurrentBailEndpose
+    dadmod_bail_vanish
+    if ( <abc_abort> = 1 )
+        return
+    endif
     MakeSkaterGoto dadmod_bail_cancel_state
 endscript
 
@@ -4280,6 +5288,8 @@ script dadmod_bail_cancel_state
     ResetEventHandlersFromTable StartSkateExceptionTable
     VibrateOff
     PlayAnim anim = idle BlendPeriod = 0.15
+    Obj_KillSpawnedScript Name = dadmod_bail_reform
+    Obj_SpawnScript dadmod_bail_reform
     goto BailDone
 endscript
 
@@ -4339,6 +5349,196 @@ script dadmod_sqget_unlock
     wait 6 gameframes
     if ScreenElementExists id = dadmod_sqget_item
         dadmod_sqget_item : SetTags sqget_lock = 0
+    endif
+endscript
+
+script dadmod_bail_vanish
+    dadmod_abc_play part = abc_vanish
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 1 )
+        DestroyFlexibleParticleSystem Name = dadmod_abc_fx_out
+        CreateFlexibleParticleSystem Name = dadmod_abc_fx_out params_script = dadmod_abc_particle_params
+    endif
+    abc_on_f = 5
+    begin
+        if not IsInBail
+            unhide
+            return abc_abort = 1
+        endif
+        hide
+        wait 2 frames
+        unhide
+        wait <abc_on_f> frames
+        abc_on_f = ( <abc_on_f> - 1 )
+        if ( <abc_on_f> < 1 )
+            break
+        endif
+    repeat
+    if not IsInBail
+        return abc_abort = 1
+    endif
+    hide
+    Obj_ShadowOff
+    wait 4 frames
+    return abc_abort = 0
+endscript
+
+script dadmod_bail_reform
+    hide
+    Obj_ShadowOff
+    wait 3 frames
+    dadmod_abc_play part = abc_reform
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 1 )
+        DestroyFlexibleParticleSystem Name = dadmod_abc_fx_in
+        CreateFlexibleParticleSystem Name = dadmod_abc_fx_in params_script = dadmod_abc_particle_params
+    endif
+    abc_on_f = 1
+    begin
+        unhide
+        wait <abc_on_f> frames
+        hide
+        wait 2 frames
+        abc_on_f = ( <abc_on_f> + 1 )
+        if ( <abc_on_f> > 5 )
+            break
+        endif
+    repeat
+    unhide
+    Obj_ShadowOn ShadowType = Detailed
+endscript
+
+dadmod_abc_particle_params = {
+bone = Bone_Pelvis
+EnableRotate
+emitScript = emit_dadmod_abc_particle
+emitterIndependent = 1
+max = 40
+Type = Flat
+texture = apm_spray_01
+BlendMode = Add
+}
+
+script emit_dadmod_abc_particle
+    setEmitRange width = 30.0 height = 50.0 depth = 0.0
+    setCircularEmit circular = 1
+    setLife min = 0.2 max = 0.45
+    setAngleSpread spread = 0.5
+    setSpeedRange min = 1.0 max = 4.0
+    setEmitTarget x = 0.0 y = 1.0 z = 0.0
+    setForce x = 0.0 y = 0.05 z = 0.0
+    setParticleSize sw = 6.0 ew = 1.0
+    setColor sr = 120 sg = 170 sb = 255 sa = 255 er = 60 eg = 40 eb = 255 ea = 0
+    EmitRate rate = 120.0
+    wait 0.3 seconds
+    EmitRate rate = 0
+    destroy ifEmpty = 1
+endscript
+
+script dadmod_abc_get
+    on = 0
+    if THUGRECOMP_SettingLoad key = "auto_bail_cancel"
+        if ( <value> = 1 )
+            on = 1
+        endif
+    endif
+    return abc_on = <on>
+endscript
+
+script dadmod_abc_text
+    dadmod_abc_get
+    if ( <abc_on> = 1 )
+        return abc_text = "On"
+    endif
+    return abc_text = "Off"
+endscript
+
+script dadmod_abc_toggle
+    if ScreenElementExists id = dadmod_abc_item
+        if dadmod_abc_item : GetSingleTag abc_lock
+            if ( <abc_lock> = 1 )
+                return
+            endif
+        endif
+        dadmod_abc_item : SetTags abc_lock = 1
+        SpawnScript dadmod_abc_unlock
+    endif
+    dadmod_abc_get
+    if ( <abc_on> = 1 )
+        on = 0
+    else
+        on = 1
+    endif
+    THUGRECOMP_SettingSave key = "auto_bail_cancel" value = <on>
+    dadmod_abc_text
+    thugpro_menu_item_update_extra_text id = dadmod_abc_item text = <abc_text>
+endscript
+
+script dadmod_abc_unlock
+    wait 6 gameframes
+    if ScreenElementExists id = dadmod_abc_item
+        dadmod_abc_item : SetTags abc_lock = 0
+    endif
+endscript
+
+script dadmod_abc_play part = abc_vanish
+    if ( <part> = abc_vanish )
+        KillSpawnedScript Name = dadmod_abc_whoosh_later
+        SpawnScript dadmod_abc_whoosh_later
+    endif
+endscript
+
+script dadmod_abc_whoosh_later
+    wait 8 gameframes
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 1 )
+        PlaySound Whoosh vol = 100
+    endif
+endscript
+
+script dadmod_abcsnd_get
+    on = 1
+    if THUGRECOMP_SettingLoad key = "bail_cancel_sound_on"
+        if ( <value> = 0 )
+            on = 0
+        endif
+    endif
+    return abcsnd_on = <on>
+endscript
+
+script dadmod_abcsnd_text
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 1 )
+        return abcsnd_text = "On"
+    endif
+    return abcsnd_text = "Off"
+endscript
+
+script dadmod_abcsnd_toggle
+    if ScreenElementExists id = dadmod_abcsnd_item
+        if dadmod_abcsnd_item : GetSingleTag abcsnd_lock
+            if ( <abcsnd_lock> = 1 )
+                return
+            endif
+        endif
+        dadmod_abcsnd_item : SetTags abcsnd_lock = 1
+        SpawnScript dadmod_abcsnd_unlock
+    endif
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 1 )
+        on = 0
+    else
+        on = 1
+    endif
+    THUGRECOMP_SettingSave key = "bail_cancel_sound_on" value = <on>
+    dadmod_abcsnd_text
+    thugpro_menu_item_update_extra_text id = dadmod_abcsnd_item text = <abcsnd_text>
+endscript
+
+script dadmod_abcsnd_unlock
+    wait 6 gameframes
+    if ScreenElementExists id = dadmod_abcsnd_item
+        dadmod_abcsnd_item : SetTags abcsnd_lock = 0
     endif
 endscript
 
@@ -4647,6 +5847,230 @@ script dadmod_midload_online_note
     { font = small text = "OK" pad_choose_script = dadmod_midload_close }
     ]
     }
+endscript
+
+dadmod_skc_scales_ready = 0
+
+dadmod_skc_tricks_ready = 0
+
+dadmod_skc_undo_map = { }
+
+dadmod_skc_undo_specials = [ { } { } { } { } { } { } { } { } { } { } { } { } ]
+
+script dadmod_skc_list_items
+    THUGRECOMP_SkcCount
+    <dm_total> = <count>
+    if ( <dm_total> = 0 )
+        make_thugpro_menu_item text = "No saved skaters found" pad_choose_script = nullscript not_focusable
+        return
+    endif
+    <dm_n> = 0
+    begin
+        THUGRECOMP_SkcName index = <dm_n>
+        make_thugpro_menu_item {
+        text = <name>
+        pad_choose_script = <dm_run>
+        pad_choose_params = { index = <dm_n> }
+        }
+        <dm_n> = ( <dm_n> + 1 )
+    repeat <dm_total>
+endscript
+
+script dadmod_skc_scales_menu
+    dadmod_es_open name = dadmod_skc_list title = "Copy Scales From" back_script = dadmod_skc_scales_back back_params = { focus_target = dadmod_es_plain_0 }
+    dadmod_skc_list_items dm_run = dadmod_skc_scales_pick
+    thugpro_menu_finalize
+endscript
+
+script dadmod_skc_scales_back
+    dadmod_es_options_menu options_array = dadmod_es_scale cam_pos = General <...>
+endscript
+
+script dadmod_skc_scales_pick
+    dadmod_me
+    GetPlayerAppearance player = <me>
+    <dm_before> = <profile>
+    <skc_app> = <profile>
+    if THUGRECOMP_SkcScales index = <index>
+        dadmod_undo_save
+        Change dadmod_skc_scales_undo = <dm_before>
+        Change dadmod_skc_scales_ready = 1
+        dadmod_undo_apply to = <skc_app> male = <me_male>
+        dadmod_midload_mark
+    endif
+    dadmod_skc_scales_back focus_target = dadmod_es_plain_0
+endscript
+
+script dadmod_skc_scales_undo
+    if IsTrue dadmod_skc_scales_ready
+        dadmod_me
+        GetPlayerAppearance player = <me>
+        <skc_app> = <profile>
+        <skc_from> = ( dadmod_skc_scales_undo )
+        if THUGRECOMP_SkcScales
+            dadmod_undo_save
+            dadmod_undo_apply to = <skc_app> male = <me_male>
+            dadmod_midload_mark
+        endif
+        Change dadmod_skc_scales_ready = 0
+    endif
+    dadmod_skc_scales_back focus_target = dadmod_es_plain_0
+endscript
+
+script dadmod_skc_et_items
+    if not ScreenElementExists id = MoreOptions_boneless_anim
+        return
+    endif
+    if ScreenElementExists id = dadmod_skc_copy_tricks
+        return
+    endif
+    make_thugpro_menu_item {
+    id = dadmod_skc_copy_tricks
+    text = "Copy Tricks From..."
+    pad_choose_script = dadmod_skc_tricks_menu
+    pad_choose_params = { }
+    description_text = "Use the tricks and specials of another saved skater"
+    }
+    if IsTrue dadmod_skc_tricks_ready
+        make_thugpro_menu_item {
+        id = dadmod_skc_undo_tricks
+        text = "Undo Copy Tricks"
+        pad_choose_script = dadmod_skc_tricks_undo
+        pad_choose_params = { }
+        description_text = "Put back the tricks you had before the copy"
+        }
+    else
+        make_thugpro_menu_item {
+        id = dadmod_skc_undo_tricks
+        text = "Undo Copy Tricks"
+        pad_choose_script = nullscript
+        not_focusable
+        description_text = "Put back the tricks you had before the copy"
+        }
+    endif
+endscript
+
+script dadmod_skc_tricks_back
+    if LevelIs Load_MainMenu
+        create_edit_tricks_menu from_ss_menu focus_target = <focus_target>
+    else
+        create_edit_tricks_menu focus_target = <focus_target>
+    endif
+endscript
+
+script dadmod_skc_tricks_menu
+    if LevelIs Load_MainMenu
+        <dm_style> = MENU_STYLE_RIGHT
+        <dm_back> = { from_ss_menu focus_target = dadmod_skc_copy_tricks }
+    else
+        <dm_style> = MENU_STYLE_LEFT
+        <dm_back> = { focus_target = dadmod_skc_copy_tricks }
+    endif
+    thugpro_menu_create {
+    menu_name = dadmod_skc_list
+    menu_title = "Copy Tricks From"
+    menu_style = <dm_style>
+    helper_text = generic_helper_text
+    pad_back_script = create_edit_tricks_menu
+    pad_back_params = <dm_back>
+    boxed
+    scrolling
+    }
+    dadmod_skc_list_items dm_run = dadmod_skc_tricks_pick
+    thugpro_menu_finalize
+endscript
+
+script dadmod_skc_bind_special
+    if ( <dm_cat> = 1 )
+        BindTrickToKeyCombo {
+        special
+        index = <dm_slot_index>
+        key_combo = <dm_slot>
+        trick = <dm_trick>
+        update_mappings = 1
+        cat
+        }
+    else
+        BindTrickToKeyCombo {
+        special
+        index = <dm_slot_index>
+        key_combo = <dm_slot>
+        trick = <dm_trick>
+        update_mappings = 1
+        }
+    endif
+endscript
+
+script dadmod_skc_tricks_refresh
+    GetCurrentSkaterProfileIndex
+    if not InSplitScreenGame
+        UpdateTrickMappings Skater = <currentSkaterProfileIndex>
+    endif
+    GoalManager_ReplaceTrickText All
+endscript
+
+script dadmod_skc_tricks_snapshot
+    GetCurrentSkaterProfileIndex
+    GetSkaterProfileInfo player = <currentSkaterProfileIndex>
+    Change dadmod_skc_undo_map = <trick_mapping>
+    <dm_list> = [ { } { } { } { } { } { } { } { } { } { } { } { } ]
+    <dm_n> = 0
+    begin
+        GetSpecialTrickInfo index = <dm_n>
+        SetArrayElement arrayname = dm_list index = <dm_n> newvalue = { slot = <special_trickslot> trick = <special_trickname> cat = <isCat> }
+        <dm_n> = ( <dm_n> + 1 )
+    repeat 12
+    Change dadmod_skc_undo_specials = <dm_list>
+endscript
+
+script dadmod_skc_tricks_pick
+    if not THUGRECOMP_SkcTricks index = <index>
+        dadmod_skc_tricks_back focus_target = dadmod_skc_copy_tricks
+        return
+    endif
+    dadmod_skc_tricks_snapshot
+    <dm_n> = 0
+    begin
+        RemoveParameter slot
+        RemoveParameter trick
+        RemoveParameter cat
+        <dm_slot> = Unassigned
+        <dm_trick> = Unassigned
+        <dm_cat> = 0
+        if ( <dm_n> < <skc_specials> )
+            if THUGRECOMP_SkcSpecial index = <dm_n>
+                <dm_slot> = <slot>
+                <dm_trick> = <trick>
+                <dm_cat> = <cat>
+            endif
+        endif
+        dadmod_skc_bind_special dm_slot_index = <dm_n> dm_slot = <dm_slot> dm_trick = <dm_trick> dm_cat = <dm_cat>
+        <dm_n> = ( <dm_n> + 1 )
+    repeat 12
+    GetCurrentSkaterProfileIndex
+    SetSkaterProfileInfo player = <currentSkaterProfileIndex> params = { trick_mapping = <skc_trick_mapping> }
+    dadmod_skc_tricks_refresh
+    Change dadmod_skc_tricks_ready = 1
+    dadmod_midload_mark
+    dadmod_skc_tricks_back focus_target = dadmod_skc_copy_tricks
+endscript
+
+script dadmod_skc_tricks_undo
+    if IsTrue dadmod_skc_tricks_ready
+        <dm_old> = ( dadmod_skc_undo_specials )
+        <dm_n> = 0
+        begin
+            <dm_e> = ( <dm_old> [ <dm_n> ] )
+            dadmod_skc_bind_special dm_slot_index = <dm_n> dm_slot = ( <dm_e> . slot ) dm_trick = ( <dm_e> . trick ) dm_cat = ( <dm_e> . cat )
+            <dm_n> = ( <dm_n> + 1 )
+        repeat 12
+        GetCurrentSkaterProfileIndex
+        SetSkaterProfileInfo player = <currentSkaterProfileIndex> params = { trick_mapping = ( dadmod_skc_undo_map ) }
+        dadmod_skc_tricks_refresh
+        Change dadmod_skc_tricks_ready = 0
+        dadmod_midload_mark
+    endif
+    dadmod_skc_tricks_back focus_target = dadmod_skc_copy_tricks
 endscript
 
 dadmod_bhra_keep = 0
@@ -5224,6 +6648,9 @@ script thugpro_menu_driver
     last_menu = 0
     player_cam_on = 0
     known_menu = 0
+    AppendSuffixToChecksum base = #"0xb4315bae" SuffixString = "_menu"
+    kali_feat_menu = <appended_id>
+    RemoveParameter appended_id
     begin
         wait 1 gameframe
         menu_now = 0
@@ -5296,6 +6723,36 @@ script thugpro_menu_driver
         endif
         if ScreenElementExists id = dadmod_lobby_wait
             menu_now = 11
+        endif
+        if ScreenElementExists id = game_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = general_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = pre_display_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = hud_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = panel_message_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = camera_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = sound_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = music_options_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = control_setup_menu
+            menu_now = 12
+        endif
+        if ScreenElementExists id = <kali_feat_menu>
+            menu_now = 12
         endif
         if THUGRECOMP_MenuCamEdit query = 1
             menu_now = 9
@@ -6105,10 +7562,17 @@ script dadmod_menu
     pad_choose_script = dadmod_throw_menu
     }
     make_thugpro_menu_item {
+    text = "Cars  >"
+    sub_label = "Cars"
+    id = dadmod_pause_cars
+    description_text = "Drive a car. Everyone on the server sees it, even players without dadmod"
+    pad_choose_script = dadmod_cars_menu
+    }
+    make_thugpro_menu_item {
     text = "Sky & weather  >"
     sub_label = "Sky & weather"
     id = dadmod_pause_skywx
-    description_text = "Sky, time of day, sky boost and weather"
+    description_text = "Sky, fog, time of day, weather and fireworks"
     pad_choose_script = dadmod_pause_skywx_menu
     }
     make_thugpro_menu_item {
@@ -6169,7 +7633,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_balance_item
     text = "Balance"
     extra_text = <balance_text>
-    description_text = "How hard grinds, manuals and lips are to balance, using the stock game's Easy and Sick balance. Default is the stock game; Infinite never tips. Only you."
+    description_text = "How hard grinds, manuals and lips are to balance, using the stock game's Easy and Sick balance. Default is the stock game; Infinite never tips."
     option_arrows_callback = dadmod_balance_cycle
     option_arrows
     pad_choose
@@ -6179,7 +7643,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_speed_item
     text = "Player speed"
     extra_text = <speed_text>
-    description_text = "1-4 slow motion, 5 normal, 6-10 a higher top speed that you build up to. Only you."
+    description_text = "1-4 slow motion, 5 normal, 6-10 a higher top speed that you build up to."
     option_arrows_callback = dadmod_speed_cycle
     option_arrows
     pad_choose
@@ -6189,8 +7653,28 @@ script dadmod_pause_gameplay_menu
     id = dadmod_sqget_item
     text = "Bail cancel"
     extra_text = <sqget_text>
-    description_text = "When you bail, press Square to get straight back on your board. Only you; off in Firefight, King of the Hill and Capture the Flag."
+    description_text = "When you bail, press Square to get straight back on your board. Off in Firefight, King of the Hill and Capture the Flag."
     option_arrows_callback = dadmod_sqget_toggle
+    option_arrows
+    pad_choose
+    }
+    dadmod_abc_text
+    make_thugpro_menu_item {
+    id = dadmod_abc_item
+    text = "Auto bail cancel"
+    extra_text = <abc_text>
+    description_text = "Every bail ends on its own: you break apart and reappear on your board. Off in Firefight, King of the Hill and Capture the Flag."
+    option_arrows_callback = dadmod_abc_toggle
+    option_arrows
+    pad_choose
+    }
+    dadmod_abcsnd_text
+    make_thugpro_menu_item {
+    id = dadmod_abcsnd_item
+    text = "Bail cancel effects"
+    extra_text = <abcsnd_text>
+    description_text = "The whoosh sound and blue sparkles when you break apart on a bail cancel. Only you see and hear them."
+    option_arrows_callback = dadmod_abcsnd_toggle
     option_arrows
     pad_choose
     }
@@ -6199,7 +7683,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_bhra_keep_item
     text = "BHRA keeps combo"
     extra_text = <bhra_keep_text>
-    description_text = "Bunny Hop Revert (BHRA): a hop then a revert in the air keeps your combo going. Only you."
+    description_text = "Bunny Hop Revert (BHRA): a hop then a revert in the air keeps your combo going."
     option_arrows_callback = dadmod_bhra_keep_toggle
     option_arrows
     pad_choose
@@ -6208,7 +7692,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_bhra_easy_item
     text = "Easy BHRA"
     extra_text = <bhra_easy_text>
-    description_text = "Longer revert window around the hop, so Bunny Hop Reverts are easier to land. Only you."
+    description_text = "Longer revert window around the hop, so Bunny Hop Reverts are easier to land."
     option_arrows_callback = dadmod_bhra_easy_toggle
     option_arrows
     pad_choose
@@ -6217,7 +7701,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_bhra_style_item
     text = "BHRA style"
     extra_text = <bhra_style_text>
-    description_text = "How your Bunny Hop Revert looks after a land pivot hop: Land Pivot or Revert. Needs Land Pivots on. Only you."
+    description_text = "How your Bunny Hop Revert looks after a land pivot hop: Land Pivot or Revert. Needs Land Pivots on."
     option_arrows_callback = dadmod_bhra_style_toggle
     option_arrows
     pad_choose
@@ -6227,7 +7711,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_tsfx_item
     text = "Trick Screen Effects"
     extra_text = <tsfx_text>
-    description_text = "The full-screen effects of special tricks, like the 3D Scary Grind film look. Only your screen."
+    description_text = "The full-screen effects of special tricks, like the 3D Scary Grind film look."
     option_arrows_callback = dadmod_tsfx_toggle
     option_arrows
     pad_choose
@@ -6246,23 +7730,23 @@ script dadmod_pause_gameplay_menu
     option_arrows
     pad_choose
     }
-    dadmod_ui_item id = gfx_mirror_pause key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right and swaps steering to match. Only your screen."
+    dadmod_ui_item id = gfx_mirror_pause key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right and swaps steering to match."
+    dadmod_ui_item id = dadmod_mousecam_pause key = "mouse_camera" label = "Mouse camera" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_mirror desc = "On foot, hold the left mouse button and drag to look around your skater. Wheel zooms, middle click resets."
     thugpro_menu_finalize
 endscript
 
 script dadmod_pause_skywx_menu
     dadmod_pause_sub_create name = dadmod_skywx title = "sky & weather" back_id = dadmod_pause_skywx
-    dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap the sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
-    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own (only your screen), even when the server changes it."
-    dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 5 desc = "Richer sky colors to match the time of day, with stars at night."
-    dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Back to the level's own sky and time of day, sky boost 5."
-    make_thugpro_menu_item {
-    text = "Weather  >"
-    sub_label = "Weather"
-    id = dadmod_pause_wx
-    description_text = "Rain, thunderstorms, snow, fog and fireworks"
-    pad_choose_script = dadmod_pause_weather
-    }
+    dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
+    dadmod_ui_item id = gfx_todfog_pause key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
+    dadmod_ui_item id = gfx_fogamt_pause key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
+    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
+    dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
+    dadmod_ui_item id = gfx_weather_pause key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
+    dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
+    dadmod_ui_item id = gfx_fireworks_pause key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
+    dadmod_ui_item id = gfx_fwnow_pause key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
+    dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
     if GotParam focus_id
         thugpro_menu_finalize focus_target = <focus_id>
     else
@@ -6275,7 +7759,6 @@ script dadmod_pause_sound_menu
     dadmod_ui_item id = gfx_levelsfx_pause key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines and other map sounds. 0 is off."
     dadmod_ui_item id = gfx_tricksfx_pause key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of special trick clips, like the guitar grind. 0 is off."
     dadmod_ui_item id = gfx_telesfx_pause key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of teleporter and teleporting elevator sounds. 0 is off."
-    dadmod_ui_item id = gfx_soundlog_pause key = "gfx_soundlog" label = "Sound logger" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_soundlog desc = "Writes every sound to dadmod/soundlog.txt, for finding sound bugs."
     thugpro_menu_finalize
 endscript
 
@@ -6308,14 +7791,13 @@ script dadmod_pause_controls_menu
 endscript
 
 dadmod_pause_gfx_groups = [
-{ title = "Display" desc = "Windowed or fullscreen and the resolution (shows after a restart)" items = [ "gfx_windowed" "gfx_res" ] }
+{ title = "Display" desc = "Windowed or fullscreen, the resolution and v-sync, applied with Apply" items = [ "gfx_windowed" "gfx_res" "gfx_vsync" "gfx_dispapply" ] }
 { title = "Textures" desc = "Texture filtering and sharpness" items = [ "gfx_aniso" "gfx_lodbias" "gfx_uismooth" ] }
 { title = "Anti-aliasing" desc = "Smooth jagged edges" items = [ "gfx_fxaa" "gfx_msaa" ] }
 { title = "Effects" desc = "Sharpening, bloom, ambient occlusion, haze, depth of field, outlines and motion blur" items = [ "gfx_sharpen" "gfx_bloom" "gfx_ssao" "gfx_fog" "gfx_dof" "gfx_outline" "gfx_mblur" ] }
 { title = "Color" desc = "A color look plus brightness, contrast, saturation, vibrance, gamma, temperature and tint" items = [ "gfx_preset" "gfx_bright" "gfx_contrast" "gfx_sat" "gfx_vibrance" "gfx_gamma" "gfx_temp" "gfx_tint" ] }
 { title = "Retro" desc = "Pixelate, CRT TV, film grain, chromatic aberration and vignette" items = [ "gfx_pixelate" "gfx_crt" "gfx_grain" "gfx_chroma" "gfx_vignette" ] }
-{ title = "Sky" desc = "Sky style, time of day (fixed or dynamic) and sky boost" items = [ "gfx_galaxy" "gfx_tod" "gfx_daylen" "gfx_lamps" "gfx_lampadd" "gfx_lampdel" "gfx_skypop" "gfx_skydef" ] }
-{ title = "Extras" desc = "FPS counter, screenshots, v-sync and mirror mode" items = [ "gfx_fps" "gfx_shotkey" "gfx_shothud" "gfx_vsync" "gfx_mirror" ] }
+{ title = "Extras" desc = "FPS counter, screenshots and frame generation" items = [ "gfx_fps" "gfx_shotkey" "gfx_shothud" "gfx_framegen" ] }
 ]
 
 dadmod_gfx_from_pause = 0
@@ -6395,9 +7877,11 @@ script dadmod_pause_gfx_group
     thugpro_menu_finalize
 endscript
 
-dadmod_pause_weather_items = [ "gfx_weather" "gfx_wxclear" "gfx_wxrain" "gfx_wxstorm" "gfx_wxsnow" "gfx_wxfog" "gfx_wxamt" "gfx_fireworks" "gfx_fwevery" "gfx_fwnow" ]
+dadmod_pause_weather_items = [ "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_tod" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
 
 script dadmod_pause_weather
+    dadmod_pause_skywx_menu
+    return
     dialog_box_exit
     generic_menu_cleanup
     thugpro_menu_create {
@@ -6955,2383 +8439,6 @@ more_level_qbs = [
 "levels\\NO\\NO_level_particle_data.qb"
 "levels\\NO\\NO_cutscene_fast_particle_data.qb"
 "levels\\NO\\NO_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_st = {
-structure_name = level_Mainmenu_st
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 10.25
-COIM_size = 1331200
-tod_manager_active = 1
-pre = "ST_scripts.pre"
-scnpre = "STscn.pre"
-level = "ST"
-sky = "ST_Sky"
-colpre = "STcol.pre"
-pedpre = "STped.pre"
-level_sfx_qb = "levels\\ST\\ST_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_06 }
-{ Type = guest Name = sheckler }
-{ Type = flavor Name = chainsawskater }
-]
-overview_cam_zoom = (0.0,-2e+03,1e+03)
-thugpro_prx = "mainmenu_st_scripts.pre"
-qb = "levels\\mainmenu_st\\ST.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\ST\\ST_scripts.qb"
-"levels\\ST\\ST_cutscene_particle_data.qb"
-"levels\\ST\\ST_level_particle_data.qb"
-"levels\\ST\\ST_cutscene_fast_particle_data.qb"
-"levels\\ST\\ST_level_fast_particle_data.qb"
-"levels\\st\\st_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_se = {
-structure_name = level_Mainmenu_se
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 9.47
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "SE_scripts.pre"
-scnpre = "SEscn.pre"
-level = "SE"
-sky = "SE_Sky"
-colpre = "SEcol.pre"
-pedpre = "SEped.pre"
-level_sfx_qb = "levels\\SE\\SE_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-uber_frig_height = 8e+02
-overview_cam_zoom = (0.0,2e+04,-1e+04)
-thugpro_prx = "mainmenu_se_scripts.pre"
-qb = "levels\\mainmenu_se\\SE.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\SE\\SE_scripts.qb"
-"levels\\SE\\SE_cutscene_particle_data.qb"
-"levels\\SE\\SE_level_particle_data.qb"
-"levels\\SE\\SE_cutscene_fast_particle_data.qb"
-"levels\\SE\\SE_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_se2 = {
-structure_name = level_Mainmenu_se2
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 7.31
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "SE2_scripts.pre"
-scnpre = "SE2scn.pre"
-level = "SE2"
-sky = "SE2_Sky"
-colpre = "SE2col.pre"
-pedpre = "SE2ped.pre"
-level_sfx_qb = "levels\\SE2\\SE2_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_zoom = (0.0,8e+03,0.0)
-overview_cam_hide_objects = [ CG_Vortex_01 CG_Vortex_02 CG_Vortex3_spinny ]
-thugpro_prx = "mainmenu_se2_scripts.pre"
-qb = "levels\\mainmenu_se2\\SE2.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\SE2\\SE2_scripts.qb"
-"levels\\SE2\\SE2_cutscene_particle_data.qb"
-"levels\\SE2\\SE2_level_particle_data.qb"
-"levels\\SE2\\SE2_cutscene_fast_particle_data.qb"
-"levels\\SE2\\SE2_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_la = {
-structure_name = level_Mainmenu_la
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-loading_time = 8.67
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "LA_scripts.pre"
-scnpre = "LAscn.pre"
-level = "LA"
-sky = "LA_Sky"
-colpre = "LAcol.pre"
-pedpre = "LAped.pre"
-level_sfx_qb = "levels\\LA\\LA_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_zoom = (0.0,1e+04,0.0)
-thugpro_prx = "mainmenu_la_scripts.pre"
-qb = "levels\\mainmenu_la\\la.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\LA\\thugpro\\LA_scripts.qb"
-"levels\\LA\\LA_cutscene_particle_data.qb"
-"levels\\LA\\LA_level_particle_data.qb"
-"levels\\LA\\LA_cutscene_fast_particle_data.qb"
-"levels\\LA\\LA_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sc = {
-structure_name = level_Mainmenu_sc
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-loading_time = 6.15
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "SC_scripts.pre"
-scnpre = "SCscn.pre"
-level = "SC"
-sky = "SC_Sky"
-thugpro_col_pre
-pedpre = "SCped.pre"
-level_sfx_qb = "levels\\SC\\SC_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_angle = -45
-overview_cam_zoom = (1e+03,0.0,-1e+03)
-thugpro_prx = "mainmenu_sc_scripts.pre"
-qb = "levels\\mainmenu_sc\\SC.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\SC\\SC_scripts.qb"
-"levels\\SC\\SC_cutscene_particle_data.qb"
-"levels\\SC\\SC_level_particle_data.qb"
-"levels\\SC\\SC_cutscene_fast_particle_data.qb"
-"levels\\SC\\SC_level_fast_particle_data.qb"
-"levels\\sc\\sc_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_hn = {
-structure_name = level_Mainmenu_hn
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "hn"
-ambient_red = 72
-ambient_green = 72
-ambient_blue = 72
-ambient_mod_factor = 0.2
-heading_0 = -30
-pitch_0 = -60
-red_0 = 110
-green_0 = 110
-blue_0 = 105
-mod_factor_0 = 0.9
-heading_1 = 200
-pitch_1 = 33
-red_1 = 23
-green_1 = 24
-blue_1 = 30
-mod_factor_1 = 0.9
-fog_red = 0
-fog_green = 0
-fog_blue = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "hn_scripts.pre"
-scnpre = "hnscn.pre"
-colpre = "hncol.pre"
-indoor
-overview_cam_zoom = (-2.5e+03,4e+03,0.0)
-overview_cam_hide_objects = [
-roof_break_heli
-piece_roof_fall
-piece_roof_fall_01
-roof_piece_fall_03
-SkHan_Wall2
-SkHan_Wall5
-SkHan_Wall0
-SkHan_Wall15
-SkHan_Wall16
-SkHan_Wall17
-JG_HN_TunnelRoof
-Han_Wind_Tunnel7
-]
-thugpro_prx = "mainmenu_hn_scripts.pre"
-qb = "levels\\mainmenu_hn\\hn.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\hn\\hn_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_vn = {
-structure_name = level_Mainmenu_vn
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "VN"
-sky = "vn_Sky"
-ambient_red = 72
-ambient_green = 72
-ambient_blue = 72
-ambient_mod_factor = 0.2
-heading_0 = -30
-pitch_0 = -60
-red_0 = 110
-green_0 = 110
-blue_0 = 105
-mod_factor_0 = 0.9
-heading_1 = 200
-pitch_1 = 33
-red_1 = 23
-green_1 = 24
-blue_1 = 30
-mod_factor_1 = 0.9
-fog_red = 0
-fog_green = 0
-fog_blue = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "vn_scripts.pre"
-scnpre = "vnscn.pre"
-colpre = "vncol.pre"
-overview_cam_pos = (1056.072,8086.354,1931.711)
-thugpro_prx = "mainmenu_vn_scripts.pre"
-qb = "levels\\mainmenu_vn\\vn.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\VN\\VN_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sc2 = {
-structure_name = level_Mainmenu_sc2
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "SC2"
-sky = "sc2_Sky"
-nosun
-ambient_red = 72
-ambient_green = 72
-ambient_blue = 72
-ambient_mod_factor = 0.2
-heading_0 = -30
-pitch_0 = -60
-red_0 = 110
-green_0 = 110
-blue_0 = 105
-mod_factor_0 = 0.9
-heading_1 = 200
-pitch_1 = 33
-red_1 = 23
-green_1 = 24
-blue_1 = 30
-mod_factor_1 = 0.9
-fog_red = 0
-fog_green = 0
-fog_blue = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "sc2_scripts.pre"
-scnpre = "sc2scn.pre"
-colpre = "sc2col.pre"
-thugpro_prx = "mainmenu_sc2_scripts.pre"
-qb = "levels\\mainmenu_sc2\\sc2.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\SC2\\SC2_scripts.qb"
-"levels\\SC2\\SC2_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ph = {
-structure_name = level_Mainmenu_ph
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS2
-loading_time = 7.12
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "PH_scripts.pre"
-scnpre = "PHscn.pre"
-level = "PH"
-sky = "PH_Sky"
-colpre = "PHcol.pre"
-level_sfx_qb = "levels\\PH\\PH_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_angle = 0
-overview_cam_zoom = (0.0,5e+03,3e+03)
-overview_cam_hide_objects = [ PH_Phillyside_Ceiling0 PH_Phillyside_Ceiling01 PH_Phillyside_Ceiling5 DT_underbridge01 ]
-thugpro_prx = "mainmenu_ph_scripts.pre"
-qb = "levels\\mainmenu_ph\\PH.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\PH\\PH_scripts.qb"
-"levels\\PH\\PH_cutscene_particle_data.qb"
-"levels\\PH\\PH_level_particle_data.qb"
-"levels\\PH\\PH_cutscene_fast_particle_data.qb"
-"levels\\PH\\PH_level_fast_particle_data.qb"
-"levels\\ph\\ph_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_dj = {
-structure_name = level_Mainmenu_dj
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-loading_time = 5.86
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "DJ_scripts.pre"
-scnpre = "DJscn.pre"
-level = "DJ"
-sky = "DJ_Sky"
-colpre = "DJcol.pre"
-pedpre = "DJped.pre"
-level_sfx_qb = "levels\\DJ\\DJ_sfx.qb"
-thugpro_col_pre
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_pos = (2.5e+03,1e+04,0.0)
-thugpro_prx = "mainmenu_dj_scripts.pre"
-qb = "levels\\mainmenu_dj\\DJ.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\DJ\\DJ_scripts.qb"
-"levels\\DJ\\DJ_cutscene_particle_data.qb"
-"levels\\DJ\\DJ_level_particle_data.qb"
-"levels\\DJ\\DJ_cutscene_fast_particle_data.qb"
-"levels\\DJ\\DJ_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ca = {
-structure_name = level_Mainmenu_ca
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-nosun
-loading_time = 6.8
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "CA_scripts.pre"
-scnpre = "CAscn.pre"
-level = "CA"
-sky = "CA_Sky"
-colpre = "CAcol.pre"
-pedpre = "CAped.pre"
-thugpro_sky_scn_pre
-level_sfx_qb = "levels\\CA\\CA_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_pos = (1975.968,9068.753,4968.952)
-overview_cam_angle = 45.0
-thugpro_prx = "mainmenu_ca_scripts.pre"
-qb = "levels\\mainmenu_ca\\ca.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\CA\\CA_scripts.qb"
-"levels\\CA\\CA_cutscene_particle_data.qb"
-"levels\\CA\\CA_level_particle_data.qb"
-"levels\\CA\\CA_cutscene_fast_particle_data.qb"
-"levels\\CA\\CA_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ap = {
-structure_name = level_Mainmenu_ap
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-loading_time = 7.83
-COIM_size = 1331200
-tod_manager_active = 0
-pre = "AP_scripts.pre"
-scnpre = "APscn.pre"
-level = "AP"
-sky = "AP_Sky"
-thugpro_col_pre
-pedpre = "APped.pre"
-level_sfx_qb = "levels\\AP\\AP_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor_lo = 0.3
-ambient_mod_factor_hi = 0.0
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0_lo = 1.4
-mod_factor_0_hi = 0.0
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1_lo = 0.4
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_angle = 90
-overview_cam_zoom = (-2.2e+04,3e+04,4e+03)
-thugpro_prx = "mainmenu_ap_scripts.pre"
-qb = "levels\\mainmenu_ap\\AP.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\AP\\AP_scripts.qb"
-"levels\\AP\\AP_level_particle_data.qb"
-"levels\\AP\\AP_level_fast_particle_data.qb"
-"levels\\ap\\ap_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_nj = {
-structure_name = level_Mainmenu_nj
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableBackfacePatch
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "NJ"
-sky = "nj_Sky"
-level_sfx_qb = "levels\\NJ\\NJ_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor = 0.3
-heading_0 = 50
-pitch_0 = 330
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 240
-pitch_1 = 330
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.4
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 1000
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "NJ_scripts.pre"
-scnpre = "NJscn.pre"
-colpre = "NJcol.pre"
-overview_cam_angle = -10
-overview_cam_zoom = (0.0,1e+04,0.0)
-thugpro_prx = "mainmenu_nj_scripts.pre"
-qb = "levels\\mainmenu_nj\\nj.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\NJ\\NJ_scripts.qb"
-"levels\\nj\\nj_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ny = {
-structure_name = level_Mainmenu_ny
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "ny"
-sky = "ny_Sky"
-level_sfx_qb = "levels\\NY\\ny_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor = 0.3
-heading_0 = 3.3e+02
-pitch_0 = 3.3e+02
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 1.5e+02
-pitch_1 = 3.3e+02
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 126
-fog_blue = 227
-fog_green = 169
-fog_alpha = 45
-fog_dist = 1000
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "ny_scripts.pre"
-scnpre = "nyscn.pre"
-colpre = "nycol.pre"
-overview_cam_angle = 0
-overview_cam_zoom = (1e+03,7e+03,2e+03)
-overview_cam_hide_objects =
-[
-NightOn_JG_NY_77NightLights NY_CW_Office_lights03
-JG_NY_77BuildingTop JG_NY_77LowerWindows
-NY_CW_Office_lights CW_Chase_pills03
-NY_Chase_EG_JP01_a NY_Chase_EG_JP01
-NY_Chase_EG_JP_noIn_roof
-NY_Chase_EG_JP_In_roofwall
-cw_chase_struts
-cw_chase_strut
-cw_chase_struts_a
-cw_chase_strut_a
-]
-thugpro_prx = "mainmenu_ny_scripts.pre"
-qb = "levels\\mainmenu_ny\\ny.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\NY\\ny_scripts.qb"
-"levels\\ny\\ny_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_fl = {
-structure_name = level_Mainmenu_fl
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "FL"
-sky = "FL_Sky"
-nosun
-level_sfx_qb = "levels\\FL\\FL_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor = 0.3
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0 = 1.4
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "fl_scripts.pre"
-scnpre = "flscn.pre"
-colpre = "flcol.pre"
-overview_cam_zoom = (0.0,7e+03,2e+03)
-thugpro_prx = "mainmenu_fl_scripts.pre"
-qb = "levels\\mainmenu_fl\\fl.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\fl\\FL_scripts.qb"
-"levels\\fl\\fl_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sd = {
-structure_name = level_Mainmenu_sd
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "SD"
-sky = "SD_Sky"
-level_sfx_qb = "levels\\SD\\SD_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor = 0.3
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0 = 1.4
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "SD_scripts.pre"
-scnpre = "SDscn.pre"
-colpre = "SDcol.pre"
-thugpro_prx = "mainmenu_sd_scripts.pre"
-qb = "levels\\mainmenu_sd\\sd.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\SD\\SD_scripts.qb"
-"levels\\sd\\sd_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_hi = {
-structure_name = level_Mainmenu_hi
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "HI"
-sky = "hi_Sky"
-nosun
-level_sfx_qb = "levels\\HI\\HI_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor = 0.3
-heading_0 = 3.2e+02
-pitch_0 = 3.3e+02
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 1.6e+02
-pitch_1 = 3.3e+02
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 150
-fog_blue = 235
-fog_green = 170
-fog_alpha = 38
-fog_dist = 1000
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-num_f_heads = 4
-num_f_torsos = 4
-num_f_legs = 4
-pre = "HI_scripts.pre"
-scnpre = "HIscn.pre"
-colpre = "HIcol.pre"
-overview_cam_zoom = (-1e+03,1.2e+04,4e+03)
-thugpro_prx = "mainmenu_hi_scripts.pre"
-qb = "levels\\mainmenu_hi\\hi.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\HI\\HI_scripts.qb"
-"levels\\hi\\hi_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_vc = {
-structure_name = level_Mainmenu_vc
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "vc"
-sky = "vc_Sky"
-nosun
-level_sfx_qb = "levels\\vc\\vc_sfx.qb"
-extranetanimsscript = animload_Ped_Driver
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor = 0.3
-heading_0 = 2e+02
-pitch_0 = 3.3e+02
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 4e+01
-pitch_1 = 3.3e+02
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 80
-fog_green = 90
-fog_blue = 120
-fog_alpha = 30
-fog_dist = 3e+02
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "VC_scripts.pre"
-scnpre = "VCscn.pre"
-colpre = "VCcol.pre"
-overview_cam_angle = 90
-overview_cam_zoom = (-2e+03,2e+04,-1e+04)
-thugpro_prx = "mainmenu_vc_scripts.pre"
-qb = "levels\\mainmenu_vc\\vc.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\vc\\vc_scripts.qb"
-"levels\\vc\\vc_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sj = {
-structure_name = level_Mainmenu_sj
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "sj"
-level_sfx_qb = "levels\\sj\\sj_sfx.qb"
-ambient_red = 58
-ambient_green = 57
-ambient_blue = 59
-ambient_mod_factor = 0.75
-heading_0 = 351
-pitch_0 = 303
-red_0 = 80
-green_0 = 63
-blue_0 = 59
-mod_factor_0 = 1.26
-heading_1 = 314
-pitch_1 = 272
-red_1 = 47
-green_1 = 50
-blue_1 = 52
-mod_factor_1 = 0.46
-fog_red = 27
-fog_blue = 23
-fog_green = 19
-fog_alpha = 70
-fog_dist = 705
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "SJ_scripts.pre"
-scnpre = "SJscn.pre"
-colpre = "SJcol.pre"
-overview_cam_zoom = (1e+03,8e+03,-5e+02)
-overview_cam_hide_objects = [
-g_dome_00 g_dome_01 g_dome_02 g_dome_03
-g_dome_04 g_dome_043 g_dome_05 g_dome_06
-g_dome_07 g_dome_08 g_dome_09 g_dome_10
-g_dome_11 g_dome_12 g_dome_13 g_dome_14
-g_dome_15 g_dome_16 g_dome_17 g_dome_18
-g_dome_19 g_dome_2 g_dome_20 g_dome_21
-g_dome_22 g_dome_23 g_dome_24 g_dome_25
-g_dome_26 g_dome_27 g_dome_28 g_dome_29
-g_dome_30 g_dome_31 g_dome_32 g_dome_33
-g_dome_34 g_dome_35 g_dome_36
-g_jumbo_tron_03
-]
-thugpro_prx = "mainmenu_sj_scripts.pre"
-qb = "levels\\mainmenu_sj\\sj.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\sj\\sj_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ru = {
-structure_name = level_Mainmenu_ru
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "ru"
-sky = "ru_Sky"
-nosun
-level_sfx_qb = "levels\\ru\\ru_sfx.qb"
-ambient_red = 69
-ambient_green = 72
-ambient_blue = 79
-ambient_mod_factor = 0.3
-heading_0 = 135.0
-pitch_0 = 3.3e+02
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 3e+02
-pitch_1 = 3.3e+02
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 140
-fog_blue = 135
-fog_green = 135
-fog_alpha = 50
-fog_dist = 500
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "RU_scripts.pre"
-scnpre = "RUscn.pre"
-colpre = "RUcol.pre" 90
-overview_cam_zoom = (4e+03,1.5e+04,-8e+03)
-thugpro_prx = "mainmenu_ru_scripts.pre"
-qb = "levels\\mainmenu_ru\\ru.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\ru\\ru_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_hh = {
-structure_name = level_Mainmenu_hh
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug1
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "hh"
-sky = "hh_Sky"
-nosun
-level_sfx_qb = "levels\\HH\\HH_sfx.qb"
-ambient_red = 44
-ambient_green = 37
-ambient_blue = 29
-ambient_mod_factor = 0.3
-heading_0 = 5e+01
-pitch_0 = 3.6e+02
-red_0 = 130
-green_0 = 120
-blue_0 = 97
-mod_factor_0 = 1.4
-heading_1 = 2.7e+02
-pitch_1 = 3.3e+02
-red_1 = 58
-green_1 = 62
-blue_1 = 66
-mod_factor_1 = 0.1
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-pre = "HH_scripts.pre"
-scnpre = "HHscn.pre"
-colpre = "HHcol.pre"
-overview_cam_angle = 0
-overview_cam_zoom = (1e+03,6e+03,-1e+03)
-thugpro_prx = "mainmenu_hh_scripts.pre"
-qb = "levels\\mainmenu_hh\\hh.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\HH\\HH_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_practice = {
-structure_name = level_Mainmenu_practice
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-DisableGoalEditor
-DisableGoalAttack
-DisableCTF
-DisableGraffiti
-loading_time = 8.5
-level = "practice"
-sky = "practice_Sky"
-default_level_stuff
-pre = "practice_scripts.pre"
-scnpre = "practicescn.pre"
-colpre = "practicecol.pre"
-overview_cam_zoom = (0.0,2e+03,0.0)
-thugpro_prx = "mainmenu_practice_scripts.pre"
-qb = "levels\\mainmenu_practice\\practice.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\practice\\practice_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sch = {
-structure_name = level_Mainmenu_sch
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "sch"
-sky = "sch_Sky"
-default_level_stuff
-pre = "SCH_scripts.pre"
-scnpre = "SCHscn.pre"
-colpre = "SCHcol.pre"
-overview_cam_zoom = (1e+03,6e+03,1e+03)
-thugpro_prx = "mainmenu_sch_scripts.pre"
-qb = "levels\\mainmenu_sch\\sch.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\sch\\sch_scripts.qb"
-"levels\\sch\\sch_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_alc = {
-structure_name = level_Mainmenu_alc
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "alc"
-sky = "alc_Sky"
-default_level_stuff
-pre = "ALC_scripts.pre"
-scnpre = "ALCscn.pre"
-colpre = "ALCcol.pre"
-overview_cam_zoom = (-1e+03,1.1e+04,1e+03)
-thugpro_prx = "mainmenu_alc_scripts.pre"
-qb = "levels\\mainmenu_alc\\alc.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\alc\\alc_scripts.qb"
-"levels\\alc\\alc_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sf2 = {
-structure_name = level_Mainmenu_sf2
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "sf2"
-sky = "sf2_Sky"
-default_level_lights
-default_level_stuff
-pre = "SF2_scripts.pre"
-scnpre = "SF2scn.pre"
-colpre = "SF2col.pre"
-overview_cam_angle = -90
-overview_cam_zoom = (-2e+03,8e+03,0.0)
-thugpro_prx = "mainmenu_sf2_scripts.pre"
-qb = "levels\\mainmenu_sf2\\sf2.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\sf2\\sf2_scripts.qb"
-"levels\\sf2\\sf2_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_kon = {
-structure_name = level_Mainmenu_kon
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "kon"
-sky = "kon_Sky"
-default_level_stuff
-pre = "KON_scripts.pre"
-scnpre = "KONscn.pre"
-colpre = "KONcol.pre"
-thugpro_prx = "mainmenu_kon_scripts.pre"
-qb = "levels\\mainmenu_kon\\kon.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\kon\\kon_scripts.qb"
-"levels\\kon\\kon_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_lon = {
-structure_name = level_Mainmenu_lon
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "lon"
-sky = "lon_Sky"
-default_level_stuff
-pre = "LON_scripts.pre"
-scnpre = "LONscn.pre"
-colpre = "LONcol.pre"
-overview_cam_zoom = (4e+03,3e+03,-1e+03)
-thugpro_prx = "mainmenu_lon_scripts.pre"
-qb = "levels\\mainmenu_lon\\lon.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\lon\\lon_scripts.qb"
-"levels\\lon\\lon_thugpro.qb"
-"levels\\lon\\lon_level_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_jnk = {
-structure_name = level_Mainmenu_jnk
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "jnk"
-sky = "jnk_Sky"
-default_level_stuff
-pre = "JNK_scripts.pre"
-scnpre = "JNKscn.pre"
-colpre = "JNKcol.pre"
-overview_cam_zoom = (0.0,8e+03,0.0)
-thugpro_prx = "mainmenu_jnk_scripts.pre"
-qb = "levels\\mainmenu_jnk\\jnk.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\jnk\\jnk_scripts.qb"
-"levels\\jnk\\jnk_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_zoo = {
-structure_name = level_Mainmenu_zoo
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-loading_time = 8.5
-level = "zoo"
-sky = "zoo_Sky"
-default_level_stuff
-pre = "ZOO_scripts.pre"
-scnpre = "ZOOscn.pre"
-colpre = "ZOOcol.pre"
-overview_cam_zoom = (0.0,7e+03,3e+03)
-thugpro_prx = "mainmenu_zoo_scripts.pre"
-qb = "levels\\mainmenu_zoo\\zoo.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\zoo\\zoo_scripts.qb"
-"levels\\zoo\\zoo_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_cnv = {
-structure_name = level_Mainmenu_cnv
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-indoor
-nosun
-loading_time = 8.5
-level = "cnv"
-sky = "cnv_Sky"
-default_level_stuff
-pre = "CNV_scripts.pre"
-scnpre = "CNVscn.pre"
-colpre = "CNVcol.pre"
-overview_cam_zoom = (-5e+02,5e+03,-2e+03)
-thugpro_prx = "mainmenu_cnv_scripts.pre"
-qb = "levels\\mainmenu_cnv\\cnv.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\cnv\\cnv_scripts.qb"
-"levels\\cnv\\cnv_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_hof = {
-structure_name = level_Mainmenu_hof
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS4
-nosun
-loading_time = 8.5
-level = "hof"
-sky = "hof_Sky"
-default_level_stuff
-pre = "HOF_scripts.pre"
-scnpre = "HOFscn.pre"
-colpre = "HOFcol.pre"
-wallride_hack
-overview_cam_angle = -90
-overview_cam_zoom = (0.0,5e+03,0.0)
-thugpro_prx = "mainmenu_hof_scripts.pre"
-qb = "levels\\mainmenu_hof\\hof.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\hof\\hof_scripts.qb"
-"levels\\hof\\hof_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_vans = {
-structure_name = level_Mainmenu_vans
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableBackfacePatch
-loading_time = 8.5
-level = "vans"
-nosun
-indoor
-DisableGoalEditor
-DisableGoalAttack
-default_level_stuff
-pre = "VANS_scripts.pre"
-scnpre = "VANSscn.pre"
-colpre = "VANScol.pre"
-overview_cam_hide_objects = [ z_sv_jc_rafters Z_SV_JH_JC_GEO_CEILING02 Z_SV_JC_GEO_CEILING03 Z_SV_JC_GEO_CEILING04 Z_SV_JC_GEO_CEILING05 ]
-thugpro_prx = "mainmenu_vans_scripts.pre"
-qb = "levels\\mainmenu_vans\\vans.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\vans\\vans_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_skatepark = {
-structure_name = level_Mainmenu_skatepark
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS1
-DisableBackfacePatch
-loading_time = 8.5
-level = "skatepark"
-nosun
-indoor
-DisableGoalEditor
-default_level_stuff
-pre = "skatepark_scripts.pre"
-scnpre = "skateparkscn.pre"
-colpre = "skateparkcol.pre"
-overview_cam_angle = 0
-overview_cam_zoom = (0.0,1.2e+04,-2e+02)
-thugpro_prx = "mainmenu_skatepark_scripts.pre"
-qb = "levels\\mainmenu_skatepark\\skatepark.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\skatepark\\skatepark_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sz = {
-structure_name = level_Mainmenu_sz
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "sz"
-sky = "sz_sky"
-default_level_stuff
-pre = "SZ_scripts.pre"
-scnpre = "SZscn.pre"
-colpre = "SZcol.pre"
-overview_cam_zoom = (0.0,2.5e+04,1e+04)
-thugpro_prx = "mainmenu_sz_scripts.pre"
-qb = "levels\\mainmenu_sz\\sz.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\sz\\sz_scripts.qb"
-"levels\\sz\\sz_thugpro.qb"
-"levels\\sz\\sz_level_particle_data.qb"
-"levels\\sz\\sz_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_atlanta = {
-structure_name = level_Mainmenu_atlanta
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "atlanta"
-sky = "Default_Sky"
-level_sfx_qb = "levels\\atlanta\\atlanta_sfx.qb"
-default_level_stuff
-pre = "atlanta_scripts.pre"
-scnpre = "atlantascn.pre"
-colpre = "atlantacol.pre"
-overview_cam_zoom = (5e+02,4e+04,-1.5e+03)
-thugpro_prx = "mainmenu_atlanta_scripts.pre"
-qb = "levels\\mainmenu_atlanta\\atlanta.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\atlanta\\atlanta_scripts.qb"
-"levels\\atlanta\\atlanta_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_kyoto = {
-structure_name = level_Mainmenu_kyoto
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-nosun
-loading_time = 8.5
-level = "kyoto"
-default_sky
-default_level_stuff
-pre = "kyoto_scripts.pre"
-scnpre = "kyotoscn.pre"
-colpre = "kyotocol.pre"
-overview_cam_zoom = (0.0,2.8e+04,0.0)
-thugpro_prx = "mainmenu_kyoto_scripts.pre"
-qb = "levels\\mainmenu_kyoto\\kyoto.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\kyoto\\kyoto_scripts.qb"
-"levels\\kyoto\\kyoto_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_hisch = {
-structure_name = level_Mainmenu_hisch
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-wallride_hack
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 4.0
-level = "HISCH"
-sky = "default_sky"
-default_level_stuff
-pre = "HISCH_scripts.pre"
-scnpre = "HISCHscn.pre"
-colpre = "HISCHcol.pre"
-overview_cam_zoom = (0.0,3e+03,1.5e+03)
-thugpro_prx = "mainmenu_hisch_scripts.pre"
-qb = "levels\\mainmenu_hisch\\hisch.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\HISCH\\HISCH_scripts.qb"
-"levels\\hisch\\hisch_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_funpark = {
-structure_name = level_Mainmenu_z_funpark
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "z_funpark"
-sky = "Default_Sky"
-default_level_stuff
-pre = "z_funpark_scripts.pre"
-scnpre = "z_funparkscn.pre"
-colpre = "z_funparkcol.pre"
-overview_cam_zoom = (-2.7e+04,5.2e+04,-3e+04)
-thugpro_prx = "mainmenu_z_funpark_scripts.pre"
-qb = "levels\\mainmenu_z_funpark\\z_funpark.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_funpark\\z_funpark_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_center = {
-structure_name = level_Mainmenu_z_center
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THP8
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "z_center"
-sky = "Default_Sky"
-default_level_stuff
-pre = "z_center_scripts.pre"
-scnpre = "z_centerscn.pre"
-colpre = "z_centercol.pre"
-overview_cam_zoom = (-2e+03,4e+03,-2e+02)
-thugpro_prx = "mainmenu_z_center_scripts.pre"
-qb = "levels\\mainmenu_z_center\\z_center.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_center\\z_center_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_riod = {
-structure_name = level_Mainmenu_z_riod
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-indoor
-nosun
-DisableGoalEditor
-DisableGoalAttack
-loading_time = 8.5
-level = "z_riod"
-sky = "sunset_sky"
-default_level_stuff
-pre = "z_riod_scripts.pre"
-scnpre = "z_riodscn.pre"
-colpre = "z_riodcol.pre"
-overview_cam_zoom = (0.0,2e+04,1.7e+04)
-thugpro_prx = "mainmenu_z_riod_scripts.pre"
-qb = "levels\\mainmenu_z_riod\\z_riod.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_riod\\z_riod_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_sm = {
-structure_name = level_Mainmenu_z_sm
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-level = "z_sm"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_sm_scripts.pre"
-scnpre = "z_smscn.pre"
-colpre = "z_smcol.pre"
-overview_cam_zoom = (2e+03,1.6e+04,-1e+03)
-thugpro_prx = "mainmenu_z_sm_scripts.pre"
-qb = "levels\\mainmenu_z_sm\\Z_SM.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_sm\\z_sm_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_bh = {
-structure_name = level_Mainmenu_z_bh
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-default_level_stuff
-level = "z_bh"
-sky = "thaw_Sky"
-level_sfx_qb = "levels\\z_bh\\z_bh_sfx_scripts.qb"
-loading_time = 8.5
-pre = "z_bh_scripts.pre"
-scnpre = "z_bhscn.pre"
-colpre = "z_bhcol.pre"
-overview_cam_zoom = (2.5e+03,1.1e+04,1.5e+03)
-overview_cam_angle = -90
-thugpro_prx = "mainmenu_z_bh_scripts.pre"
-qb = "levels\\mainmenu_z_bh\\Z_BH.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_bh\\z_bh_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_sv2 = {
-structure_name = level_Mainmenu_z_sv2
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-default_level_stuff
-default_sky
-indoor
-nosun
-level = "z_sv2"
-loading_time = 8.5
-pre = "z_sv2_scripts.pre"
-scnpre = "z_sv2scn.pre"
-colpre = "z_sv2col.pre"
-thugpro_prx = "mainmenu_z_sv2_scripts.pre"
-qb = "levels\\mainmenu_z_sv2\\Z_SV2.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_sv2\\z_sv2_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_sr = {
-structure_name = level_Mainmenu_z_sr
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-level = "z_sr"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_sr_scripts.pre"
-scnpre = "z_srscn.pre"
-colpre = "z_srcol.pre"
-thugpro_prx = "mainmenu_z_sr_scripts.pre"
-qb = "levels\\mainmenu_z_sr\\Z_SR.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_sr\\z_sr_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_dt = {
-structure_name = level_Mainmenu_z_dt
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-level = "z_dt"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_dt_scripts.pre"
-scnpre = "z_dtscn.pre"
-colpre = "z_dtcol.pre"
-thugpro_prx = "mainmenu_z_dt_scripts.pre"
-qb = "levels\\mainmenu_z_dt\\Z_DT.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_dt\\z_dt_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_ho = {
-structure_name = level_Mainmenu_z_ho
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-level = "z_ho"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_ho_scripts.pre"
-scnpre = "z_hoscn.pre"
-colpre = "z_hocol.pre"
-thugpro_prx = "mainmenu_z_ho_scripts.pre"
-qb = "levels\\mainmenu_z_ho\\z_ho.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_ho\\z_ho_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_lv = {
-structure_name = level_Mainmenu_z_lv
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-default_level_stuff
-level = "z_lv"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_lv_scripts.pre"
-scnpre = "z_lvscn.pre"
-colpre = "z_lvcol.pre"
-thugpro_prx = "mainmenu_z_lv_scripts.pre"
-qb = "levels\\mainmenu_z_lv\\z_lv.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_lv\\z_lv_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_z_oi = {
-structure_name = level_Mainmenu_z_oi
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THAW
-DisableGoalEditor
-DisableGoalAttack
-DisableBackfacePatch
-default_level_stuff
-level = "z_oi"
-sky = "thaw_Sky"
-loading_time = 8.5
-pre = "z_oi_scripts.pre"
-scnpre = "z_oiscn.pre"
-colpre = "z_oicol.pre"
-thugpro_prx = "mainmenu_z_oi_scripts.pre"
-qb = "levels\\mainmenu_z_oi\\Z_OI.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\z_oi\\z_oi_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_foun = {
-structure_name = level_Mainmenu_foun
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-models_in_script_prx
-DisableBackfacePatch
-level = "foun"
-nosun
-default_level_stuff
-pre = "foun_scripts.pre"
-scnpre = "founscn.pre"
-colpre = "founcol.pre"
-indoor
-nosun
-overview_cam_zoom = (1e+03,1e+03,0.0)
-overview_cam_hide_objects = [
-Pipes_Ceiling01
-Pipes_Ceiling02
-Pipes_Ceiling03
-Opti_sWallSection_North_01
-Opti_Generator_Exterior01
-]
-thugpro_prx = "mainmenu_foun_scripts.pre"
-qb = "levels\\mainmenu_foun\\foun.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\foun\\foun_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_rio = {
-structure_name = level_Mainmenu_rio
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-models_in_script_prx
-DisableBackfacePatch
-level = "rio"
-sky = "rio_Sky"
-default_level_stuff
-pre = "rio_scripts.pre"
-scnpre = "rioscn.pre"
-colpre = "riocol.pre"
-nosun
-overview_cam_zoom = (3e+03,3.2e+04,7e+03)
-thugpro_prx = "mainmenu_rio_scripts.pre"
-qb = "levels\\mainmenu_rio\\rio.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\rio\\rio_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_sub = {
-structure_name = level_Mainmenu_sub
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-nosun
-models_in_script_prx
-level = "sub"
-sky = "sub_Sky"
-default_level_stuff
-pre = "sub_scripts.pre"
-scnpre = "subscn.pre"
-colpre = "subcol.pre"
-overview_cam_zoom = (0.0,1.7e+04,0.0)
-thugpro_prx = "mainmenu_sub_scripts.pre"
-qb = "levels\\mainmenu_sub\\sub.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\sub\\sub_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_tok = {
-structure_name = level_Mainmenu_tok
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-nosun
-indoor
-models_in_script_prx
-level = "tok"
-sky = "tok_Sky"
-default_level_stuff
-pre = "tok_scripts.pre"
-scnpre = "tokscn.pre"
-colpre = "tokcol.pre"
-overview_cam_zoom = (2e+03,1.7e+04,-2e+03)
-thugpro_prx = "mainmenu_tok_scripts.pre"
-qb = "levels\\mainmenu_tok\\tok.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\tok\\tok_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_shp = {
-structure_name = level_Mainmenu_shp
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = THPS3
-DisableGoalEditor
-DisableGoalAttack
-models_in_script_prx
-level = "shp"
-sky = "shp_Sky"
-default_level_stuff
-pre = "shp_scripts.pre"
-scnpre = "shpscn.pre"
-colpre = "shpcol.pre"
-overview_cam_zoom = (0.0,2.2e+04,1e+03)
-thugpro_prx = "mainmenu_shp_scripts.pre"
-qb = "levels\\mainmenu_shp\\shp.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\shp\\shp_scripts.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

@@ -55,7 +55,9 @@ SERVER_NAMES = re.compile(r'^(thugpro_bang_|thugpro_mapvote_|thugpro_afk_|thugpr
 SERVER_FILES = {'mods/anims/qanims.q', 'mods/anims/pmanims.q'}
 # host parts of client mods that live in the same file as the client part (!ammo is answered by the host)
 SERVER_BLOCKS = {'thugpro_throw_parse', 'thugpro_throw_parse2', 'thugpro_throw_chat', 'thugpro_throw_give', 'thugpro_throw_confirm',
-                 'dadmod_bang_online_level_command'}
+                 'dadmod_bang_online_level_command',
+                 # our THPG Baltimore conversion is Dev only (Noah 2026-11-20: only Larxian's Baltimore in the release)
+                 'level_dadmod_thpgbaltimore', 'load_dadmod_thpgbaltimore'}
 # blocks of stock scripts that Kali changed: handled by hand in client/qb/dadmod (wrap or our own version)
 HAND = {'create_main_menu', 'create_pause_menu', 'exit_pause_menu', 'thugpro_show_quick_menu', 'thugpro_update_tod',
         'thugpro_menu_create_title', 'load_level'}
@@ -128,6 +130,12 @@ PATCHES = {
     'list_level_thpg': [(
         '{ text = "BALTIMORE (THPG)" exclude = 0 enabled = 1 num_votes = 0 level = Load_dadmod_THPGBaltimore level_thumb = thumb_default level_num = LevelNum_Default }\n',
         '')],
+    # Noah 2026-11-20: only Larxian's Baltimore in the release; without it the row says not installed (no conversion fallback)
+    'load_dadmod_thpglarxbaltimore': [(
+        '        if ScriptExists Load_dadmod_THPGBaltimore\n            Load_dadmod_THPGBaltimore <...>\n        else\n'
+        '            dadmod_thpg_not_installed\n        endif\n',
+        '        dadmod_thpg_not_installed\n')],
+    'dadmod_added_levels': [(' Load_dadmod_THPGBaltimore ', ' ')],
 }
 PED = re.compile(r'^ped_[mf]_|^ped_body$', re.I)
 # Dev-only log calls a server mod adds into client scripts (mods/bhra_probe): the line goes, the script stays

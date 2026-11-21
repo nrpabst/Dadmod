@@ -1550,7 +1550,7 @@ script revert
     goto OnGroundAi
 endscript
 
-dadmod_added_levels = [ #"0x001202e3" #"0x341caf9f" #"0x6552c592" #"0xe0d4e51a" #"0xf06d95da" #"0x73babdd0" #"0x16a10a9a" #"0x1a69989e" #"0x896a81b2" #"0x27eeac8d" #"0x2843fdc8" Load_dadmod_THPGFDR Load_dadmod_THPGLove Load_dadmod_THPGSlums Load_dadmod_THPGBCity Load_dadmod_THPGHarbor Load_dadmod_THPGLansdowne Load_dadmod_THPGMonuments Load_dadmod_THPGMuseums Load_dadmod_THPGMuseumInt Load_dadmod_THPGPhilly Load_dadmod_THPGBaltimore Load_dadmod_THPGWashington Load_dadmod_THPGTraining Load_dadmod_THPGLarxPhilly Load_dadmod_THPGLarxBaltimore Load_dadmod_THPGLarxWashington ]
+dadmod_added_levels = [ #"0x001202e3" #"0x341caf9f" #"0x6552c592" #"0xe0d4e51a" #"0xf06d95da" #"0x73babdd0" #"0x16a10a9a" #"0x1a69989e" #"0x896a81b2" #"0x27eeac8d" #"0x2843fdc8" Load_dadmod_THPGFDR Load_dadmod_THPGLove Load_dadmod_THPGSlums Load_dadmod_THPGBCity Load_dadmod_THPGHarbor Load_dadmod_THPGLansdowne Load_dadmod_THPGMonuments Load_dadmod_THPGMuseums Load_dadmod_THPGMuseumInt Load_dadmod_THPGPhilly Load_dadmod_THPGWashington Load_dadmod_THPGTraining Load_dadmod_THPGLarxPhilly Load_dadmod_THPGLarxBaltimore Load_dadmod_THPGLarxWashington ]
 
 dadmod_added_level_creators = [ "tyler.thpsX" "letmynutzgo" "letmynutzgo" "letmynutzgo" "rodafy" "letmynutzgo" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Neversoft" "Larxian" "Larxian" "Larxian" ]
 

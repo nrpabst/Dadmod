@@ -764,29 +764,6 @@ script Load_dadmod_THPGPhilly
     load_level Level_dadmod_THPGPhilly
 endscript
 
-Level_dadmod_THPGBaltimore = {
-game = THPG
-structure_name = Level_dadmod_THPGBaltimore
-load_script = Load_dadmod_THPGBaltimore
-Name = "Baltimore"
-loading_time = 8.5
-level = "THPGBaltimore"
-sky = "THPGBaltimore_Sky"
-qb = "levels\\THPGBaltimore\\THPGBaltimore.qb"
-level_qb = "levels\\THPGBaltimore\\THPGBaltimore_scripts.qb"
-more_level_qbs = [
-"levels\\THPGBaltimore\\THPGBaltimore_thugpro.qb"
-]
-pre = "THPGBaltimore_scripts.pre"
-scnpre = "THPGBaltimorescn.pre"
-colpre = "THPGBaltimorecol.pre"
-default_level_stuff
-}
-
-script Load_dadmod_THPGBaltimore
-    load_level Level_dadmod_THPGBaltimore
-endscript
-
 Level_dadmod_THPGWashington = {
 game = THPG
 structure_name = Level_dadmod_THPGWashington
@@ -1127,11 +1104,7 @@ script Load_dadmod_THPGLarxBaltimore
     if GotParam found
         <found> <...>
     else
-        if ScriptExists Load_dadmod_THPGBaltimore
-            Load_dadmod_THPGBaltimore <...>
-        else
-            dadmod_thpg_not_installed
-        endif
+        dadmod_thpg_not_installed
     endif
 endscript
 

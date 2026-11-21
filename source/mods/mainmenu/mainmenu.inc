@@ -2797,7 +2797,7 @@ static bool __cdecl CF_MenuDelete(void* params, void* script) {
 }
 
 // ---- main screen item order (F9 reorder mode)
-// THUGRECOMP_KeyPressed key="F9"          -> true once per press (only while the game window is in front); key="Alt+F12" needs Alt
+// THUGRECOMP_KeyPressed key="F9"          -> true once per press (only while the game window is in front); key="Alt+F12" needs Alt; key="Home" too
 // THUGRECOMP_MenuOrder count=N pos=i       -> idx: which item goes at position i (main_order in [menu])
 // THUGRECOMP_MenuOrderMove count=N from=i to=j  moves the item at position i to position j and saves
 
@@ -2805,6 +2805,19 @@ static bool __cdecl CF_KeyPressed(void* params, void*) {
     const char* key = nullptr;
     GetStringParam(params, "key", &key);
     if (!key) return false;
+    // key="Home": true once per press, game window in front, Alt/Ctrl not held (Noah 2026-11-21: Home = level select
+    // in free skate, mods/homelevel). Older DLLs return false for it.
+    if (_stricmp(key, "Home") == 0) {
+        static bool homeWas = false;
+        DWORD hpid = 0;
+        HWND hfg = GetForegroundWindow();
+        if (hfg) GetWindowThreadProcessId(hfg, &hpid);
+        bool hnow = hpid == GetCurrentProcessId() && (GetAsyncKeyState(VK_HOME) & 0x8000) != 0 &&
+                    (GetAsyncKeyState(VK_MENU) & 0x8000) == 0 && (GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0;
+        bool hfresh = hnow && !homeWas;
+        homeWas = hnow;
+        return hfresh;
+    }
     // "Alt+F12" needs Alt held; a plain "F12" ignores the press while Alt is held (Noah 2026-11-02: Alt+F12 = Chat Art)
     bool alt = _strnicmp(key, "alt+", 4) == 0;
     if (alt) key += 4;

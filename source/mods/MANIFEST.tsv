@@ -25,6 +25,7 @@ dadbot	server	no	prx:net.q dll:dadbot.inc dadmod:discord-bot	Ollama chat bridge
 dedicated	server	no	dll:dedicated.inc prx:net.q dadmod:dedicated.*	Dedicated server / Host and Play
 freeskate_menu	client	later	prx:(handle_start_pressed, exit_pause_menu)	Free skate keeps running in the pause menu
 gfx	client	yes	dll:gfx.inc prx:Levels.q dadmod:gfx.ini	Graphics: post effects, sky, local weather, lamps, fireworks
+homelevel	client	yes	prx:ButtonScripts.q dll:mainmenu.inc	Home key opens Change Level (offline, or host online); always on; ticked from the noclip watcher
 host_observer	both	no	prx:ButtonScripts.q prx:consolemessage.q prx:Levels.q prx:gamemenu_levelselect.q prx:skateshop.q prx:net.q prx:control_setup.q prx:procrastination.q	Full copies of stock/Kali scripts with our edits; the client build never uses these copies
 hotpotato	server	no	dll:hotpotato.inc	!hp mode
 kalichaos	client	no	prx:net.q	Port of Kali Mod 2.8 Chaos Mode; left out of the client build (other people's mod)

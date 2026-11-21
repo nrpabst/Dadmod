@@ -13,8 +13,10 @@
 //      disagree (something appeared from behind something else, or a camera cut) it shows the nearer real picture
 //      unmoved. Pixels the HUD covers are taken from the real frame as is.
 //   5. Pacing: the game's own Present shows the first in-between frame; the rest and then the real frame are shown
-//      at even steps from the game's busy-wait (its Sleep(0) calls), or at the latest when the next frame begins
-//      (BeginScene). Auto uses the monitor's rate, or a common rate is picked (120/144/165/180/240 Hz); 144 Hz alternates
+//      at even steps right after it (we wait inside the Present hook, in the time the game would spend busy-waiting
+//      anyway), never later than the next tick needs to start. In a window, presents don't wait for the monitor while
+//      frame generation is on (Windows' compositor shows them without tearing): two presents that each waited for
+//      a refresh used the whole 1/60 s and dropped the game to ~40 fps (Noah's first test, 2026-11-21). Auto uses the monitor's rate, or a common rate is picked (120/144/165/180/240 Hz); 144 Hz alternates
 //      2 and 3 frames per real frame, 120 Hz is always 2, 240 Hz always 4.
 // Every card: 5 small pixel shaders, each well under the 512 instruction slots D3D9 guarantees (the build checks it
 // with shaderslots.ps1 -Limit 512), every create checked, all-or-nothing. It switches itself off (logged once) when
@@ -49,12 +51,12 @@ float4 ps_fg_luma(float2 uv : TEXCOORD0) : COLOR {
     float2 d = fgpx.xy;
     float l = fgL(tex2D(fs0, uv + float2(-d.x, -d.y)).rgb) + fgL(tex2D(fs0, uv + float2(d.x, -d.y)).rgb)
             + fgL(tex2D(fs0, uv + float2(-d.x, d.y)).rgb) + fgL(tex2D(fs0, uv + float2(d.x, d.y)).rgb);
-    l *= 0.25;
+    l = sqrt(l * 0.25);  // square root: lifts dark detail so night levels still give the search something to match
     return float4(l, l, l, 1);
 }
 
 float fgSad(float2 uv, float2 o) {
-    float2 d = fgpx.xy;
+    float2 d = fgpx.xy * 2.0;  // 3x3 taps spread over 5x5 pixels: steadier vectors for the same cost
     float s = 0;
     [unroll] for (int y = -1; y <= 1; y++) {
         [unroll] for (int x = -1; x <= 1; x++) {
@@ -102,6 +104,21 @@ float4 ps_fg_search1(float2 uv : TEXCOORD0) : COLOR {
     return fgEnc(best);
 }
 
+// a vector that fits its own pixels worse than a neighbour's vector is replaced by that one (removes stray vectors)
+float4 ps_fg_smooth(float2 uv : TEXCOORD0) : COLOR {
+    float2 d = fgpx.xy;
+    float2 best = fgDec(tex2Dlod(fs2, float4(uv, 0, 0)));
+    float bc = fgSad(uv, best * 0.5 * d);
+    [loop] for (int j = -1; j <= 1; j++) {
+        [loop] for (int i = -1; i <= 1; i++) {
+            float2 v = fgDec(tex2Dlod(fs2, float4(uv + float2(i, j) * d, 0, 0)));
+            float c = fgSad(uv, v * 0.5 * d);
+            if (c < bc - 0.0001) { bc = c; best = v; }
+        }
+    }
+    return fgEnc(best);
+}
+
 float2 fgVec(float2 uv) {
     float2 tc = uv * fgA.zw - 0.5;
     float2 f = frac(tc);
@@ -118,8 +135,17 @@ float4 ps_fg_make(float2 uv : TEXCOORD0) : COLOR {
     float2 dv = fgVec(uv) * fgA.xy;
     float3 a = tex2Dlod(fs0, float4(uv - t * dv, 0, 0)).rgb;
     float3 b = tex2Dlod(fs1, float4(uv + (1 - t) * dv, 0, 0)).rgb;
-    float3 e3 = abs(a - b);
-    float w = saturate((max(e3.r, max(e3.g, e3.b)) - 0.08) * 6.0);
+    // how well the two moved pictures agree around this pixel (3x3): where they don't, the vector is wrong here
+    // (or something appeared from behind something else) and the nearer real picture is shown unmoved instead
+    float e = 0;
+    [unroll] for (int y = -1; y <= 1; y++) {
+        [unroll] for (int x = -1; x <= 1; x++) {
+            float2 q = uv + float2(x, y) * fgpx.xy;
+            float3 e3 = abs(tex2Dlod(fs0, float4(q - t * dv, 0, 0)).rgb - tex2Dlod(fs1, float4(q + (1 - t) * dv, 0, 0)).rgb);
+            e += max(e3.r, max(e3.g, e3.b));
+        }
+    }
+    float w = saturate((e / 9.0 - 0.035) * 15.0);
     float3 n0 = tex2Dlod(fs0, float4(uv, 0, 0)).rgb;
     float3 n1 = tex2Dlod(fs1, float4(uv, 0, 0)).rgb;
     float3 c = lerp(lerp(a, b, t), t < 0.5 ? n0 : n1, w);
@@ -130,7 +156,7 @@ float4 ps_fg_make(float2 uv : TEXCOORD0) : COLOR {
 }
 )HLSL";
 
-static IDirect3DPixelShader9 *g_fgCopy = nullptr, *g_fgLuma = nullptr, *g_fgSearch0 = nullptr, *g_fgSearch1 = nullptr, *g_fgMake = nullptr;
+static IDirect3DPixelShader9 *g_fgCopy = nullptr, *g_fgLuma = nullptr, *g_fgSearch0 = nullptr, *g_fgSearch1 = nullptr, *g_fgSmooth = nullptr, *g_fgMake = nullptr;
 static bool g_fgShadersTried = false, g_fgShadersOk = false;
 static bool g_fgDead = false;        // a shader or texture could not be made: off for this session
 static int g_fgTestMult = 0;         // gfx_test.ini fgmult
@@ -201,7 +227,7 @@ static bool FgMakeShaders(IDirect3DDevice9* dev) {
     auto compile = g_dx ? (CompileShader_t)GetProcAddress(g_dx, "D3DXCompileShader") : nullptr;
     struct { const char* fn; IDirect3DPixelShader9** out; } list[] = {
         {"ps_fg_copy", &g_fgCopy}, {"ps_fg_luma", &g_fgLuma}, {"ps_fg_search0", &g_fgSearch0},
-        {"ps_fg_search1", &g_fgSearch1}, {"ps_fg_make", &g_fgMake}};
+        {"ps_fg_search1", &g_fgSearch1}, {"ps_fg_smooth", &g_fgSmooth}, {"ps_fg_make", &g_fgMake}};
     bool ok = true;
     for (auto& s : list) if (!FgShader(dev, compile, s.fn, s.out)) { ok = false; break; }
     if (!ok) {
@@ -216,7 +242,7 @@ static bool FgMakeShaders(IDirect3DDevice9* dev) {
 }
 
 // ---- textures (D3DPOOL_DEFAULT: freed at every device reset) ----
-static IDirect3DTexture9 *g_fgS[2] = {}, *g_fgF = nullptr, *g_fgL[2][4] = {}, *g_fgV[4] = {};
+static IDirect3DTexture9 *g_fgS[2] = {}, *g_fgF = nullptr, *g_fgL[2][4] = {}, *g_fgV[4] = {}, *g_fgVt = nullptr;
 static UINT g_fgW = 0, g_fgH = 0, g_fgLw[4] = {}, g_fgLh[4] = {};
 static bool g_fgHave[2] = {};
 static DWORD g_fgSeq[2] = {};
@@ -225,7 +251,7 @@ static bool g_fgSceneThis = false;  // the 3D picture of this frame was copied a
 
 static void FgFree() {
     IDirect3DTexture9** all[] = {&g_fgS[0], &g_fgS[1], &g_fgF, &g_fgL[0][0], &g_fgL[0][1], &g_fgL[0][2], &g_fgL[0][3],
-                                 &g_fgL[1][0], &g_fgL[1][1], &g_fgL[1][2], &g_fgL[1][3], &g_fgV[0], &g_fgV[1], &g_fgV[2], &g_fgV[3]};
+                                 &g_fgL[1][0], &g_fgL[1][1], &g_fgL[1][2], &g_fgL[1][3], &g_fgV[0], &g_fgV[1], &g_fgV[2], &g_fgV[3], &g_fgVt};
     for (auto p : all) if (*p) { (*p)->Release(); *p = nullptr; }
     g_fgW = g_fgH = 0;
     g_fgHave[0] = g_fgHave[1] = false;
@@ -246,6 +272,7 @@ static bool FgTargets(IDirect3DDevice9* dev, UINT w, UINT h) {
     bool ok = rt(w, h, &g_fgS[0]) && rt(w, h, &g_fgS[1]) && rt(w, h, &g_fgF);
     for (int k = 0; ok && k < 4; ++k)
         ok = rt(g_fgLw[k], g_fgLh[k], &g_fgL[0][k]) && rt(g_fgLw[k], g_fgLh[k], &g_fgL[1][k]) && rt(g_fgLw[k], g_fgLh[k], &g_fgV[k]);
+    ok = ok && rt(g_fgLw[0], g_fgLh[0], &g_fgVt);
     if (!ok) { FgFree(); return false; }
     g_fgW = w; g_fgH = h;
     return true;
@@ -331,11 +358,13 @@ static void FgCheckRefresh(IDirect3DDevice9* dev) {
     g_fgRate = rate;
 }
 static int g_fgPickWas = -1;
+static bool g_fgPresentKnown = false, g_fgWindowed = false, g_fgImmediate = false;  // the device's present settings (AdjustPP)
+static bool g_fgBsThis = false;     // the game's first BeginScene of this frame was seen
+static double g_fgBegin = 0;        // ... and when (the game starts drawing a tick)
 
 // The game's Present (via EndFrame, before RunScreen): keep this frame back and put the first in-between frame
 // in the back buffer. Returns true when it did.
 static void FgDraw(IDirect3DDevice9* dev, IDirect3DSurface9* bb, int prev, int cur, float t, bool search);
-static void FgInstallSleep();
 static bool FgFrame(IDirect3DDevice9* dev) {
     g_fgGenNow = false;
     g_fgThread = GetCurrentThreadId();
@@ -347,13 +376,19 @@ static bool FgFrame(IDirect3DDevice9* dev) {
     g_fgSceneThis = false;
     if (!FgOn()) {
         g_fgHave[0] = g_fgHave[1] = false;
+        g_fgBsThis = false;
         if (V("gfx_framegen")) FgWhy("off: not available on this card");
         else if (*g_fgWhy) FgWhy("off");
         return false;
     }
-    FgInstallSleep();
+    g_fgBsThis = false;
     if (g_reshadeLoaded) { g_fgHave[0] = g_fgHave[1] = false; FgWhy("off: ReShade is loaded"); return false; }
     if (V("gfx_framegen") != g_fgPickWas) { g_fgPickWas = V("gfx_framegen"); g_fgRefresh = 0; }  // a new pick: check again now
+    if (g_fgPresentKnown && g_fgWindowed && !g_fgImmediate) {  // turned on in a window: reset once so presents stop waiting
+        g_fgPresentKnown = false;
+        mmenu::Log("gfx: frame generation: resetting the device so window presents don't wait for the monitor");
+        *(volatile BYTE*)0x786AB4 = 1;
+    }
     FgCheckRefresh(dev);
     if (g_fgRate < 100) { g_fgHave[0] = g_fgHave[1] = false; FgWhy("off: monitor is 60 Hz or slower"); return false; }
     g_fgAcc += g_fgRate / 60.0;
@@ -432,6 +467,12 @@ static void FgDraw(IDirect3DDevice9* dev, IDirect3DSurface9* bb, int prev, int c
                 Pass(dev, g_fgSearch1, s, g_fgLw[k], g_fgLh[k], g_fgLw[k], g_fgLh[k], g_fgL[prev][k], g_fgL[cur][k], g_fgV[k + 1]);
                 if (s) s->Release();
             }
+            for (int r = 0; r < 2; ++r) {  // V0 -> Vt -> V0
+                IDirect3DTexture9 *src = r ? g_fgVt : g_fgV[0], *dst = r ? g_fgV[0] : g_fgVt;
+                s = FgSurf(dst);
+                Pass(dev, g_fgSmooth, s, g_fgLw[0], g_fgLh[0], g_fgLw[0], g_fgLh[0], g_fgL[prev][0], g_fgL[cur][0], src);
+                if (s) s->Release();
+            }
         }
     }
     if (t > 0) {
@@ -465,6 +506,7 @@ static DWORD g_fgFlags = 0;
 
 static void NoteDeviceLost(HRESULT hr);  // gfx.inc
 static void FgClear() { g_fgQn = g_fgQi = 0; }
+static void FgRun(bool late);
 // after the game's Present returned: schedule the rest at even steps of 1/(60 x mult) s
 static void FgQueue(IDirect3DDevice9* dev, IDirect3DSwapChain9* sc, const RECT* a, const RECT* b, HWND w, const RGNDATA* r, DWORD f, HRESULT hr) {
     if (!g_fgGenNow) return;
@@ -474,9 +516,13 @@ static void FgQueue(IDirect3DDevice9* dev, IDirect3DSwapChain9* sc, const RECT* 
     g_fgHasA = a != nullptr; if (a) g_fgRa = *a;
     g_fgHasB = b != nullptr; if (b) g_fgRb = *b;
     double t0 = FgNow(), step = 1.0 / (g_fgRate > 0 ? g_fgRate : 60.0 * g_fgMult);
+    // the next tick starts about 1/60 s after this one started drawing; leave it 1.5 ms
+    double last = (g_fgBegin > 0 && g_fgBegin <= t0 ? g_fgBegin : t0) + 1.0 / 60 - 0.0015;
     g_fgQn = g_fgQi = 0;
     for (int k = 2; k < g_fgMult; ++k) g_fgQ[g_fgQn++] = {t0 + (k - 1) * step, (float)k / g_fgMult};
     g_fgQ[g_fgQn++] = {t0 + (g_fgMult - 1) * step, -1.0f};
+    for (int i = 0; i < g_fgQn; ++i) if (g_fgQ[i].due > last) g_fgQ[i].due = last;
+    FgRun(false);
 }
 static void FgShow(const FgItem& it) {
     IDirect3DDevice9* dev = g_fgDev;
@@ -499,7 +545,7 @@ static void FgRun(bool late) {
     while (g_fgQi < g_fgQn) {
         FgItem it = g_fgQ[g_fgQi];
         bool real = it.t < 0;
-        if (!late && FgNow() < it.due) return;
+        if (!late) while (FgNow() < it.due) Sleep(0);  // the game's own wait does the same (Sleep(0) spin)
         ++g_fgQi;
         if (late && !real) { ++g_fgStats[1]; continue; }
         ++g_fgStats[real ? (late ? 3 : 2) : 0];
@@ -511,37 +557,34 @@ static void FgRun(bool late) {
                    g_fgRate, g_fgStats[0] + (g_fgStats[2] + g_fgStats[3]), g_fgStats[1], g_fgStats[2], g_fgStats[3]);
 }
 
-// the game's busy-wait between ticks (Sleep(0) in 0x44EEF0) is where the queued frames go out on time
-static void(WINAPI* g_fgRealSleep)(DWORD) = nullptr;
-static void WINAPI FgSleep(DWORD ms) {
-    if (g_fgQi < g_fgQn && !g_inPost && GetCurrentThreadId() == g_fgThread) FgRun(false);
-    g_fgRealSleep(ms);
-}
-static void HookImport(HMODULE mod, const char* dll, void* real, void* hook);
-static void FgInstallSleep() {
-    static bool done = false;
-    if (done) return;
-    done = true;
-    HMODULE k = GetModuleHandleA("kernel32.dll");
-    void* real = k ? (void*)GetProcAddress(k, "Sleep") : nullptr;
-    if (!real) return;
-    g_fgRealSleep = (void(WINAPI*)(DWORD))real;
-    HookImport(GetModuleHandleA(nullptr), "kernel32.dll", real, (void*)&FgSleep);
-}
-
 typedef HRESULT(STDMETHODCALLTYPE* BeginScene_t)(IDirect3DDevice9*);
 static BeginScene_t g_origBS = nullptr;
 static HRESULT STDMETHODCALLTYPE HookBS(IDirect3DDevice9* dev) {
     if (!g_inPost && !g_fgInEnd) {
         InterlockedIncrement(&g_fgBsCount);
-        if (g_fgQi < g_fgQn) FgRun(true);
+        if (!g_fgBsThis) { g_fgBsThis = true; g_fgBegin = FgNow(); }
+        if (g_fgQi < g_fgQn) FgRun(true);  // safety: anything still queued goes out before the next frame
     }
     return g_origBS(dev);
 }
 
-// fullscreen (exclusive) with frame generation on: ask for the monitor's fastest refresh at this resolution
-static void FgFullscreenRefresh(IDirect3D9* d3d, UINT adapter, D3DPRESENT_PARAMETERS* pp) {  // (borderless fullscreen uses the desktop's rate)
-    if (!d3d || !pp || pp->Windowed || V("gfx_framegen") == 0) return;
+// AdjustPP (device create / reset). Windowed with frame generation on: presents don't wait for the monitor (the
+// compositor shows them without tearing; see the top). Fullscreen (exclusive) with it on: ask for the monitor's
+// fastest refresh at this resolution (borderless fullscreen uses the desktop's rate).
+static void FgFullscreenRefresh(IDirect3D9* d3d, UINT adapter, D3DPRESENT_PARAMETERS* pp) {
+    if (!pp) return;
+    g_fgPresentKnown = true;
+    g_fgWindowed = pp->Windowed != FALSE;
+    g_fgImmediate = false;
+    if (V("gfx_framegen") == 0) return;
+    if (pp->Windowed) {
+        if (pp->PresentationInterval != D3DPRESENT_INTERVAL_IMMEDIATE)
+            mmenu::Log("gfx: frame generation: window presents don't wait for the monitor (the game's own pacing stays 60)");
+        pp->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+        g_fgImmediate = true;
+        return;
+    }
+    if (!d3d) return;
     if (pp->FullScreen_RefreshRateInHz >= 100) return;
     D3DFORMAT fmt = pp->BackBufferFormat == D3DFMT_UNKNOWN ? D3DFMT_X8R8G8B8 : pp->BackBufferFormat;
     if (fmt == D3DFMT_A8R8G8B8) fmt = D3DFMT_X8R8G8B8;

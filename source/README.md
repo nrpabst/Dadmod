@@ -13,6 +13,8 @@ still line up.
   (MSVC x86).
 - `mods/*/*.inc` - the DLL parts the loader includes: graphics settings (`gfx`), controllers (`controller/padhub`),
   main menu scenes (`mainmenu`), boot speed, bank drops, infinite balance lock, crash log.
+- `mods/fullscreen/` - Alt+Enter borderless fullscreen and the live Display menu (Apply, then Keep within 15 seconds).
+  In the Dev build now; it joins the player build in a later release.
 - `client/qb/dadmod/` - hand-written scripts. Most wrap a stock script (`<name>_orig`, see `client/wrap.txt`) so
   whatever the player has keeps running underneath.
 - `client/qb/gen/` - scripts generated from our main build (`client/tools/gen_client_qb.py`): our own new scripts,

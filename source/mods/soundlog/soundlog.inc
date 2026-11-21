@@ -377,6 +377,9 @@ static HRESULT WINAPI DsCreateHook(void* ds, const DWORD* desc, void** out, void
 
 // ---------------------------------------------------------------- toggle + watcher thread
 static int ReadToggle() {
+#ifdef SOUNDLOG_NO_LOGGER   // the player (client) build has no sound logger (Noah 2026-11-21); the pause fix and teleporter volume stay
+    return 0;
+#endif
 #ifdef SOUNDLOG_LIVE
     static int liveDefault = 1;   // the live test DLL logs from the moment it loads, until gfx.ini says gfx_soundlog = 0
 #else

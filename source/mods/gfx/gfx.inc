@@ -530,6 +530,8 @@ static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
+static bool g_galaxyOff = false;  // set when this card has no shader for the galaxy: the game's own sky is kept (2026-11-21)
+static bool GalaxyOn() { return V("gfx_galaxy") != 0 && !g_galaxyOff; }
 static bool g_skyGraded = false;  // the game's own sky was graded this frame
 static bool g_skyPass = false;
 static D3DMATRIX g_view = {}, g_proj = {};
@@ -662,7 +664,7 @@ float noise3(float3 x) {
     return lerp(lerp(lerp(hash13(i), hash13(i + float3(1, 0, 0)), f.x), lerp(hash13(i + float3(0, 1, 0)), hash13(i + float3(1, 1, 0)), f.x), f.y),
                 lerp(lerp(hash13(i + float3(0, 0, 1)), hash13(i + float3(1, 0, 1)), f.x), lerp(hash13(i + float3(0, 1, 1)), hash13(i + float3(1, 1, 1)), f.x), f.y), f.z);
 }
-float fbm(float3 p) { float a = 0.5, s = 0; for (int i = 0; i < 5; i++) { s += a * noise3(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
+float fbm(float3 p) { float a = 0.5, s = 0; [loop] for (int i = 0; i < 5; i++) { s += a * noise3(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
 
 float3 fxaa(float2 uv) {
     float3 nw = tex2D(s0, uv + float2(-1, -1) * px.xy).rgb, ne = tex2D(s0, uv + float2(1, -1) * px.xy).rgb;
@@ -899,7 +901,7 @@ float4 ps_galaxy(float2 uv : TEXCOORD0) : COLOR {
 float3 hsv2rgb(float h, float s, float v) { float3 k = saturate(abs(frac(h + float3(0, 2.0 / 3, 1.0 / 3)) * 6 - 3) - 1); return v * lerp(1, k, s); }
 float3 starfield(float3 d, float t, float dens) {
     float3 col = 0;
-    [unroll] for (int k = 0; k < 2; k++) {
+    [loop] for (int k = 0; k < 2; k++) {
         float sc = k == 0 ? 90.0 : 210.0;
         float3 p = d * sc, ci = floor(p);
         float h = hash13(ci + k * 17.0);
@@ -909,13 +911,28 @@ float3 starfield(float3 d, float t, float dens) {
     }
     return col * float3(0.85, 0.9, 1.0);
 }
+// starfield(d, t, 1.0) and starfield(d, t, 0.6) in one pass: the same cells and twinkle, two densities (2026-11-21, smaller shaders)
+void starfield2(float3 d, float t, out float3 a, out float3 b) {
+    a = 0; b = 0;
+    [loop] for (int k = 0; k < 2; k++) {
+        float sc = k == 0 ? 90.0 : 210.0;
+        float3 p = d * sc, ci = floor(p);
+        float h = hash13(ci + k * 17.0);
+        float3 r = float3(hash13(ci + 1.7), hash13(ci + 3.1), hash13(ci + 5.3));
+        float g = pow(saturate(1 - length(frac(p) - r) * 2.6), 10.0) * (0.75 + 0.25 * sin(t * (1.5 + h * 3.0) + h * 40.0)) * (k == 0 ? 2.6 : 1.5);
+        a += step(1 - 1.0 * (k == 0 ? 0.10 : 0.22), h) * g;
+        b += step(1 - 0.6 * (k == 0 ? 0.10 : 0.22), h) * g;
+    }
+    a *= float3(0.85, 0.9, 1.0); b *= float3(0.85, 0.9, 1.0);
+}// the golden sky keeps the unrolled fbm3: as a loop its clouds come out in other places (2026-11-21 pixel compare)
+float fbm3u(float3 p) { float a = 0.5, s = 0; [unroll] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
 // clouds on a flat ceiling over the camera: where the ray meets it
 float2 dome(float3 d, float lift) { return d.xz / (max(d.y, 0) + lift); }
-float fbm3(float3 p) { float a = 0.5, s = 0; [unroll] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
+float fbm3(float3 p) { float a = 0.5, s = 0; [loop] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
 
 float3 sky_aurora(float3 d, float t, float az, float el) {
     float3 col = lerp(float3(0.02, 0.05, 0.08), float3(0.0, 0.01, 0.04), saturate(el * 1.4)) + starfield(d, t, 1.0) * 0.8;
-    [unroll] for (int i = 0; i < 3; i++) {
+    [loop] for (int i = 0; i < 3; i++) {
         float y0 = 0.22 + i * 0.13 + 0.07 * sin(az * 2.0 + i * 2.1 + t * 0.07) + 0.06 * (noise3(float3(az * 4.0, t * 0.12, i * 7.0)) - 0.5);
         float c = el - y0;
         float shape = c < 0 ? exp(-c * c * 900.0) : exp(-c * (9.0 - i * 2.0));
@@ -967,7 +984,7 @@ float3 sky_golden(float3 d, float t, float az, float el) {
     float sun = saturate(dot(d, sd));
     col += pow(sun, 6.0) * float3(1.0, 0.55, 0.20) * 0.6 + smoothstep(0.9993, 0.9996, sun) * float3(1.0, 0.92, 0.7) * 2.0;
     float2 q = dome(d, 0.18) * 0.45 + float2(t * 0.02, t * 0.008);
-    float c = smoothstep(0.48, 0.78, fbm3(float3(q, 0.3)) + noise3(float3(q * 4.0, t * 0.03)) * 0.12);
+    float c = smoothstep(0.48, 0.78, fbm3u(float3(q, 0.3)) + noise3(float3(q * 4.0, t * 0.03)) * 0.12);
     float3 cl = lerp(float3(0.95, 0.55, 0.40), float3(1.0, 0.85, 0.60), pow(sun, 3.0));
     return lerp(col, cl, c * 0.85 * saturate(el * 6.0));
 }
@@ -1024,17 +1041,21 @@ float3 sky_blackhole(float3 d, float t, float az, float el) {
     float r = max(length(p), 1e-4);
     float bend = R * R * 1.6 / r;
     float3 dd = normalize(d - (bx * p.x + by * p.y) / r * bend);
-    float3 col = starfield(dd, t, 1.4) + float3(0.02, 0.02, 0.05) + lerp(float3(0.10, 0.18, 0.55), float3(0.45, 0.20, 0.60), noise3(dd * 4.0)) * pow(saturate(fbm3(dd * 2.5) * 1.3 - 0.3), 2.0) * 0.8;
     float2 dp = float2(p.x, p.y / 0.22);
     float dr = length(dp), ang = atan2(dp.y, dp.x);
-    float disk = smoothstep(R * 1.6, R * 2.0, dr) * smoothstep(R * 5.0, R * 2.6, dr);
-    float swirl = 0.55 + 0.45 * noise3(float3(dr * 60.0, ang * 3.0 - t * 1.6 + 30.0 / (dr * 40.0 + 1.0), t * 0.2));
-    float3 dcol = lerp(float3(1.0, 0.45, 0.10), float3(1.0, 0.92, 0.75), saturate(1.8 - dr / R * 0.45)) * swirl * (0.4 + (0.55 + 0.45 * cos(ang)) * 1.4);
-    float front = step(0, -p.y);
     float2 hp = float2(p.x, (p.y - R * 0.05) / 0.85);
     float hr = length(hp);
+    // the three noise3 lookups share one loop body (2026-11-21: three inlined copies put this sky over 512 slots)
+    float3 na = dd * 4.0, nb = float3(dr * 60.0, ang * 3.0 - t * 1.6 + 30.0 / (dr * 40.0 + 1.0), t * 0.2), nc = float3(hr * 70.0, atan2(hp.y, hp.x) * 3.0 + t * 1.4, 4.0);
+    float3 nz = 0;
+    [loop] for (int k = 0; k < 3; k++) nz += noise3(k == 0 ? na : (k == 1 ? nb : nc)) * float3(k == 0, k == 1, k == 2);
+    float3 col = starfield(dd, t, 1.4) + float3(0.02, 0.02, 0.05) + lerp(float3(0.10, 0.18, 0.55), float3(0.45, 0.20, 0.60), nz.x) * pow(saturate(fbm3(dd * 2.5) * 1.3 - 0.3), 2.0) * 0.8;
+    float disk = smoothstep(R * 1.6, R * 2.0, dr) * smoothstep(R * 5.0, R * 2.6, dr);
+    float swirl = 0.55 + 0.45 * nz.y;
+    float3 dcol = lerp(float3(1.0, 0.45, 0.10), float3(1.0, 0.92, 0.75), saturate(1.8 - dr / R * 0.45)) * swirl * (0.4 + (0.55 + 0.45 * cos(ang)) * 1.4);
+    float front = step(0, -p.y);
     float halo = smoothstep(R * 2.6, R * 1.7, hr) * smoothstep(R * 1.25, R * 1.45, hr) * step(0, p.y);
-    float hswirl = 0.6 + 0.4 * noise3(float3(hr * 70.0, atan2(hp.y, hp.x) * 3.0 + t * 1.4, 4.0));
+    float hswirl = 0.6 + 0.4 * nz.z;
     if (r < R) col = 0;
     col += exp(-pow((r - R * 1.08) / (R * 0.05), 2)) * float3(1.0, 0.8, 0.55) * 1.2;
     col += float3(1.0, 0.6, 0.25) * halo * hswirl * 1.2 * step(R, r);
@@ -1064,7 +1085,7 @@ float3 skies(float3 d, float style, float t) {
     return sky_candy(d, t, az, el);
 }
 // time of day + sky boost for the extra skies; sky boost 5 (the default) leaves them as designed
-float3 skylook(float3 c, float3 d, float style, float t, float tod) {
+float3 skylook(float3 c, float3 d, float style, float t, float tod, float3 st10, float3 st06) {
     float pop = sk.y, el = d.y;
     bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;  // golden, vapor, rainbow, candy
     float lum = dot(c, L);
@@ -1074,23 +1095,45 @@ float3 skylook(float3 c, float3 d, float style, float t, float tod) {
     else if (tod > 2.5 && tod < 3.5) c = c * float3(1.10, 0.92, 0.82) + float3(1.0, 0.42, 0.12) * exp(-abs(el) * 5.0) * 0.18;
     else if (tod > 3.5 && tod < 4.5) {
         c = c * (bright ? float3(0.22, 0.26, 0.42) : float3(0.75, 0.80, 0.95));
-        if (bright) c += starfield(d, t, 1.0) * saturate(el * 4.0) * 0.8;
+        if (bright) c += st10 * saturate(el * 4.0) * 0.8;
     } else if (tod > 4.5) {
         c = c * (bright ? float3(0.55, 0.42, 0.55) : float3(0.88, 0.85, 0.92)) + float3(0.85, 0.32, 0.14) * exp(-abs(el) * 6.0) * 0.15;
-        if (bright) c += starfield(d, t, 0.6) * saturate(el * 3.0 - 0.3) * 0.6;
+        if (bright) c += st06 * saturate(el * 3.0 - 0.3) * 0.6;
     }
     return c;
 }
-float4 ps_skies(float2 uv : TEXCOORD0) : COLOR {
+// One small shader per extra sky (2026-11-21: all ten in one ps_skies came to ~4,900 then ~3,300 instruction slots;
+// D3D9 only promises 512 for ps_3_0, so each sky is its own shader, chosen by gfx_galaxy in DrawGalaxy)
+float3 skydir(float2 uv) {
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
-    float3 d = normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
-    float3 c = skies(d, p9.y, p1.w);
-    float3 a = skylook(c, d, p9.y, p1.w, sk.x);
-    [branch] if (sk.w > 0.001) a = lerp(a, skylook(c, d, p9.y, p1.w, sk.z), sk.w);
+    return normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
+}
+float4 skyout(float3 c, float3 d, float style) {
+    float3 st10 = 0, st06 = 0;  // the night/evening stars, made once
+    bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;
+    [branch] if (bright && (sk.x > 3.5 || (sk.w > 0.001 && sk.z > 3.5))) starfield2(d, p1.w, st10, st06);
+    float3 a = 0, b = 0;  // the look for this time of day and, while it fades, the next one: one loop body (2026-11-21, smaller shaders)
+    [loop] for (int i = 0; i < 2; i++) {
+        if (i == 1 && sk.w <= 0.001) break;
+        float3 l = skylook(c, d, style, p1.w, i == 0 ? sk.x : sk.z, st10, st06);
+        if (i == 0) a = l; else b = l;
+    }
+    [branch] if (sk.w > 0.001) a = lerp(a, b, sk.w);
     return float4(saturate(a), 1);
 }
+#define DADMOD_SKY(n, fn) float4 ps_sky##n(float2 uv : TEXCOORD0) : COLOR { float3 d = skydir(uv); return skyout(fn(d, p1.w, atan2(d.x, d.z), d.y), d, n); }
+DADMOD_SKY(5, sky_aurora)
+DADMOD_SKY(6, sky_synthwave)
+DADMOD_SKY(7, sky_storm)
+DADMOD_SKY(8, sky_golden)
+DADMOD_SKY(9, sky_vapor)
+DADMOD_SKY(10, sky_hell)
+DADMOD_SKY(11, sky_water)
+DADMOD_SKY(12, sky_rainbow)
+DADMOD_SKY(13, sky_blackhole)
+DADMOD_SKY(14, sky_candy)
 // the game's own sky, graded right after it is drawn: richer colors and a look that matches the time of day
-float3 skygrade(float3 c, float3 d, float tod) {
+float3 skygrade(float3 c, float3 d, float tod, float3 gx) {
     float el = d.y, pop = sk.y;
     float lum = dot(c, L);
     c = lerp(lum.xxx, c, 1 + pop * 0.9);
@@ -1109,11 +1152,11 @@ float3 skygrade(float3 c, float3 d, float tod) {
         c = lerp(c, g * (0.45 + lum * 1.2), mixv) + pow(sun, 10) * float3(1.0, 0.55, 0.2) * 0.35 + pow(sun, 300) * float3(1.0, 0.85, 0.6) * 0.5;
     } else if (tod > 3.5 && tod < 4.5) { // night: deep blue-black with stars and a faint milky way
         c = c * float3(0.30, 0.38, 0.62) * (0.6 - pop * 0.2);
-        c += galaxy(d, 1.0, p1.w) * (0.55 + pop * 0.5) * saturate(el * 5 + 0.4);
+        c += gx * (0.55 + pop * 0.5) * saturate(el * 5 + 0.4);
     } else if (tod > 4.5) {              // evening, lights on: dusk glow low down, first stars up high
         float3 g = lerp(float3(0.85, 0.32, 0.14), float3(0.07, 0.06, 0.20), saturate(el * 2.0));
         c = lerp(c, g * (0.4 + lum), mixv) + pow(sun, 8) * float3(0.9, 0.4, 0.15) * 0.35;
-        c += galaxy(d, 1.0, p1.w) * 0.35 * saturate(el * 3 - 0.4);
+        c += gx * 0.35 * saturate(el * 3 - 0.4);
     }
     return c;
 }
@@ -1121,8 +1164,10 @@ float4 ps_sky(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
     float3 d = normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
-    float3 a = skygrade(c, d, sk.x);
-    [branch] if (sk.w > 0.001) a = lerp(a, skygrade(c, d, sk.z), sk.w);
+    float3 gx = 0;  // the milky way for night/evening, made once (2026-11-21: four inlined copies put ps_sky over NVIDIA's slot limit)
+    [branch] if (sk.x > 3.5 || (sk.w > 0.001 && sk.z > 3.5)) gx = galaxy(d, 1.0, p1.w);
+    float3 a = skygrade(c, d, sk.x, gx);
+    [branch] if (sk.w > 0.001) a = lerp(a, skygrade(c, d, sk.z, gx), sk.w);
     return float4(saturate(a), 1);
 }
 // ---- weather (scene pass, before the HUD): s0 color, s1 depth when p9.z > 0
@@ -1184,12 +1229,12 @@ float4 ps_weather(float2 uv : TEXCOORD0) : COLOR {
     float az = atan2(d.x, d.z), el = asin(clamp(d.y, -1, 1));
     [branch] if (wetness > 0.01) {
         float r = 0;
-        [unroll] for (int k = 0; k < 3; k++) r += rainlayer(az, el, t, k, z, wetness);
+        [loop] for (int k = 0; k < 3; k++) r += rainlayer(az, el, t, k, z, wetness);
         c = lerp(c, float3(0.75, 0.8, 0.88) * (0.4 + 0.6 * lite) + fl * 0.5, saturate(r) * 0.45);
     }
     [branch] if (snow > 0.01) {
         float sn = 0;
-        [unroll] for (int k = 0; k < 3; k++) sn += snowlayer(az, el, t, k, z, saturate(snow));
+        [loop] for (int k = 0; k < 3; k++) sn += snowlayer(az, el, t, k, z, saturate(snow));
         c = lerp(c, float3(0.95, 0.97, 1.0) * (0.45 + 0.55 * lite), saturate(sn));
     }
     return float4(c, 1);
@@ -1277,7 +1322,7 @@ static IDirect3DVertexShader9* g_vs = nullptr;
 static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDown = nullptr, *g_psBlur = nullptr, *g_psScene = nullptr,
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
-                             *g_psSkies = nullptr,  // skies 5-14 (optional: a failed compile only loses those skies)
+                             *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
                              *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr,  // optional too
                              *g_psMirror = nullptr;  // optional: without it mirror mode does nothing
 static IDirect3DVertexDeclaration9* g_decl = nullptr;
@@ -1330,45 +1375,157 @@ static bool CachedShaderCode(CompileShader_t compile, const char* fn, const char
     return true;
 }
 
+// ---- what this graphics card can do (2026-11-21) ---------------------------------------------------
+// A player's NVIDIA card refused ps_sky (~4000 instruction slots); the old MakeShaders then stopped halfway
+// without a log line, reported "ready" on the next call (it only checked g_vs) and the galaxy sky drew with
+// no vertex declaration: an access violation inside d3d9/the driver on every start. Now every card's limits
+// are read once and logged, shaders over the card's slot limit are skipped, and the shader set is
+// all-or-nothing. dadmod\gfx_test.ini (test builds only, never shipped) can fake a weak card:
+//   failshader = ps_sky      that shader's create is treated as failed
+//   weakcard = 1             pretend: 512 pixel/vertex shader slots, no readable depth (INTZ)
+static bool g_cardChecked = false, g_cardSM3 = true, g_cardIntz = true;
+static UINT g_cardPsSlots = 32768, g_cardVsSlots = 32768;
+static std::string g_testFailShader;
+static bool g_testWeak = false;
+static void ReadGfxTest() {
+    std::string s;
+    if (!ReadWholeFile(ExeDirFile("gfx_test.ini"), s)) return;
+    size_t p = 0;
+    while (p < s.size()) {
+        size_t e = s.find('\n', p);
+        if (e == std::string::npos) e = s.size();
+        std::string line = s.substr(p, e - p);
+        p = e + 1;
+        size_t sc = line.find(';');
+        if (sc != std::string::npos) line.resize(sc);
+        size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        auto trim = [](std::string t) {
+            size_t a = t.find_first_not_of(" \t\r"), b = t.find_last_not_of(" \t\r");
+            return a == std::string::npos ? std::string() : t.substr(a, b - a + 1);
+        };
+        std::string k = trim(line.substr(0, eq)), v = trim(line.substr(eq + 1));
+        if (k == "failshader") g_testFailShader = v;
+        else if (k == "weakcard") g_testWeak = atoi(v.c_str()) != 0;
+    }
+}
+static void CardCheck(IDirect3DDevice9* dev) {
+    if (g_cardChecked) return;
+    g_cardChecked = true;
+    ReadGfxTest();
+    D3DCAPS9 c = {};
+    bool haveCaps = SUCCEEDED(dev->GetDeviceCaps(&c));
+    D3DADAPTER_IDENTIFIER9 id = {};
+    IDirect3D9* d3d = nullptr;
+    D3DDEVICE_CREATION_PARAMETERS cp = {};
+    D3DDISPLAYMODE mode = {};
+    bool haveId = SUCCEEDED(dev->GetDirect3D(&d3d)) && d3d && SUCCEEDED(dev->GetCreationParameters(&cp)) &&
+                  SUCCEEDED(d3d->GetAdapterIdentifier(cp.AdapterOrdinal, 0, &id));
+    if (haveCaps) {
+        g_cardSM3 = (c.PixelShaderVersion & 0xFFFF) >= 0x0300 && (c.VertexShaderVersion & 0xFFFF) >= 0x0300;
+        if (c.MaxPixelShader30InstructionSlots) g_cardPsSlots = c.MaxPixelShader30InstructionSlots;
+        if (c.MaxVertexShader30InstructionSlots) g_cardVsSlots = c.MaxVertexShader30InstructionSlots;
+    }
+    if (d3d) {
+        const D3DFORMAT kIntz = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');
+        d3d->GetAdapterDisplayMode(cp.AdapterOrdinal, &mode);
+        D3DFORMAT fmt = mode.Format ? mode.Format : D3DFMT_X8R8G8B8;
+        g_cardIntz = SUCCEEDED(d3d->CheckDeviceFormat(cp.AdapterOrdinal, cp.DeviceType, fmt, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_TEXTURE, kIntz));
+        bool rt = SUCCEEDED(d3d->CheckDeviceFormat(cp.AdapterOrdinal, cp.DeviceType, fmt, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8));
+        if (!rt) { g_cardSM3 = false; mmenu::Log("gfx: card can't render to A8R8G8B8 textures, effects off"); }
+        d3d->Release();
+    }
+    if (g_testWeak) { g_cardPsSlots = g_cardVsSlots = 512; g_cardIntz = false; }
+    unsigned drv = (unsigned)id.DriverVersion.HighPart, drl = (unsigned)id.DriverVersion.LowPart;
+    mmenu::Log("gfx: card %s (vendor 0x%04lX device 0x%04lX, driver %u.%u.%u.%u): ps %lu.%lu, vs %lu.%lu, ps slots %u, vs slots %u, "
+               "max texture %lux%lu, render targets %lu, readable depth %s%s%s",
+               haveId ? id.Description : "?", id.VendorId, id.DeviceId, drv >> 16, drv & 0xFFFF, drl >> 16, drl & 0xFFFF,
+               (c.PixelShaderVersion >> 8) & 0xFF, c.PixelShaderVersion & 0xFF, (c.VertexShaderVersion >> 8) & 0xFF, c.VertexShaderVersion & 0xFF,
+               g_cardPsSlots, g_cardVsSlots, c.MaxTextureWidth, c.MaxTextureHeight, c.NumSimultaneousRTs, g_cardIntz ? "yes" : "no",
+               g_testWeak ? " [TEST: weak card]" : "", g_testFailShader.empty() ? "" : " [TEST: failing a shader]");
+    if (!g_cardSM3) mmenu::Log("gfx: card has no shader model 3.0, graphics effects off");
+}
+// instruction slots a compiled shader takes (opcode tokens, without declarations/constants/comments)
+static UINT ShaderSlots(const std::string& code) {
+    const DWORD* t = (const DWORD*)code.data();
+    size_t n = code.size() / 4, i = 1, slots = 0;
+    while (i < n) {
+        DWORD tok = t[i], op = tok & 0xFFFF;
+        if (op == 0xFFFF) break;                                    // end
+        if (op == 0xFFFE) { i += 1 + ((tok >> 16) & 0x7FFF); continue; }  // comment block
+        size_t len = (tok >> 24) & 0x0F;
+        if (op != 31 && op != 81 && op != 82 && op != 83) ++slots;  // dcl, def, defi, defb take no slot
+        i += 1 + len;
+    }
+    return (UINT)slots;
+}
+// one shader: compile/cache, check against the card, create. Every failure is logged with its reason.
+static bool MakeOneShader(IDirect3DDevice9* dev, CompileShader_t compile, const char* fn, const char* prof, bool vs, void** out) {
+    std::string code, err;
+    if (!CachedShaderCode(compile, fn, prof, code, err)) { mmenu::Log("gfx: shader %s failed to compile: %s", fn, err.c_str()); return false; }
+    UINT slots = ShaderSlots(code), limit = vs ? g_cardVsSlots : g_cardPsSlots;
+    if (slots > limit) { mmenu::Log("gfx: shader %s skipped: %u instruction slots, this card allows %u", fn, slots, limit); return false; }
+    HRESULT hr = g_testFailShader == fn ? D3DERR_INVALIDCALL
+                 : vs ? dev->CreateVertexShader((const DWORD*)code.data(), (IDirect3DVertexShader9**)out)
+                      : dev->CreatePixelShader((const DWORD*)code.data(), (IDirect3DPixelShader9**)out);
+    if (FAILED(hr) || !*out) {
+        if (*out) { ((IUnknown*)*out)->Release(); *out = nullptr; }
+        mmenu::Log("gfx: shader %s rejected by the card (hr 0x%08lX, %u slots)%s", fn, hr, slots, g_testFailShader == fn ? " [TEST]" : "");
+        return false;
+    }
+    return true;
+}
+// All-or-nothing: the core set (vertex shader, declaration, the post-process chain) either all exists or none
+// of it does. Optional shaders (galaxy, extra skies, sky grading, weather, fireworks, lamps, mirror) can each be
+// missing; every user checks its own pointer.
+static bool g_shadersReady = false;
+static bool AnySkyN() { for (auto p : g_psSkyN) if (p) return true; return false; }
 static bool MakeShaders(IDirect3DDevice9* dev) {
-    if (g_vs) return true;
+    if (g_shadersReady) return true;
     if (g_shaderFail) return false;
+    CardCheck(dev);
+    if (!g_cardSM3) { g_shaderFail = true; return false; }
     if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
     auto compile = g_dx ? (CompileShader_t)GetProcAddress(g_dx, "D3DXCompileShader") : nullptr;
-    struct { const char* fn; const char* prof; bool vs; void** out; } list[] = {
+    struct { const char* fn; const char* prof; bool vs; void** out; } core[] = {
         {"vs_main", "vs_3_0", true, (void**)&g_vs}, {"ps_fxaa", "ps_3_0", false, (void**)&g_psFxaa},
         {"ps_bright", "ps_3_0", false, (void**)&g_psBright}, {"ps_down", "ps_3_0", false, (void**)&g_psDown},
         {"ps_blur", "ps_3_0", false, (void**)&g_psBlur}, {"ps_scene", "ps_3_0", false, (void**)&g_psScene},
         {"ps_look", "ps_3_0", false, (void**)&g_psLook}, {"ps_screen", "ps_3_0", false, (void**)&g_psScreen},
-        {"ps_galaxy", "ps_3_0", false, (void**)&g_psGalaxy}, {"ps_ao", "ps_3_0", false, (void**)&g_psAO},
-        {"ps_aoblur", "ps_3_0", false, (void**)&g_psAOBlur}, {"ps_sky", "ps_3_0", false, (void**)&g_psSky}};
-    for (auto& s : list) {
-        std::string code, err;
-        if (!CachedShaderCode(compile, s.fn, s.prof, code, err)) {
-            mmenu::Log("gfx: shader %s failed: %s", s.fn, err.c_str());
-            g_shaderFail = true;
-            return false;
-        }
-        HRESULT hr = s.vs ? dev->CreateVertexShader((const DWORD*)code.data(), (IDirect3DVertexShader9**)s.out)
-                          : dev->CreatePixelShader((const DWORD*)code.data(), (IDirect3DPixelShader9**)s.out);
-        if (FAILED(hr)) { g_shaderFail = true; return false; }
+        {"ps_ao", "ps_3_0", false, (void**)&g_psAO}, {"ps_aoblur", "ps_3_0", false, (void**)&g_psAOBlur}};
+    bool ok = true;
+    for (auto& s : core) if (!MakeOneShader(dev, compile, s.fn, s.prof, s.vs, s.out)) { ok = false; break; }
+    if (ok) {
+        D3DVERTEXELEMENT9 el[] = {{0, 0, D3DDECLTYPE_FLOAT4, 0, D3DDECLUSAGE_POSITION, 0},
+                                  {0, 16, D3DDECLTYPE_FLOAT2, 0, D3DDECLUSAGE_TEXCOORD, 0}, D3DDECL_END()};
+        HRESULT hr = dev->CreateVertexDeclaration(el, &g_decl);
+        if (FAILED(hr) || !g_decl) { g_decl = nullptr; mmenu::Log("gfx: vertex declaration rejected by the card (hr 0x%08lX)", hr); ok = false; }
     }
-    struct { const char* fn; IDirect3DPixelShader9** out; } optional[] = {
-        {"ps_skies", &g_psSkies}, {"ps_weather", &g_psWeather}, {"ps_fireworks", &g_psFireworks}, {"ps_lamps", &g_psLamps},
-        {"ps_mirror", &g_psMirror}};
-    for (auto& o : optional) {
-        std::string code, err;
-        if (CachedShaderCode(compile, o.fn, "ps_3_0", code, err)) dev->CreatePixelShader((const DWORD*)code.data(), o.out);
-        else mmenu::Log("gfx: shader %s failed: %s", o.fn, err.c_str());
+    if (!ok) {
+        for (auto& s : core) if (*s.out) { ((IUnknown*)*s.out)->Release(); *s.out = nullptr; }
+        if (g_decl) { g_decl->Release(); g_decl = nullptr; }
+        g_shaderFail = true;
+        mmenu::Log("gfx: graphics effects off on this card (the game itself is unchanged)");
+        return false;
     }
-    D3DVERTEXELEMENT9 el[] = {{0, 0, D3DDECLTYPE_FLOAT4, 0, D3DDECLUSAGE_POSITION, 0},
-                              {0, 16, D3DDECLTYPE_FLOAT2, 0, D3DDECLUSAGE_TEXCOORD, 0}, D3DDECL_END()};
-    dev->CreateVertexDeclaration(el, &g_decl);
+    struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
+        {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
+        {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_mirror", &g_psMirror, "mirror picture"}};
+    for (auto& o : optional)
+        if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
+    for (int i = 0; i < 10; ++i) {
+        char fn[16];
+        wsprintfA(fn, "ps_sky%d", i + 5);
+        if (!MakeOneShader(dev, compile, fn, "ps_3_0", false, (void**)&g_psSkyN[i])) mmenu::Log("gfx: galaxy sky %d unavailable on this card (the milky way shows instead)", i + 5);
+    }
+    g_shadersReady = true;
     mmenu::Log("gfx: effects ready");
     return true;
 }
 
 static void Quad(IDirect3DDevice9* dev, UINT w, UINT h, float z = 0) {
+    if (!g_shadersReady || !g_vs || !g_decl) return;  // never draw with a half-made shader set
     // clip-space quad with the D3D9 half-pixel offset
     float ox = -1.0f / w, oy = 1.0f / h;
     float v[4][6] = {{-1 + ox, 1 + oy, z, 1, 0, 0}, {1 + ox, 1 + oy, z, 1, 1, 0}, {-1 + ox, -1 + oy, z, 1, 0, 1}, {1 + ox, -1 + oy, z, 1, 1, 1}};
@@ -1377,6 +1534,7 @@ static void Quad(IDirect3DDevice9* dev, UINT w, UINT h, float z = 0) {
 
 static void Pass(IDirect3DDevice9* dev, IDirect3DPixelShader9* ps, IDirect3DSurface9* dst, UINT sw, UINT sh, UINT dw, UINT dh,
                  IDirect3DBaseTexture9* t0, IDirect3DBaseTexture9* t1 = nullptr, IDirect3DBaseTexture9* t2 = nullptr, IDirect3DBaseTexture9* t3 = nullptr) {
+    if (!ps || !dst) return;  // a shader this card didn't get: skip the pass instead of drawing with none
     dev->SetRenderTarget(0, dst);
     D3DVIEWPORT9 vp = {0, 0, dw, dh, 0, 1};
     dev->SetViewport(&vp);
@@ -1932,9 +2090,13 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
 
 static void DrawGalaxy(IDirect3DDevice9* dev) {
     g_galaxyDone = true;
+    // no shader for it on this card: hand the sky back to the game (the hooks stop skipping its sky draws)
+    if (!MakeShaders(dev) || !(g_psGalaxy || AnySkyN())) {
+        if (!g_galaxyOff) { g_galaxyOff = true; mmenu::Log("gfx: galaxy sky off: this card has no shader for it, the game's own sky stays"); }
+        return;
+    }
     static bool once = false;
     if (!once) { once = true; mmenu::Log("gfx: galaxy sky drawing"); }
-    if (!MakeShaders(dev)) return;
     IDirect3DSurface9* rt = nullptr;
     if (FAILED(dev->GetRenderTarget(0, &rt)) || !rt) return;
     D3DSURFACE_DESC d;
@@ -1951,8 +2113,11 @@ static void DrawGalaxy(IDirect3DDevice9* dev) {
     dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
     int style = V("gfx_galaxy");
     float save9 = g_c[9][1];
-    if (style >= 5 && !g_psSkies) g_c[9][1] = 1;  // extra skies unavailable: milky way
-    dev->SetPixelShader(style >= 5 && g_psSkies ? g_psSkies : g_psGalaxy);
+    IDirect3DPixelShader9* skyN = style >= 5 && style <= 14 ? g_psSkyN[style - 5] : nullptr;
+    if (!skyN && !g_psGalaxy) for (int i = 0; i < 10 && !skyN; ++i) skyN = g_psSkyN[i];  // only some extra skies made it: the first of those
+    IDirect3DPixelShader9* ps = skyN ? skyN : g_psGalaxy;
+    if (!ps) { g_c[9][1] = save9; g_sb->Apply(); g_inPost = false; return; }
+    dev->SetPixelShader(ps);
     dev->SetPixelShaderConstantF(1, &g_c[1][0], 13);
     g_c[9][1] = save9;
     dev->SetPixelShaderConstantF(16, g_sky, 1);
@@ -1971,7 +2136,7 @@ static void SkyGrade(IDirect3DDevice9* dev) {
     if (!BackBufferIsTarget(dev, &bb)) return;
     D3DSURFACE_DESC d;
     bb->GetDesc(&d);
-    if (!MakeShaders(dev) || !EnsureTargets(dev, d.Width, d.Height)) { bb->Release(); return; }
+    if (!MakeShaders(dev) || !g_psSky || !EnsureTargets(dev, d.Width, d.Height)) { bb->Release(); return; }
     static bool once = false;
     if (!once) { once = true; mmenu::Log("gfx: sky grading (time of day %d, boost %d)", V("gfx_tod"), V("gfx_skypop")); }
     if (InterlockedExchange(&g_dirtyPost, 0)) BuildConstants();
@@ -2215,8 +2380,8 @@ static HRESULT STDMETHODCALLTYPE HookST(IDirect3DDevice9* dev, D3DTRANSFORMSTATE
         if (t == D3DTS_VIEW) g_view = *m;
         if (t == D3DTS_PROJECTION) {
             bool sky = fabsf(m->_43) < 0.001f && m->_34 < -0.5f;
-            if (sky && V("gfx_galaxy") && !g_galaxyDone) { g_origST(dev, t, m); DrawGalaxy(dev); }
-            if (!sky && g_skyPass && !g_skyGraded && !V("gfx_galaxy") && SkyWanted()) SkyGrade(dev);
+            if (sky && GalaxyOn() && !g_galaxyDone) { g_origST(dev, t, m); DrawGalaxy(dev); }
+            if (!sky && g_skyPass && !g_skyGraded && !GalaxyOn() && SkyWanted()) SkyGrade(dev);
             if (!sky && g_skyPass && !g_fwDone && FireworksLive() && (g_msaaOn || g_intzFail)) DrawFireworks(dev);
             g_skyPass = sky;
             if (!sky && m->_34 < -0.5f) { g_proj = *m; g_haveProj = true; }
@@ -2249,13 +2414,13 @@ static HRESULT STDMETHODCALLTYPE HookRS(IDirect3DDevice9* dev, D3DRENDERSTATETYP
 
 static bool ScreenSpaceDraw(IDirect3DDevice9* dev);
 static HRESULT STDMETHODCALLTYPE HookDIP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;  // the galaxy replaces the game's sky
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;  // the galaxy replaces the game's sky
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
     return g_origDIP(dev, t, b, mi, nv, si, pc);
 }
 
 static HRESULT STDMETHODCALLTYPE HookDP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT sv, UINT pc) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
     return g_origDP(dev, t, sv, pc);
 }
@@ -2276,7 +2441,7 @@ static bool ScreenSpaceDraw(IDirect3DDevice9* dev) {
 }
 
 static HRESULT STDMETHODCALLTYPE HookDPUP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT n, const void* v, UINT st) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;
     // Noah 2026-10-20 (mirror mode showed unflipped bits): the game also draws 3D effects (shadows,
     // particles, trails) with DrawPrimitiveUP, so only a screen-space draw ends the 3D scene.
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
@@ -2295,6 +2460,12 @@ static HRESULT STDMETHODCALLTYPE HookFVF(IDirect3DDevice9* dev, DWORD f) {
 static IDirect3DSurface9* MakeIntz(IDirect3DDevice9* dev) {
     if (g_intzSurf) return g_intzSurf;
     if (g_intzFail || !g_autoDS) return nullptr;
+    CardCheck(dev);
+    if (!g_cardIntz) {  // the card has no readable depth format (or a weak-card test): depth effects stay off
+        g_intzFail = true;
+        mmenu::Log("gfx: readable depth (INTZ) not supported by this card, depth effects off");
+        return nullptr;
+    }
     D3DSURFACE_DESC d;
     g_autoDS->GetDesc(&d);
     const D3DFORMAT kIntz = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');
@@ -2547,6 +2718,7 @@ static int __cdecl ReadControlsHook(int player, BYTE* out) {
         WORD b = *(WORD*)(out + 4);
         *(WORD*)(out + 4) = (WORD)((b & ~12) | (b & 4 ? 8 : 0) | (b & 8 ? 4 : 0));
     }
+    if (player == 1) cars2::Remap(out);  // cars2.inc: while driving, up/down also press gas/brake
     return r;
 }
 // Tricks: the trick system records each button press under its name (0x51F958 calls GetButtonChecksum(index),

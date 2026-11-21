@@ -61,3 +61,4 @@ thpg	client	yes	prx:Levels.q	Tony Hawk's Proving Ground level select tab (Larxia
 midload	client	yes	prx:ButtonScripts.q prx:(stats/tricks/memcard scripts) data:dadmod_casidle.qb	Quick Menu > Load Skater mid-level (offline only for now); unsaved-changes warning (mods/midload/apply.py hooks, client wraps)
 onlinemaps	both	yes	prx:skateshop.q prx:net.q prx:userslots.q	Our extra maps hostable online (greyed-slot check); ! level commands are host-answered (server only)
 screenfx	client	yes	prx:ButtonScripts.q prx:grindscripts.q(CreatureScaryGrindEffect) prx:Levels.q	Trick Screen Effects On/Off (Pause > dadmod > Gameplay, player shibe); client: wrap CreatureScaryGrindEffect (client/qb/dadmod/screenfx.q)
+levelfix	client	yes	data:dadmod_levelfix.qb prx:Levels.q(load_level)	Stock level script fixes loaded after each level's own qbs: New Orleans "Into the Underworld" manhole scream off (Noah 2026-11-21)

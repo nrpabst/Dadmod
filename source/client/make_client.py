@@ -158,6 +158,18 @@ def build_casidle(out):
     print(f'dadmod_casidle.qb: Edit Skater scripts ({len(data) // 1024} KB)')
 
 
+def build_levelfix(out):
+    """data\\dadmod_levelfix.qb: our replacements for a few stock level scripts (mods/levelfix), LoadQB'd by load_level
+    after every level's own qbs (Noah 2026-11-21: New Orleans manhole scream off)."""
+    try:
+        data = compile_q(open(os.path.join(WORK, 'mods', 'levelfix', 'levelfix.q'), encoding='latin1').read().replace('\r\n', '\n'))
+    except Exception as e:
+        sys.exit(f'QB BUILD FAILED: dadmod_levelfix.qb: {e}')
+    with open(os.path.join(out, 'data', 'dadmod_levelfix.qb'), 'wb') as f:
+        f.write(data)
+    print(f'dadmod_levelfix.qb: stock level script fixes ({len(data)} bytes)')
+
+
 # the Edit Skater qb, in load order (build/obsspawn_test_make.sh concatenates the same list)
 CASIDLE_PARTS = ['mainmenu/casidle.q', 'casmod/lists.q', 'casmod/logo_adjust.q', 'casmod/sexchange.q', 'casmod/offline.q',
                  'casmod/undress.q', 'casmod/menus.q', 'casmod/removeitems.q', 'casmod/qol.q', 'casmod/ownmenus.q']
@@ -217,7 +229,7 @@ def package(out, release=None):
     inst = os.path.join(CLIENT, 'installer')
     with open(os.path.join(out, 'dadmod', 'version.txt'), 'w', newline='\r\n') as f:
         f.write(VERSION + '\n')
-    want = ['dadmod/version.txt'.replace('/', os.sep), 'binkw32.dll', os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_casidle.qb')]
+    want = ['dadmod/version.txt'.replace('/', os.sep), 'binkw32.dll', os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_casidle.qb'), os.path.join('data', 'dadmod_levelfix.qb')]
     # the game's updater (Pause > dadmod > Update dadmod; native/update.inc) runs this copy of the installer from
     # <game>\dadmod\updater (Noah 2026-11-18)
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
@@ -555,6 +567,7 @@ def main(argv):
         sys.exit('QB BUILD FAILED: client scripts call functions the client DLL does not have (client/tools/check_cfuncs.py)')
     build_prx(out)
     build_casidle(out)
+    build_levelfix(out)
     copy_menulevels(out, menulevels)
     if not no_dll:
         build_dll(out)

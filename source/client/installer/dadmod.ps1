@@ -11,7 +11,8 @@
 #     levels' files in data\pre and data\sounds (installer\vault_levels.txt; a copy the player already had is kept and left alone).
 # What it did is written to <game>\dadmod\install.json; the uninstaller undoes exactly that. The unzipped
 # dadmod-install folder stays (Noah 2026-11-17), so Setup.bat can install again from it.
-# Setup.bat also updates: it checks the public releases repo ($UpdateRepo below) and installs a newer dadmod.zip.
+# Setup.bat checks the public releases repo for a newer dadmod.zip itself, before it unpacks files.dad (Noah 2026-11-20);
+# the in-game updater uses Check-Update / Get-Update below.
 # Your dadmod settings (dadmod\*.ini) stay after an uninstall.
 param(
     [Parameter(Position = 0)][ValidateSet('menu', 'install', 'uninstall', 'repair', 'update')][string]$Action = 'menu',
@@ -434,37 +435,22 @@ function Setup-Menu {
     while (Game-Running $g) {
         if ((Ask 'THUG Pro is running. Close it first.' @('I closed it', 'Quit')) -eq 2) { exit 0 }
     }
-    # a newer dadmod on GitHub? (quietly skipped when there's no internet or no release yet)
-    Write-Host ''
-    Write-Host 'Checking for a newer dadmod...'
-    $u = Check-Update (Have-Version $g $ver)
-    if ($u.state -eq 'newer') {
-        Write-Host $u.text -ForegroundColor Green
-        if ((Ask 'Download and install it now?' @('Yes, update now', 'Not now')) -eq 1) {
-            [void](Get-Update $u $g)
-            Write-Host ''
-            Write-Host 'Press any key to close.'
-            try { [void][Console]::ReadKey($true) } catch { }
-            return
-        }
-    } elseif ($u.state -eq 'same') {
-        Write-Host $u.text
-    } elseif ($u.state -eq 'limit') {
-        Write-Host $u.text
-    }
-    $installed = Test-Path -LiteralPath (Join-Path $g 'dadmod\install.json')
+    # the update check runs in Setup.bat before files.dad is unpacked (Noah 2026-11-20), so there's none here and no
+    # "Check for updates" choice. "Update" only when this package is newer than what's installed.
     $first = 'Install dadmod'
-    if ($installed) { $first = 'Update dadmod' }
-    switch (Ask 'What do you want to do?' @($first, 'Repair (put back missing maps and files)', 'Uninstall dadmod', 'Check for updates', 'Quit')) {
+    if (Test-Path -LiteralPath (Join-Path $g 'dadmod\install.json')) {
+        $first = 'Reinstall dadmod'
+        $iv = Join-Path $g 'dadmod\version.txt'
+        $inst = $null
+        if (Test-Path -LiteralPath $iv) { $inst = (Get-Content -LiteralPath $iv -TotalCount 1).Trim() }
+        $a = Version-Of $inst; $b = Version-Of $ver
+        if ($b -and (-not $a -or $b -gt $a)) { $first = "Update dadmod to $ver" }
+        elseif ($a -and $b -and $b -lt $a) { $first = "Reinstall dadmod (this package is $ver, older than your $inst)" }
+    }
+    switch (Ask 'What do you want to do?' @($first, 'Repair (put back missing maps and files)', 'Uninstall dadmod', 'Quit')) {
         1 { Install $g }
         2 { Install $g $true }
         3 { if ((Ask 'Remove dadmod from this game?' @('Yes, uninstall', 'No')) -eq 1) { Uninstall $g } else { return } }
-        4 {
-            Write-Host 'Checking GitHub for a newer dadmod...'
-            $u = Check-Update (Have-Version $g $ver)
-            Write-Host $u.text
-            if ($u.state -eq 'newer' -and (Ask 'Download and install it now?' @('Yes, update now', 'Not now')) -eq 1) { [void](Get-Update $u $g) }
-        }
         default { return }
     }
     Write-Host ''

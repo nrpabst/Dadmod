@@ -394,6 +394,7 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_MouseMenu", mmenu::CF_MouseMenu },
     { "THUGRECOMP_MouseBack", mmenu::CF_MouseBack },
     { "THUGRECOMP_MouseNext", mmenu::CF_MouseNext },
+    { "THUGRECOMP_MouseRightPause", mmenu::CF_MouseRightPause },
     { "THUGRECOMP_MouseArrows", mmenu::CF_MouseArrows },
     { "THUGRECOMP_MouseOver", mmenu::CF_MouseOver },
     { "THUGRECOMP_MouseHoverDone", mmenu::CF_MouseHoverDone },

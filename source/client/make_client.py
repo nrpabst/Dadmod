@@ -158,8 +158,20 @@ def build_casidle(out):
     print(f'dadmod_casidle.qb: Edit Skater scripts ({len(data) // 1024} KB)')
 
 
+def build_levelfix(out):
+    """data\\dadmod_levelfix.qb: our replacements for a few stock level scripts (mods/levelfix), LoadQB'd by load_level
+    after every level's own qbs (Noah 2026-11-21: New Orleans manhole clank + camera shake off)."""
+    try:
+        data = compile_q(open(os.path.join(WORK, 'mods', 'levelfix', 'levelfix.q'), encoding='latin1').read().replace('\r\n', '\n'))
+    except Exception as e:
+        sys.exit(f'QB BUILD FAILED: dadmod_levelfix.qb: {e}')
+    with open(os.path.join(out, 'data', 'dadmod_levelfix.qb'), 'wb') as f:
+        f.write(data)
+    print(f'dadmod_levelfix.qb: stock level script fixes ({len(data)} bytes)')
+
+
 # the Edit Skater qb, in load order (build/obsspawn_test_make.sh concatenates the same list)
-CASIDLE_PARTS = ['mainmenu/casidle.q', 'casmod/lists.q', 'casmod/logo_adjust.q', 'casmod/sexchange.q', 'casmod/offline.q',
+CASIDLE_PARTS = ['mainmenu/casidle.q', 'casmod/lists.q', 'casmod/pednames.q', 'casmod/logo_adjust.q', 'casmod/sexchange.q', 'casmod/offline.q',
                  'casmod/undress.q', 'casmod/menus.q', 'casmod/removeitems.q', 'casmod/qol.q', 'casmod/ownmenus.q']
 
 
@@ -217,7 +229,7 @@ def package(out, release=None):
     inst = os.path.join(CLIENT, 'installer')
     with open(os.path.join(out, 'dadmod', 'version.txt'), 'w', newline='\r\n') as f:
         f.write(VERSION + '\n')
-    want = ['dadmod/version.txt'.replace('/', os.sep), 'binkw32.dll', os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_casidle.qb')]
+    want = ['dadmod/version.txt'.replace('/', os.sep), 'binkw32.dll', os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_casidle.qb'), os.path.join('data', 'dadmod_levelfix.qb')]
     # the game's updater (Pause > dadmod > Update dadmod; native/update.inc) runs this copy of the installer from
     # <game>\dadmod\updater (Noah 2026-11-18)
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
@@ -294,8 +306,9 @@ def package(out, release=None):
         new_cache[key] = hashlib.sha1(open(path, 'rb').read()).hexdigest()
 
     reused = 0
-    # dadmod_casidle.qb is all our own code (2026-11-18) and ships as a normal file
-    for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'),):
+    # dadmod_casidle.qb is all our own code (2026-11-18) and ships as a normal file; dadmod_levelfix.qb is a stock
+    # New Orleans script minus one line (2026-11-21), so it is a recipe rebuilt from the player's own NO_scripts.prx
+    for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_levelfix.qb')):
         want.remove(rel)
         name = os.path.splitext(os.path.basename(rel))[0] + '.dpr'
         key = 'recipe-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
@@ -424,7 +437,11 @@ def package(out, release=None):
     print('files.dad: %d MB stored -> %d MB LZMA (%d s)' % (os.path.getsize(inner) >> 20, os.path.getsize(dpk) >> 20, time.time() - t0))
     os.remove(inner)
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(os.path.join(inst, 'Setup.bat'), 'dadmod-install/Setup.bat')
+        # Setup.bat checks GitHub before it unpacks files.dad (Noah 2026-11-20), so it carries the package version itself
+        bat = open(os.path.join(inst, 'Setup.bat'), 'rb').read()
+        if b"$ver = '@DADMOD_VERSION@'" not in bat:
+            sys.exit('PACKAGE FAILED: installer/Setup.bat has no version line to fill in')
+        zf.writestr('dadmod-install/Setup.bat', bat.replace(b'@DADMOD_VERSION@', VERSION.encode('ascii')))
         # README.txt (was INSTALL.txt until Noah 2026-11-18) is UTF-8 (block-letter art, Noah 2026-11-17); a BOM so Notepad always shows it right
         txt = open(os.path.join(inst, 'README.txt'), encoding='utf-8-sig').read().replace('@DADMOD_VERSION@', VERSION)
         zf.writestr('dadmod-install/README.txt', ('\ufeff' + txt.replace('\r\n', '\n').replace('\n', '\r\n')).encode('utf-8'))  # Notepad-friendly
@@ -451,16 +468,21 @@ def default_settings(out):
             rows.append(line.rstrip('\r\n'))
     with open(os.path.join(d, 'panel_settings.txt'), 'w', encoding='latin-1', newline='\r\n') as f:
         f.write('\n'.join(rows) + '\n')
+    # gfx_soundlog: the client build has no sound logger (Noah 2026-11-21; 0.9.16/0.9.17 shipped it On from Dev's ini)
     gl = [l.rstrip('\r\n') for l in open(os.path.join(dev, 'gfx.ini'), encoding='latin-1')
-          if not l.split('=')[0].strip() in ('gfx_debug', 'gfx_shotdir')]
+          if not l.split('=')[0].strip() in ('gfx_debug', 'gfx_shotdir', 'gfx_soundlog')
+          and not l.lstrip().lower().startswith('; sound logger')]
     # Noah 2026-11-18: a new install starts with every Graphics option off (the game as THUG Pro draws it); only the
     # non-graphics keys (screenshot key, controls, weather choices) keep Dev's values
     gfx_off = ('gfx_aniso', 'gfx_lodbias', 'gfx_uismooth', 'gfx_msaa', 'gfx_vsync', 'gfx_fxaa', 'gfx_sharpen', 'gfx_bloom',
-               'gfx_ssao', 'gfx_fog', 'gfx_dof', 'gfx_outline', 'gfx_mblur', 'gfx_pixelate', 'gfx_vignette', 'gfx_grain',
+               'gfx_ssao', 'gfx_framegen', 'gfx_fog', 'gfx_dof', 'gfx_outline', 'gfx_mblur', 'gfx_pixelate', 'gfx_vignette', 'gfx_grain',
                'gfx_chroma', 'gfx_crt', 'gfx_preset', 'gfx_bright', 'gfx_contrast', 'gfx_sat', 'gfx_vibrance', 'gfx_gamma',
-               'gfx_temp', 'gfx_tint', 'gfx_galaxy', 'gfx_tod', 'gfx_weather', 'gfx_fireworks', 'gfx_lamps', 'gfx_skypop',
+               'gfx_temp', 'gfx_tint', 'gfx_galaxy', 'gfx_tod', 'gfx_todfog', 'gfx_weather', 'gfx_fireworks', 'gfx_lamps', 'gfx_skypop',
                'gfx_fps', 'gfx_shothud', 'gfx_mirror')
     gl = [(l.split('=')[0].strip() + ' = 0') if l.split('=')[0].strip() in gfx_off else l for l in gl]
+    gfx_fixed = {'gfx_fogamt': 5, 'gfx_skywxver': 1,  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
+                 'gfx_tricksfx': 30, 'gfx_levelsfx': 100, 'gfx_telesfx': 100}  # 0.9.19: sound sliders as shipped before (Dev has them muted for testing); Frame generation default Off (gfx_off)
+    gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
     with open(os.path.join(d, 'gfx.ini'), 'w', encoding='latin-1', newline='\r\n') as f:
         f.write('\n'.join(gl) + '\n')
     ml = [l.rstrip('\r\n') for l in open(os.path.join(dev, 'mainmenu.ini'), encoding='latin-1')
@@ -555,6 +577,7 @@ def main(argv):
         sys.exit('QB BUILD FAILED: client scripts call functions the client DLL does not have (client/tools/check_cfuncs.py)')
     build_prx(out)
     build_casidle(out)
+    build_levelfix(out)
     copy_menulevels(out, menulevels)
     if not no_dll:
         build_dll(out)

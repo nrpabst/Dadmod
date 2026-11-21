@@ -10,6 +10,9 @@
 #include <stdlib.h>
 
 static const DWORD kNetManagerPtr      = 0x7CCE14;  // Net manager*
+static const int kPlayerList         = 0x128;     // Manager player list head (gfx.inc ground mist; same as the server build)
+static const int kPlayerSkater       = 0x14;      // PlayerInfo CSkater*
+static const int kPlayerFlags        = 0x1D0;     // PlayerInfo flags; 1 = local player
 static const DWORD kIsServer           = 0x44E4F0;  // bool __thiscall Manager::OnServer()
 static const DWORD kStructGetInteger   = 0x476630;  // bool __thiscall CStruct::GetInteger(DWORD, int*, bool)
 static const DWORD kStructContainsFlag = 0x476B40;  // bool __thiscall CStruct::ContainsFlag(DWORD)

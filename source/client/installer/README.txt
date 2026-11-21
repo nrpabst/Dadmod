@@ -43,9 +43,13 @@
 
   Step 3   Open the "dadmod-install" folder and double-click "Setup.bat".
 
-  Step 4   Pick  1) Install   (or  1) Update  if dadmod is already in).
+  Step 4   Setup first checks for a newer dadmod. If there is one,
+           pick  1) Yes  to download it (or  2) Not now).
 
-  Step 5   Start THUG Pro as usual. The first start takes a few
+  Step 5   Pick  1) Install   (or  1) Update  or  1) Reinstall  if
+           dadmod is already in).
+
+  Step 6   Start THUG Pro as usual. The first start takes a few
            seconds longer while the main menu scenes are set up.
 
            You'll see "Dadmod @DADMOD_VERSION@ beta" at the bottom of the main menu.
@@ -78,9 +82,11 @@
 
   UPDATES
 
-  Setup.bat checks for a newer dadmod each time it opens (and with
-  4) Check for updates). If there is one, it downloads it and updates
-  your game. Your settings stay.
+  Setup.bat checks for a newer dadmod each time it opens, before it
+  unpacks anything. If there is one, it downloads it into the
+  dadmod-install folder and installs that instead. Your settings stay.
+  The game also checks when it starts and can update itself
+  (Dadmod page on the main menu).
 
 
 ==========================================================================
@@ -177,6 +183,58 @@
  6. WHAT'S NEW IN @DADMOD_VERSION@
 ==========================================================================
 
+  NEW
+    + Cars: Pause > dadmod > Cars lets you drive 17 THUG Pro cars, 20
+      more THUG2 cars and 9 props (cone, shopping cart, robot and more)
+      with the game's own car physics. H (L3) honks the horn. Players
+      without dadmod see your car (the green tuner for the extra cars
+      and props).
+    + Throwables: Random Animal, Random Pedestrian, Random Junk,
+      Skateboard, Bowling Ball and Mystery Box. Cars is one option now
+      (a random car each throw) and shows on plain THUG Pro too.
+    + Bail cancel effect: your skater flickers out with blue sparkles
+      and flickers back in on the board, like THPS1+2.
+    + Pause > dadmod > Gameplay > Auto bail cancel (default Off): every
+      bail ends that way by itself. Bail cancel effects (default On)
+      turns the sparkles and whoosh off.
+    + Clickable menus: point and click any menu, click the arrows on
+      option rows, right click or the top-left button goes back.
+    + Right click in a level opens the pause menu.
+    + Home key opens the Change Level screen (offline, or when you host).
+    + Mouse camera (Pause > dadmod > Gameplay, default On): on foot,
+      hold the left button and drag to turn the camera; the wheel zooms.
+    + Alt+Enter switches fullscreen (borderless, at your monitor's own
+      resolution).
+    + Graphics > Display changes right away with Apply; it switches
+      back after 15 seconds unless you press Keep. V-sync moved here.
+    + Graphics > Extras > Frame generation (default Off): smoother motion
+      on 120 Hz and faster monitors. The game itself still runs at 60.
+    + Sky & weather is one page. New: Dawn, ground mist Fog (Off, Knee
+      high, Head high, First floor, Rooftops) and Fog intensity (1 to
+      10, default 5).
+    + Edit Skater: Copy Scales From and Copy Tricks From another saved
+      skater, each with an Undo.
+
+  CHANGED
+    ~ Night, Evening lights and Dawn darken the whole level, not just
+      the sky; the level's own lights stay lit.
+    ~ The Dynamic time of day, Fog weather and the Street lights slider
+      are gone (old settings are converted).
+    ~ New Orleans: the manhole scream ("Into the Underworld" gap) is off.
+
+  FIXED
+    x Stuck on the main menu background with the galaxy sky on (NVIDIA
+      cards). The sky shaders are much smaller now; a shader a card
+      can't make only turns that one effect off.
+    x The Sound logger is gone from the player build (0.9.16 and 0.9.17
+      shipped it switched on by mistake).
+    x Skater select camera could swing behind the skater after Back.
+    x Edit Skater "Copy Scales From" rows did nothing in 0.9.17.
+
+
+  0.9.17
+  ------
+
   FIXED
     x Online level select: Philadelphia, Baltimore and Washington D.C.
       in the Proving Ground tab can be picked when you host. They load
@@ -190,9 +248,6 @@
   NEW
     + Pause > Graphics > Sound > Teleporter sounds (0 to 100): the
       volume of the sounds teleporters and teleporting elevators play.
-    + Pause > Graphics > Sound > Sound logger (default Off): On writes
-      every sound the game plays to dadmod\soundlog.txt, for finding
-      sound bugs.
 
   FIXED
     x BHRA: your skater holds the revert pose in the air again.

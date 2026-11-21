@@ -36,6 +36,7 @@ menuui	client	later	prx:procrastination.q prx:skateshop.q dadmod:panel_settings.
 modes_batch	server	no	dll:modes.inc prx:net.q	Custom modes and stats; its helper functions move to a shared common.inc for the client DLL
 namematch	server	no	dll:namematch.inc prx:ButtonScripts.q	Partial names in commands
 news	server	no	dll:news.inc dadmod:news.txt	Join announcement
+homelevel	client	yes	prx:ButtonScripts.q dll:mainmenu.inc	Home key opens Change Level (offline, or host online); always on; ticked from the noclip watcher
 noclip	client	later	prx:ButtonScripts.q prx:groundtricks.q	F6 noclip + Triangle replay; fine online (Noah 2026-11-05)
 objects	server	no	prx:ButtonScripts.q	?objects
 pauserow	server	no	prx:ButtonScripts.q dll:startmsg.inc	Server Menu row for unmodded players, start banner
@@ -55,9 +56,12 @@ tawhore	server	no	dll:tawhore.inc prx:net.q	Trick Attack anti-whoring
 themelabels	client	later	prx:themes.q	Edit Theme color names
 throw	both	yes	prx:ButtonScripts.q	Pause > Dadmod > Throwables is client (everyone sees stock ammo as a COMBO O, cars only dadmod players; Noah 2026-11-06); !ammo chat is host-answered
 todfade	server	no	prx:net.q	Server time-of-day fade
-vehicles	both	later	prx:ButtonScripts.q	Drive = client, Park = host
+cars2	client	yes	prx:ButtonScripts.q prx:Levels.q(dadmod_menu row)	dadmod cars 2.0 (2026-11-20): Pause > dadmod > Cars drives the 18 stock VehicleSetupMapping cars with stock vehicle physics; stock BroadcastEnterVehicle shows the car to every player; works offline and online free skate; cars 1.0 (mods/vehicles) archived in work/archive/dadmod_cars_1.0_20261120
 weather	server	no	prx:net.q	Server weather
 thpg	client	yes	prx:Levels.q	Tony Hawk's Proving Ground level select tab (Larxian cities + our Training), work/thpg/tools/build_thpg.py --userslots
 midload	client	yes	prx:ButtonScripts.q prx:(stats/tricks/memcard scripts) data:dadmod_casidle.qb	Quick Menu > Load Skater mid-level (offline only for now); unsaved-changes warning (mods/midload/apply.py hooks, client wraps)
 onlinemaps	both	yes	prx:skateshop.q prx:net.q prx:userslots.q	Our extra maps hostable online (greyed-slot check); ! level commands are host-answered (server only)
 screenfx	client	yes	prx:ButtonScripts.q prx:grindscripts.q(CreatureScaryGrindEffect) prx:Levels.q	Trick Screen Effects On/Off (Pause > dadmod > Gameplay, player shibe); client: wrap CreatureScaryGrindEffect (client/qb/dadmod/screenfx.q)
+skatercopy	client	yes	prx:ButtonScripts.q prx:procrastination.q(thugpro_menu_finalize) native:skatercopy.inc data:dadmod_casidle.qb(scale rows)	Copy Scales From / Copy Tricks From another saved skater + undo (Edit Skater scaling menu, Edit Tricks); reads Save\*.SKA, writes nothing
+levelfix	client	yes	data:dadmod_levelfix.qb prx:Levels.q(load_level)	Stock level script fixes loaded after each level's own qbs: New Orleans "Into the Underworld" manhole scream off (Noah 2026-11-21)
+fullscreen	client	yes	dll:fullscreen.inc prx:ButtonScripts.q(display.q)	Alt+Enter fullscreen + Graphics > Display applies live (Apply / Keep); in the player build since 0.9.18

@@ -102,6 +102,15 @@ script exit_pause_menu
     endif
 endscript
 
+script thugpro_menu_camera_create
+    if GotParam cameraName
+        if (<cameraName> = CAM_OPTIONS_MENU)
+            return
+        endif
+    endif
+    thugpro_menu_camera_create_orig <...>
+endscript
+
 script thugpro_update_tod
     Change dadmod_tod_upd = 1
     thugpro_update_tod_orig <...>
@@ -195,6 +204,8 @@ script load_level
         UnloadQB "dadmod_casidle.qb"
         LoadQB "dadmod_casidle.qb" LevelSpecific
     endif
+    UnloadQB "dadmod_levelfix.qb"
+    LoadQB "dadmod_levelfix.qb" LevelSpecific
 endscript
 
 script create_main_menu

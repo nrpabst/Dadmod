@@ -106,6 +106,35 @@ static void PatchFireEventNullTarget() {
     FlushInstructionCache(GetCurrentProcess(), at, 2);
 }
 
+// Net message send to a missing client: 0x459E50 (thiscall(client, msg*), ret 4) reads client+0x1E98 with no null
+// check. Skater code fetches the client with 0x532EA0 (net manager slot) and calls it straight away; when that slot
+// is empty it crashed at 0x459E71 reading 0x1E98 (Dev crash.log 2026-11-19 11:18, 2026-11-20 20:00:29 and 20:02:22:
+// trick score msg 0x52 from 0x5647C6, msg 0x35 from 0x444D34, while hosting with Cars 2.0 in use). The first 7 bytes
+// become a jump to a stub that returns at once for a NULL client and otherwise runs the original code.
+static void PatchNetSendNullClient() {
+    BYTE* at = (BYTE*)0x459E50;
+    static const BYTE orig[7] = { 0x6A, 0xFF, 0x68, 0x78, 0x82, 0x63, 0x00 };  // push -1; push 0x638278
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: net send null-client patch skipped, bytes at 0x459E50 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xC9;                    // test ecx, ecx
+    *s++ = 0x75; *s++ = 0x03;                    // jnz +3
+    *s++ = 0xC2; *s++ = 0x04; *s++ = 0x00;       // ret 4
+    memcpy(s, orig, sizeof orig); s += sizeof orig;
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x459E57 - (DWORD)(s + 5); s += 5;   // jmp 0x459E57
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, 7, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x459E50 + 5);
+    at[5] = 0x90; at[6] = 0x90;
+    VirtualProtect(at, 7, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, 7);
+}
+
 // Level name lookup (0x5369A0, thiscall(skate mod, bool), ret 4): matches the current level (this+0x34) against
 // level_select_menu_level_info and returns its text, or NULL. Our level-select tab scripts (THPG tab:
 // Load_dadmod_THPGLarxBaltimore etc.) aren't in that list, so it returned NULL and hosting crashed in the
@@ -191,6 +220,7 @@ static void Install() {
                        (LPCSTR)&Handler, &g_self);
     SetUnhandledExceptionFilter(Handler);
     PatchFireEventNullTarget();
+    PatchNetSendNullClient();
     PatchLevelNameLookup();
 }
 

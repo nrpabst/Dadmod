@@ -55,7 +55,9 @@ SERVER_NAMES = re.compile(r'^(thugpro_bang_|thugpro_mapvote_|thugpro_afk_|thugpr
 SERVER_FILES = {'mods/anims/qanims.q', 'mods/anims/pmanims.q'}
 # host parts of client mods that live in the same file as the client part (!ammo is answered by the host)
 SERVER_BLOCKS = {'thugpro_throw_parse', 'thugpro_throw_parse2', 'thugpro_throw_chat', 'thugpro_throw_give', 'thugpro_throw_confirm',
-                 'dadmod_bang_online_level_command'}
+                 'dadmod_bang_online_level_command',
+                 # our THPG Baltimore conversion is Dev only (Noah 2026-11-20: only Larxian's Baltimore in the release)
+                 'level_dadmod_thpgbaltimore', 'load_dadmod_thpgbaltimore'}
 # blocks of stock scripts that Kali changed: handled by hand in client/qb/dadmod (wrap or our own version)
 HAND = {'create_main_menu', 'create_pause_menu', 'exit_pause_menu', 'thugpro_show_quick_menu', 'thugpro_update_tod',
         'thugpro_menu_create_title', 'load_level'}
@@ -125,13 +127,20 @@ PATCHES = {
     # THPG Baltimore conversion is not shipped (Larxian's Baltimore replaces it), so its entry goes
     # chat art (Alt+F12) stays out of the release, Dev only (Noah 2026-11-17: a throwaway idea; MANIFEST client = no)
     'load_mainmenu': [('    dadmod_chatart_boot\n', '')],
-    'list_level_thpg': [(
-        '{ text = "BALTIMORE (THPG)" exclude = 0 enabled = 1 num_votes = 0 level = Load_dadmod_THPGBaltimore level_thumb = thumb_default level_num = LevelNum_Default }\n',
-        '')],
+    # (list_level_thpg had a patch removing our "BALTIMORE (THPG)" row; mods/thpg/thpg_levels.q no longer has that row
+    # since 2026-11-21, so there is nothing left to remove)
+    # Noah 2026-11-20: only Larxian's Baltimore in the release; without it the row says not installed (no conversion fallback)
+    'load_dadmod_thpglarxbaltimore': [(
+        '        if ScriptExists Load_dadmod_THPGBaltimore\n            Load_dadmod_THPGBaltimore <...>\n        else\n'
+        '            dadmod_thpg_not_installed\n        endif\n',
+        '        dadmod_thpg_not_installed\n')],
+    'dadmod_added_levels': [(' Load_dadmod_THPGBaltimore ', ' ')],
 }
 PED = re.compile(r'^ped_[mf]_|^ped_body$', re.I)
 # Dev-only log calls a server mod adds into client scripts (mods/bhra_probe): the line goes, the script stays
 LOG_ONLY = re.compile(r'^[ \t]*dadmod_bhra_log\b[^\n]*\n', re.M)
+# Sound logger rows (Noah 2026-11-21: the client build shouldn't have the sound logger at all; the DLL has it compiled out)
+SERVER_ROWS = re.compile(r'^[^\n]*\bgfx_soundlog\b[^\n]*\n', re.M)
 
 
 def blocks(path):
@@ -208,6 +217,10 @@ def qdir_files(root):
         ln = ln.strip().replace('\\', '/')
         if ln.startswith('data/') and ln.endswith('.qb'):
             yield ln[5:-3] + '.q'               # qb/game/x.q, custom.q
+    # our own qb files the server build adds to qdir.txt after decompiling (mods/cars2/add_qdir.py): cars 2.0 + throwables
+    # (2026-11-21, 0.9.18 release: without this the Cars and Throwables rows opened scripts the client never had)
+    for extra in ('qb/dadmod/dadmod_cars.q',):
+        yield extra
 
 
 def effective(root, overlay=None, order=None):
@@ -327,6 +340,7 @@ def main(argv):
                 fail.append('%s: patch anchor not found: %r' % (n, a[:50]))
             v = v.replace(a, b, 1)
         v = LOG_ONLY.sub('', v)
+        v = SERVER_ROWS.sub('', v)
         gen[n] = (k, v, rel)
     # Edit Skater part lists: stock text + our hidden flags, so Kali's own edits are never shipped
     for n in sorted(set(unsafe) | {x for x in keep if PED.match(x)}):
@@ -410,6 +424,11 @@ def main(argv):
     for i, part in enumerate(parts):
         with open(os.path.join(OUT, 'gen%02d.q' % i), 'w', encoding='latin-1', newline='\n') as f:
             # the QB compiler has no comments: where each block came from is in gen_report.txt
+            # (2026-11-21) A qb's name table lists names in the order the file first uses them. A stock script copied
+            # here unchanged (UserSelectSelect) made two entries line up exactly like plain THUG Pro's ButtonScripts.qb,
+            # and the package's no-stock-bytes audit (rightly) refused it. Naming a few common names first keeps our
+            # table order our own; the global is never read.
+            f.write('dadmod_gen%02d_names = [ IsTrue GotParam ScreenElementExists ]\n\n' % i)
             for rel, v in part:
                 f.write(v.rstrip('\n') + '\n\n')
     for stale in old - {os.path.join(OUT, 'gen%02d.q' % i) for i in range(len(parts))}:

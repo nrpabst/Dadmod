@@ -1,7 +1,9 @@
 client script generator report (gen_client_qb.py)
-generated blocks: 706   left out (server): 731   hand-written: 65
+generated blocks: 859   left out (server): 734   hand-written: 68
 
-## unclassified: changed in the server build, no rule says client or server (7)
+## unclassified: changed in the server build, no rule says client or server (9)
+script #"0xc46e26a0"  (qb/thugpro/procrastination.q, changed)
+script create_setup_options_menu  (qb/game/menu/skateshop.q, changed)
 script LandSkaterTricks  (qb/game/skater/tricks.q, changed)
 script SkateInLand  (qb/game/skater/grindscripts.q, changed)
 script SkateInOrBail_Out  (qb/game/skater/grindscripts.q, changed)
@@ -10,8 +12,7 @@ global thugpro_level_cooldown_note  (qb/game/net/net.q, new)
 script thugpro_level_mark_changed  (qb/game/net/net.q, new)
 script thugpro_level_wait_safe  (qb/game/net/net.q, new)
 
-## DLL functions the client scripts call (65)
-THUGRECOMP_AllPlayersScript  (2 blocks, e.g. dadmod_veh_park_at)
+## DLL functions the client scripts call (79)
 THUGRECOMP_BankDropsOn  (2 blocks, e.g. dadmod_pause_gameplay_menu)
 THUGRECOMP_BankDropsSet  (1 blocks, e.g. thugpro_bankdrops_local)
 THUGRECOMP_BindCapture  (1 blocks, e.g. dadmod_binds_pick)
@@ -22,14 +23,18 @@ THUGRECOMP_ButtonText  (1 blocks, e.g. dadmod_btn)
 THUGRECOMP_CaptureClear  (1 blocks, e.g. dadmod_replay_all)
 THUGRECOMP_CaptureNext  (1 blocks, e.g. dadmod_replay_all)
 THUGRECOMP_CapturePush  (1 blocks, e.g. dadmod_capture_item)
-THUGRECOMP_Display  (2 blocks, e.g. dadmod_ui_change)
+THUGRECOMP_CarsDrive  (4 blocks, e.g. dadmod_cars_beat)
+THUGRECOMP_CarsHornSend  (1 blocks, e.g. dadmod_cars_horn)
+THUGRECOMP_CarsKeys  (3 blocks, e.g. dadmod_cars_item)
+THUGRECOMP_DisplayLive  (4 blocks, e.g. dadmod_disp_apply)
+THUGRECOMP_FitText  (1 blocks, e.g. dadmod_fit_extra)
 THUGRECOMP_GfxReset  (1 blocks, e.g. dadmod_gfx_reset)
 THUGRECOMP_InputDevice  (2 blocks, e.g. dadmod_on_pad)
 THUGRECOMP_IsLocalPlayerName  (2 blocks, e.g. thugpro_bankdrops_chat)
-THUGRECOMP_KeyPressed  (6 blocks, e.g. dadmod_mm_fav_tick)
+THUGRECOMP_KeyPressed  (7 blocks, e.g. dadmod_homelevel_tick)
 THUGRECOMP_LayoutChild  (1 blocks, e.g. dadmod_layout_open)
 THUGRECOMP_LayoutInfo  (1 blocks, e.g. dadmod_layout_open)
-THUGRECOMP_Log  (11 blocks, e.g. dadmod_bhra_dbg)
+THUGRECOMP_Log  (14 blocks, e.g. dadmod_bhra_dbg)
 THUGRECOMP_MenuCamEdit  (2 blocks, e.g. dadmod_mm_cam_edit_begin)
 THUGRECOMP_MenuDelete  (1 blocks, e.g. dadmod_mm_delete_press)
 THUGRECOMP_MenuFav  (1 blocks, e.g. dadmod_mm_fav_tick)
@@ -51,9 +56,14 @@ THUGRECOMP_MenuSeen  (1 blocks, e.g. dadmod_capture_item)
 THUGRECOMP_MenuSetHere  (1 blocks, e.g. dadmod_set_menu_here)
 THUGRECOMP_MenuSpot  (1 blocks, e.g. thugpro_orient_menu_skater)
 THUGRECOMP_MenuTick  (1 blocks, e.g. thugpro_menu_driver)
+THUGRECOMP_MouseArrows  (2 blocks, e.g. dadmod_mouse_click)
+THUGRECOMP_MouseBack  (1 blocks, e.g. dadmod_mouse_back_press)
+THUGRECOMP_MouseMenu  (2 blocks, e.g. dadmod_mouse_kb_tick)
+THUGRECOMP_MouseNext  (1 blocks, e.g. dadmod_mouse_tick)
+THUGRECOMP_MouseOver  (2 blocks, e.g. dadmod_mouse_kb_tick)
+THUGRECOMP_MouseRightPause  (1 blocks, e.g. dadmod_mouse_rpause)
 THUGRECOMP_PadHeld  (4 blocks, e.g. dadmod_layout_back)
 THUGRECOMP_PadPressed  (4 blocks, e.g. dadmod_mm_fav_tick)
-THUGRECOMP_PlayerSkaterId  (1 blocks, e.g. dadmod_veh_park_for)
 THUGRECOMP_ReShadeInfo  (1 blocks, e.g. dadmod_ui_item)
 THUGRECOMP_ReorderAdd  (1 blocks, e.g. dadmod_reorder_save)
 THUGRECOMP_ReorderBegin  (1 blocks, e.g. dadmod_reorder_save)
@@ -66,8 +76,13 @@ THUGRECOMP_ReorderReset  (1 blocks, e.g. dadmod_reorder_reset)
 THUGRECOMP_ReorderSave  (1 blocks, e.g. dadmod_reorder_save)
 THUGRECOMP_ReorderUndo  (1 blocks, e.g. dadmod_reorder_undo)
 THUGRECOMP_ScanText  (4 blocks, e.g. dadmod_noclip_msg_show)
-THUGRECOMP_SettingLoad  (22 blocks, e.g. dadmod_anim_go)
-THUGRECOMP_SettingSave  (26 blocks, e.g. dadmod_anim_loop)
+THUGRECOMP_SettingLoad  (24 blocks, e.g. dadmod_abc_get)
+THUGRECOMP_SettingSave  (28 blocks, e.g. dadmod_abc_toggle)
+THUGRECOMP_SkcCount  (1 blocks, e.g. dadmod_skc_list_items)
+THUGRECOMP_SkcName  (1 blocks, e.g. dadmod_skc_list_items)
+THUGRECOMP_SkcScales  (2 blocks, e.g. dadmod_skc_scales_pick)
+THUGRECOMP_SkcSpecial  (1 blocks, e.g. dadmod_skc_tricks_pick)
+THUGRECOMP_SkcTricks  (1 blocks, e.g. dadmod_skc_tricks_pick)
 THUGRECOMP_SkinLocalZero  (1 blocks, e.g. dadmod_midload_go)
 THUGRECOMP_SkinSend  (1 blocks, e.g. dadmod_midload_online_note)
 THUGRECOMP_TextClip  (3 blocks, e.g. dadmod_ui_hl_plain)
@@ -75,9 +90,10 @@ THUGRECOMP_TextHas  (1 blocks, e.g. dadmod_anims_cat)
 THUGRECOMP_TextLoad  (2 blocks, e.g. dadmod_anims_find)
 THUGRECOMP_TextSave  (4 blocks, e.g. dadmod_anim_pick)
 THUGRECOMP_UiClock  (2 blocks, e.g. dadmod_ui_fx_loop)
+THUGRECOMP_WalkCam  (1 blocks, e.g. dadmod_walkcam_tick)
 thugrecomp_bankdrops  (1 blocks, e.g. dadmod_pause_gameplay_menu)
 
-## client blocks that use left-out server blocks (15)
+## client blocks that use left-out server blocks (16)
 script create_thugpro_level_menu_item -> dadmod_levelthumb_for
 script dadmod_anim_play -> LandSkaterTricks
 script dadmod_anim_seq_skate -> LandSkaterTricks
@@ -92,9 +108,10 @@ script revert -> LandSkaterTricks
 script Taunt -> LandSkaterTricks
 script thugpro_bankdrops_chat -> thugpro_say_to
 script thugpro_bankdrops_confirm -> thugpro_say_to
+script thugpro_main_item -> create_setup_options_menu
 script walk_maybe_throw_projectile2 -> create_console_message
 
-## generated (706)
+## generated (859)
 script #"0x001202e3"  [qb/thugpro/procrastination.q]
 script #"0x16a10a9a"  [qb/thugpro/procrastination.q]
 script #"0x1a69989e"  [qb/thugpro/procrastination.q]
@@ -123,11 +140,22 @@ script create_edit_theme_color_menu  [qb/game/menu/themes.q]
 script create_joining_lobby_dialog  [qb/game/net/net.q]
 script create_new_ss_menu  [qb/game/menu/skateshop.q]
 script create_thugpro_level_menu_item  [qb/thugpro/procrastination.q]
+script dadmod_abc_get  [qb/engine/ButtonScripts.q]
+global dadmod_abc_particle_params  [qb/engine/ButtonScripts.q]
+script dadmod_abc_play  [qb/engine/ButtonScripts.q]
+script dadmod_abc_text  [qb/engine/ButtonScripts.q]
+script dadmod_abc_toggle  [qb/engine/ButtonScripts.q]
+script dadmod_abc_unlock  [qb/engine/ButtonScripts.q]
+script dadmod_abc_whoosh_later  [qb/engine/ButtonScripts.q]
+script dadmod_abcsnd_get  [qb/engine/ButtonScripts.q]
+script dadmod_abcsnd_text  [qb/engine/ButtonScripts.q]
+script dadmod_abcsnd_toggle  [qb/engine/ButtonScripts.q]
+script dadmod_abcsnd_unlock  [qb/engine/ButtonScripts.q]
 script dadmod_added_level_creator  [qb/thugpro/procrastination.q]
 global dadmod_added_level_creators  [qb/thugpro/procrastination.q]
 global dadmod_added_levels  [qb/thugpro/procrastination.q]
-script dadmod_ammo_hud_start  [qb/engine/ButtonScripts.q]
-script dadmod_ammo_hud_watch  [qb/engine/ButtonScripts.q]
+script dadmod_ammo_hud_start  [qb/dadmod/dadmod_cars.q]
+script dadmod_ammo_hud_watch  [qb/dadmod/dadmod_cars.q]
 script dadmod_anim_choose  [qb/engine/ButtonScripts.q]
 script dadmod_anim_go  [qb/engine/ButtonScripts.q]
 script dadmod_anim_kali_kill  [qb/engine/ButtonScripts.q]
@@ -167,6 +195,8 @@ script dadmod_anims_menu_main  [qb/engine/ButtonScripts.q]
 global dadmod_anims_single  [qb/engine/ButtonScripts.q]
 script dadmod_back_to_main  [qb/game/menu/skateshop.q]
 script dadmod_bail_cancel_state  [qb/engine/ButtonScripts.q]
+script dadmod_bail_reform  [qb/engine/ButtonScripts.q]
+script dadmod_bail_vanish  [qb/engine/ButtonScripts.q]
 script dadmod_balance_apply  [qb/game/Levels.q]
 script dadmod_balance_cycle  [qb/game/Levels.q]
 script dadmod_balance_flags  [qb/game/Levels.q]
@@ -214,8 +244,69 @@ script dadmod_binds_reset  [qb/engine/ButtonScripts.q]
 script dadmod_binds_row  [qb/engine/ButtonScripts.q]
 script dadmod_binds_wait  [qb/engine/ButtonScripts.q]
 script dadmod_btn  [qb/thugpro/procrastination.q]
+global dadmod_c2_cams  [qb/dadmod/dadmod_cars.q]
+global dadmod_c2_car_sounds  [qb/dadmod/dadmod_cars.q]
+global dadmod_c2_extra_map  [qb/dadmod/dadmod_cars.q]
+global dadmod_c2_physfix  [qb/dadmod/dadmod_cars.q]
+global dadmod_c2_push_map  [qb/dadmod/dadmod_cars.q]
+global dadmod_c2_sounds  [qb/dadmod/dadmod_cars.q]
 global dadmod_cap_count  [qb/thugpro/procrastination.q]
 script dadmod_capture_item  [qb/thugpro/procrastination.q]
+global dadmod_car_atv_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_bcntaxi_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_benzvan_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_dctruck_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_duck_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_hearse_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_hippyvan_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_liberty_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_mardi_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_minivan_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_neon_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_oldvan_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_rust_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_sedan_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_smart_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_streetcar_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_sub_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_suv_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_tourbus_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_car_woodie_setup  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_beat  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_boot  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_boot_maps  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_can_drive  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_cleanup  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_exit  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_exit_go  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_exit_now  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_extra_items  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_go  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_handling_get  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_hint_off  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_horn  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_horn_hear  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_horn_src_die  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_item  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_item_x  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_load_sound  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_menu  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_menu_extra  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_menu_props  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_msg  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_pick  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_prop_hide  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_prop_items  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_prop_show  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_rehide  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_rehide_frames  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_remote_prop_one  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_remote_props  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_sub_menu  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_wait_exit  [qb/dadmod/dadmod_cars.q]
+script dadmod_cars_watch  [qb/dadmod/dadmod_cars.q]
+global dadmod_cg_layout  [qb/engine/ButtonScripts.q]
+script dadmod_char_guide_tick  [qb/engine/ButtonScripts.q]
 script dadmod_chatkeep_restore  [qb/engine/ButtonScripts.q]
 script dadmod_chatkeep_save  [qb/engine/ButtonScripts.q]
 script dadmod_custom_cam_del  [qb/game/menu/skateshop.q]
@@ -226,11 +317,18 @@ script dadmod_custom_random_pick  [qb/game/Levels.q]
 script dadmod_desc_fit  [qb/thugpro/procrastination.q]
 script dadmod_desc_fit_later  [qb/thugpro/procrastination.q]
 script dadmod_desc_hide_later  [qb/thugpro/procrastination.q]
+global dadmod_desc_is_strip  [qb/thugpro/procrastination.q]
 script dadmod_desc_panel_refresh  [qb/thugpro/procrastination.q]
 script dadmod_desc_panel_right  [qb/thugpro/procrastination.q]
 global dadmod_desc_seq  [qb/thugpro/procrastination.q]
 script dadmod_desc_setting  [qb/thugpro/procrastination.q]
+script dadmod_desc_strip  [qb/thugpro/procrastination.q]
 global dadmod_dirty  [qb/game/menu/skateshop.q]
+script dadmod_disp_apply  [qb/engine/ButtonScripts.q]
+script dadmod_disp_countdown  [qb/engine/ButtonScripts.q]
+script dadmod_disp_rows  [qb/engine/ButtonScripts.q]
+script dadmod_fit_all  [qb/engine/ButtonScripts.q]
+script dadmod_fit_extra  [qb/engine/ButtonScripts.q]
 script dadmod_free_cam  [qb/game/Levels.q]
 script dadmod_free_cam_on  [qb/game/Levels.q]
 script dadmod_freeskate_menu_live  [qb/game/menu/gamemenu_helpers.q]
@@ -239,8 +337,10 @@ script dadmod_gfx_fireworks  [qb/thugpro/procrastination.q]
 global dadmod_gfx_from_pause  [qb/game/Levels.q]
 global dadmod_gfx_lists  [qb/thugpro/procrastination.q]
 script dadmod_gfx_reset  [qb/thugpro/procrastination.q]
+global dadmod_hbar_state  [qb/engine/ButtonScripts.q]
 script dadmod_helper_refresh  [qb/thugpro/procrastination.q]
 script dadmod_helper_seen  [qb/thugpro/procrastination.q]
+script dadmod_hint_text  [qb/thugpro/procrastination.q]
 script dadmod_hl_bounce  [qb/thugpro/procrastination.q]
 script dadmod_hl_bracket_code  [qb/thugpro/procrastination.q]
 script dadmod_hl_brackets  [qb/thugpro/procrastination.q]
@@ -259,9 +359,14 @@ script dadmod_hl_spotlight  [qb/thugpro/procrastination.q]
 script dadmod_hl_style  [qb/thugpro/procrastination.q]
 script dadmod_hl_text_managed  [qb/thugpro/procrastination.q]
 script dadmod_hl_unfocus  [qb/thugpro/procrastination.q]
+script dadmod_homelevel_open  [qb/engine/ButtonScripts.q]
+script dadmod_homelevel_tick  [qb/engine/ButtonScripts.q]
 script dadmod_idle_seq  [qb/engine/ButtonScripts.q]
 global dadmod_item_catalog  [qb/engine/ButtonScripts.q]
 script dadmod_join_fade  [qb/game/menu/skateshop.q]
+script dadmod_kb_click_anim  [qb/engine/ButtonScripts.q]
+script dadmod_kb_label  [qb/engine/ButtonScripts.q]
+script dadmod_kb_label_place  [qb/engine/ButtonScripts.q]
 script dadmod_keep_item  [qb/thugpro/procrastination.q]
 global dadmod_keep_last  [qb/thugpro/procrastination.q]
 script dadmod_keep_link  [qb/thugpro/procrastination.q]
@@ -275,10 +380,12 @@ script dadmod_layout_live  [qb/thugpro/procrastination.q]
 global dadmod_layout_node  [qb/thugpro/procrastination.q]
 script dadmod_layout_open  [qb/thugpro/procrastination.q]
 script dadmod_layout_static_ok  [qb/thugpro/procrastination.q]
+script dadmod_level_online_larx  [qb/game/menu/skateshop.q]
 script dadmod_level_online_ok  [qb/game/menu/skateshop.q]
 script dadmod_levelthumbs_boot  [qb/thugpro/procrastination.q]
 global dadmod_levelthumbs_booted  [qb/thugpro/procrastination.q]
 script dadmod_lobby_fade_in  [qb/game/Levels.q]
+global dadmod_lvl_state  [qb/engine/ButtonScripts.q]
 script dadmod_main_green_focus  [qb/thugpro/procrastination.q]
 script dadmod_menu  [qb/game/Levels.q]
 script dadmod_menu_ambient_apply  [qb/game/Levels.q]
@@ -341,6 +448,56 @@ global dadmod_mm_reopen  [qb/game/menu/skateshop.q]
 script dadmod_mm_reopen_menu  [qb/game/Levels.q]
 script dadmod_mmopt_change  [qb/game/menu/skateshop.q]
 script dadmod_mmopt_item  [qb/game/menu/skateshop.q]
+script dadmod_mouse_arrow_build  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_back_button  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_back_hl  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_back_press  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_box  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_click  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_es_tag  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_frame  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_hide  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_hover_bar  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_hover_bar_off  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_is_scroll_list  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_kb_row  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_kb_tick  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_kick  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_last  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_load_hl  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_loadw  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_lvl_arrows  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_lvl_off  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_measure  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_next_button  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_next_hl  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_nudge  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_pointer  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_press  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_pulse  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_px  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_pxu  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_pyu  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_rpause  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_sel_hl  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_selw  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_skin_build  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_skin_off  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_skin_pill  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_sl_hl  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_sr_hl  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_ss_arrows  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_ss_build  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_ss_buttons  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_ss_off  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_tag_hover  [qb/engine/ButtonScripts.q]
+global dadmod_mouse_tagside  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_tick  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_tri  [qb/engine/ButtonScripts.q]
+script dadmod_mouse_txt  [qb/engine/ButtonScripts.q]
+script dadmod_move_hint  [qb/thugpro/procrastination.q]
+script dadmod_move_hint_menu  [qb/thugpro/procrastination.q]
+script dadmod_move_hint_off  [qb/thugpro/procrastination.q]
 script dadmod_noclip_after_zero  [qb/engine/ButtonScripts.q]
 script dadmod_noclip_allowed  [qb/engine/ButtonScripts.q]
 script dadmod_noclip_boot  [qb/engine/ButtonScripts.q]
@@ -378,6 +535,15 @@ script dadmod_pause_veh_noop  [qb/game/Levels.q]
 script dadmod_pause_weather  [qb/game/Levels.q]
 global dadmod_pause_weather_items  [qb/game/Levels.q]
 script dadmod_prompt_tick  [qb/thugpro/procrastination.q]
+global dadmod_prop_bike_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_cart_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_chest_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_cone_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_halfpipe_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_mini_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_robot2_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_robot_setup  [qb/dadmod/dadmod_cars.q]
+global dadmod_prop_scooter_setup  [qb/dadmod/dadmod_cars.q]
 script dadmod_reload_menu_scene  [qb/game/menu/skateshop.q]
 script dadmod_reorder_choose  [qb/thugpro/procrastination.q]
 script dadmod_reorder_keys  [qb/thugpro/procrastination.q]
@@ -402,6 +568,24 @@ script dadmod_saved_menu_menu  [qb/game/Levels.q]
 script dadmod_saved_star  [qb/game/Levels.q]
 script dadmod_set_menu_here  [qb/game/Levels.q]
 global dadmod_skater_unsaved  [qb/engine/ButtonScripts.q]
+script dadmod_skc_bind_special  [qb/engine/ButtonScripts.q]
+script dadmod_skc_et_items  [qb/engine/ButtonScripts.q]
+script dadmod_skc_list_items  [qb/engine/ButtonScripts.q]
+script dadmod_skc_scales_back  [qb/engine/ButtonScripts.q]
+script dadmod_skc_scales_menu  [qb/engine/ButtonScripts.q]
+script dadmod_skc_scales_pick  [qb/engine/ButtonScripts.q]
+global dadmod_skc_scales_ready  [qb/engine/ButtonScripts.q]
+script dadmod_skc_scales_undo  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_back  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_menu  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_pick  [qb/engine/ButtonScripts.q]
+global dadmod_skc_tricks_ready  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_refresh  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_snapshot  [qb/engine/ButtonScripts.q]
+script dadmod_skc_tricks_undo  [qb/engine/ButtonScripts.q]
+global dadmod_skc_undo_map  [qb/engine/ButtonScripts.q]
+global dadmod_skc_undo_specials  [qb/engine/ButtonScripts.q]
+global dadmod_skin_state  [qb/engine/ButtonScripts.q]
 script dadmod_sky_default  [qb/thugpro/procrastination.q]
 script dadmod_speed_apply  [qb/engine/ButtonScripts.q]
 script dadmod_speed_boot  [qb/engine/ButtonScripts.q]
@@ -440,14 +624,24 @@ script dadmod_theme_slots_menu  [qb/game/menu/themes.q]
 script dadmod_thpg_not_installed  [qb/game/Levels.q]
 script dadmod_thpg_scene_level  [qb/game/Levels.q]
 script dadmod_thpg_user_level  [qb/game/Levels.q]
-script dadmod_throw_item  [qb/engine/ButtonScripts.q]
-script dadmod_throw_label  [qb/engine/ButtonScripts.q]
-script dadmod_throw_menu  [qb/engine/ButtonScripts.q]
-script dadmod_throw_msg_clear  [qb/engine/ButtonScripts.q]
-script dadmod_throw_pick  [qb/engine/ButtonScripts.q]
+global dadmod_throw_all  [qb/dadmod/dadmod_cars.q]
+global dadmod_throw_animals  [qb/dadmod/dadmod_cars.q]
+global dadmod_throw_cat_label  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_item  [qb/dadmod/dadmod_cars.q]
+global dadmod_throw_junk  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_label  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_menu  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_model  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_msg_clear  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_next_car  [qb/dadmod/dadmod_cars.q]
+global dadmod_throw_peds  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_pick  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_random_car  [qb/dadmod/dadmod_cars.q]
+script dadmod_throw_random_go  [qb/dadmod/dadmod_cars.q]
 global dadmod_titlefx_block  [qb/engine/ButtonScripts.q]
 script dadmod_tod_client_allowed  [qb/engine/ButtonScripts.q]
 global dadmod_tod_custom  [qb/thugpro/procrastination.q]
+global dadmod_tod_dawn_lights  [qb/thugpro/procrastination.q]
 global dadmod_tod_evening_lights  [qb/thugpro/procrastination.q]
 script dadmod_tod_fade  [qb/thugpro/procrastination.q]
 global dadmod_tod_fading  [qb/thugpro/procrastination.q]
@@ -560,44 +754,21 @@ script dadmod_ui_true_rainbow  [qb/thugpro/procrastination.q]
 global dadmod_ui_wheel  [qb/thugpro/procrastination.q]
 script dadmod_ui_wheel_color  [qb/thugpro/procrastination.q]
 script dadmod_ui_wheel_lerp  [qb/thugpro/procrastination.q]
-script dadmod_veh_can_drive  [qb/engine/ButtonScripts.q]
-script dadmod_veh_clear  [qb/engine/ButtonScripts.q]
-script dadmod_veh_clear_all  [qb/engine/ButtonScripts.q]
-global dadmod_veh_data_note  [qb/engine/ButtonScripts.q]
-script dadmod_veh_drive  [qb/engine/ButtonScripts.q]
-script dadmod_veh_drive_go  [qb/engine/ButtonScripts.q]
-script dadmod_veh_drive_more  [qb/engine/ButtonScripts.q]
-script dadmod_veh_drivelist  [qb/engine/ButtonScripts.q]
-script dadmod_veh_exit  [qb/engine/ButtonScripts.q]
-script dadmod_veh_exit_go  [qb/engine/ButtonScripts.q]
-script dadmod_veh_exit_now  [qb/engine/ButtonScripts.q]
-global dadmod_veh_first  [qb/engine/ButtonScripts.q]
-script dadmod_veh_get  [qb/engine/ButtonScripts.q]
-global dadmod_veh_ids  [qb/engine/ButtonScripts.q]
-global dadmod_veh_level  [qb/engine/ButtonScripts.q]
-global dadmod_veh_max  [qb/engine/ButtonScripts.q]
-script dadmod_veh_menu  [qb/engine/ButtonScripts.q]
-script dadmod_veh_more_menu  [qb/engine/ButtonScripts.q]
-script dadmod_veh_morelist  [qb/engine/ButtonScripts.q]
-global dadmod_veh_n  [qb/engine/ButtonScripts.q]
-global dadmod_veh_next  [qb/engine/ButtonScripts.q]
-global dadmod_veh_note  [qb/engine/ButtonScripts.q]
-script dadmod_veh_park  [qb/engine/ButtonScripts.q]
-script dadmod_veh_park_at  [qb/engine/ButtonScripts.q]
-script dadmod_veh_park_for  [qb/engine/ButtonScripts.q]
-script dadmod_veh_remove  [qb/engine/ButtonScripts.q]
-script dadmod_veh_wait_exit  [qb/engine/ButtonScripts.q]
-script dadmod_veh_watch  [qb/engine/ButtonScripts.q]
+global dadmod_walkcam_n  [qb/engine/ButtonScripts.q]
+global dadmod_walkcam_opt  [qb/engine/ButtonScripts.q]
+script dadmod_walkcam_tick  [qb/engine/ButtonScripts.q]
 script edit_theme_color_item_focus  [qb/game/menu/themes.q]
+script emit_dadmod_abc_particle  [qb/engine/ButtonScripts.q]
 script GeneralBail  [qb/thugpro/procrastination.q]
 script handle_start_pressed  [qb/game/menu/gamemenu_helpers.q]
+script keyboard_key_focus  [qb/thugpro/procrastination.q]
+script keyboard_text_focus  [qb/thugpro/procrastination.q]
 global Level_dadmod_P8CarFactory  [qb/thugpro/procrastination.q]
 global Level_dadmod_P8CretePark  [qb/thugpro/procrastination.q]
 global Level_dadmod_P8Downtown  [qb/thugpro/procrastination.q]
 global Level_dadmod_P8Suburbs  [qb/thugpro/procrastination.q]
 global Level_dadmod_P8Training  [qb/thugpro/procrastination.q]
 global Level_dadmod_Streets  [qb/thugpro/procrastination.q]
-global Level_dadmod_THPGBaltimore  [qb/game/Levels.q]
 global Level_dadmod_THPGBCity  [qb/game/Levels.q]
 global Level_dadmod_THPGFDR  [qb/game/Levels.q]
 global Level_dadmod_THPGHarbor  [qb/game/Levels.q]
@@ -702,7 +873,6 @@ script level_select_change_level  [qb/game/menu/gamemenu_levelselect.q]
 global level_select_tabs  [qb/game/Levels.q]
 script level_select_valid_choice  [qb/game/menu/gamemenu_levelselect.q]
 global list_level_thpg  [qb/game/Levels.q]
-script Load_dadmod_THPGBaltimore  [qb/game/Levels.q]
 script Load_dadmod_THPGBCity  [qb/game/Levels.q]
 script Load_dadmod_THPGFDR  [qb/game/Levels.q]
 script Load_dadmod_THPGHarbor  [qb/game/Levels.q]
@@ -787,6 +957,7 @@ script thugpro_menu_finalize  [qb/thugpro/procrastination.q]
 script thugpro_menu_idle  [qb/game/Levels.q]
 script thugpro_menu_item_focus  [qb/thugpro/procrastination.q]
 script thugpro_menu_item_unfocus  [qb/thugpro/procrastination.q]
+script thugpro_menu_item_update_extra_text  [qb/thugpro/procrastination.q]
 script thugpro_menu_pose_anims  [qb/game/Levels.q]
 script thugpro_menu_pose_cycle  [qb/game/Levels.q]
 script thugpro_menu_theme_create  [qb/game/Levels.q]
@@ -796,20 +967,21 @@ script thugpro_orient_menu_skater  [qb/game/Levels.q]
 global thugpro_shop_holiday_nodes  [qb/game/Levels.q]
 global thugpro_shop_holiday_peds  [qb/game/Levels.q]
 global thugpro_shop_normal_nodes  [qb/game/Levels.q]
-script thugpro_vehicle_chat  [qb/engine/ButtonScripts.q]
 script ToggleViewMode  [qb/engine/ButtonScripts.q]
 script TruckSpin_Setup  [qb/thugpro/procrastination.q]
 script UserSelectSelect  [qb/engine/ButtonScripts.q]
 script walk_maybe_throw_projectile2  [qb/game/skater/projectiles.q]
 
-## left out: server blocks (731)
+## left out: server blocks (734)
 script #"0x328eb84c"  [host_observer (server part)]
+script #"0xc46e26a0"  [host_observer (UNCLASSIFIED)]
 script #"0xd70bd595"  [host_observer (server part)]
 script chosen_host_game  [host_observer (server part)]
 script create_console_message  [host_observer (server part)]
 script create_net_panel_message  [host_observer (server part)]
 script create_network_host_options_menu  [host_observer (server part)]
 script create_object_label  [host_observer (server part)]
+script create_setup_options_menu  [host_observer (UNCLASSIFIED)]
 script dadmod_afkstart_default  [host_observer (server part)]
 global dadmod_afkstart_defaulted  [host_observer (server part)]
 script dadmod_bang_online_level_command  [onlinemaps]
@@ -925,6 +1097,8 @@ script kchaos_VelocityEffect7  [kalichaos]
 script kchaos_VelocityEffect8  [kalichaos]
 script kchaos_VelocityEffect9  [kalichaos]
 script LandSkaterTricks  [host_observer (UNCLASSIFIED)]
+global Level_dadmod_THPGBaltimore  [thpg]
+script Load_dadmod_THPGBaltimore  [thpg]
 script quit_network_game  [host_observer (server part)]
 script SkateInLand  [host_observer (UNCLASSIFIED)]
 script SkateInOrBail_Out  [host_observer (UNCLASSIFIED)]
@@ -1458,7 +1632,6 @@ global thugpro_slaphit_beat  [slap]
 script thugpro_slaphit_check  [slap]
 script thugpro_slaphit_keepalive  [slap]
 script thugpro_slaphit_knock  [slap]
-script thugpro_slaphit_obj  [slap]
 script thugpro_slaphit_watch  [slap]
 script thugpro_slash_chat  [modes_batch]
 script thugpro_sonic_game  [sonic]

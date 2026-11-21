@@ -1,0 +1,6 @@
+        dadmod_throw_model ammo_type = <ammo_type>
+        if GotParam dadmod_tmodel
+            <model> = <dadmod_tmodel>
+            <projectilecollision> = [ { component = projectilecollision projectile_type = tomato } ]
+            dadmod_throw_next_car <...>
+        endif

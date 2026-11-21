@@ -43,3 +43,5 @@ Ollie
 Wallride
 # screenfx.q: Trick Screen Effects Off skips the 3D Scary Grind full-screen effect (player shibe)
 CreatureScaryGrindEffect
+# menus.q: Options (and Kali's Features page) keep the main menu camera instead of jumping to the stock options camera
+thugpro_menu_camera_create

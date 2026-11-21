@@ -4789,7 +4789,8 @@ dadmod_item_catalog = [
 { name = "gfx_fps" b = 1 p = { id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number." } }
 { name = "gfx_shotkey" b = 1 p = { id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder." } }
 { name = "gfx_shothud" b = 1 p = { id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture." } }
-{ name = "gfx_vsync" b = 1 p = { id = gfx_vsync key = "gfx_vsync" label = "V-sync (restart)" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_vsync desc = "Locks frames to your monitor to stop tearing. Needs a restart of the game." } }
+{ name = "gfx_vsync" b = 1 p = { id = gfx_vsync key = "gfx_vsync" label = "V-sync" kind = dispvsync min = 0 max = 0 def = 0 desc = "Locks frames to your monitor to stop tearing. Pick it, then press Apply." pdesc = "Locks frames to your monitor. Pick, then press Apply." } }
+{ name = "gfx_framegen" b = 1 p = { id = gfx_framegen key = "gfx_framegen" label = "Frame generation" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_framegen desc = "Adds smooth in-between frames for a 120 to 240 Hz monitor (the game itself still runs at 60). Auto matches your monitor, or pick a rate. Never goes faster than your monitor. Adds a tiny bit of input lag. Changes show right away." pdesc = "In-between frames. Auto matches your monitor, or pick 120 to 240 Hz." } }
 { name = "gfx_mirror" b = 1 p = { id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal." pdesc = "Flips the 3D view left to right and swaps steering to match." } }
 { name = "gfx_levelsfx" b = 1 p = { id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away." } }
 { name = "gfx_tricksfx" b = 1 p = { id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing." } }
@@ -7400,14 +7401,14 @@ script dadmod_pause_controls_menu
 endscript
 
 dadmod_pause_gfx_groups = [
-{ title = "Display" desc = "Windowed or fullscreen and the resolution, applied right away" items = [ "gfx_windowed" "gfx_res" "gfx_dispapply" ] }
+{ title = "Display" desc = "Windowed or fullscreen, the resolution and v-sync, applied with Apply" items = [ "gfx_windowed" "gfx_res" "gfx_vsync" "gfx_dispapply" ] }
 { title = "Textures" desc = "Texture filtering and sharpness" items = [ "gfx_aniso" "gfx_lodbias" "gfx_uismooth" ] }
 { title = "Anti-aliasing" desc = "Smooth jagged edges" items = [ "gfx_fxaa" "gfx_msaa" ] }
 { title = "Effects" desc = "Sharpening, bloom, ambient occlusion, haze, depth of field, outlines and motion blur" items = [ "gfx_sharpen" "gfx_bloom" "gfx_ssao" "gfx_fog" "gfx_dof" "gfx_outline" "gfx_mblur" ] }
 { title = "Color" desc = "A color look plus brightness, contrast, saturation, vibrance, gamma, temperature and tint" items = [ "gfx_preset" "gfx_bright" "gfx_contrast" "gfx_sat" "gfx_vibrance" "gfx_gamma" "gfx_temp" "gfx_tint" ] }
 { title = "Retro" desc = "Pixelate, CRT TV, film grain, chromatic aberration and vignette" items = [ "gfx_pixelate" "gfx_crt" "gfx_grain" "gfx_chroma" "gfx_vignette" ] }
 { title = "Sky" desc = "Sky style, time of day (fixed or dynamic) and sky boost" items = [ "gfx_galaxy" "gfx_tod" "gfx_daylen" "gfx_lamps" "gfx_lampadd" "gfx_lampdel" "gfx_skypop" "gfx_skydef" ] }
-{ title = "Extras" desc = "FPS counter, screenshots, v-sync and mirror mode" items = [ "gfx_fps" "gfx_shotkey" "gfx_shothud" "gfx_vsync" "gfx_mirror" ] }
+{ title = "Extras" desc = "FPS counter, screenshots and frame generation" items = [ "gfx_fps" "gfx_shotkey" "gfx_shothud" "gfx_framegen" ] }
 ]
 
 dadmod_gfx_from_pause = 0

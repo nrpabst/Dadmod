@@ -7,6 +7,10 @@ script dadmod_disp_rows
         THUGRECOMP_DisplayLive key = "res" step = 0
         thugpro_menu_item_update_extra_text id = gfx_res text = <text>
     endif
+    if ScreenElementExists id = gfx_vsync
+        THUGRECOMP_DisplayLive key = "vsync" step = 0
+        thugpro_menu_item_update_extra_text id = gfx_vsync text = <text>
+    endif
     THUGRECOMP_DisplayLive key = "apply" step = 0
     if ScreenElementExists id = gfx_dispapply
         thugpro_menu_item_update_extra_text id = gfx_dispapply text = <text>

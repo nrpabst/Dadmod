@@ -25,7 +25,8 @@ static const Setting kSettings[] = {
     {"gfx_lodbias", 0, 0, 4, "texture sharpness (mip LOD bias): 0 normal .. 4 sharpest (may shimmer)"},
     {"gfx_uismooth", 0, 0, 1, "smooth scaled menu/HUD graphics: 0 off, 1 on"},
     {"gfx_msaa", 0, 0, 3, "MSAA anti-aliasing (restart): 0 off, 1 2x, 2 4x, 3 8x"},
-    {"gfx_vsync", 0, 0, 2, "v-sync (restart): 0 game default, 1 on, 2 off"},
+    {"gfx_vsync", 0, 0, 2, "v-sync (Display > Apply): 0 game default, 1 on, 2 off"},
+    {"gfx_framegen", 0, 0, 6, "frame generation (in-between frames; the game itself still runs at 60; framegen.inc): 0 off, 1 auto (your monitor), 2 120 Hz, 3 144 Hz, 4 165 Hz, 5 180 Hz, 6 240 Hz"},
     {"gfx_fxaa", 0, 0, 2, "FXAA anti-aliasing: 0 off, 1 fast, 2 high quality"},
     {"gfx_sharpen", 0, 0, 10, "sharpening (contrast adaptive): 0 off .. 10 strong"},
     {"gfx_bloom", 0, 0, 10, "bloom (glow around bright areas): 0 off .. 10 strong"},
@@ -578,10 +579,15 @@ static UINT g_adapter = 0;
 static D3DDEVTYPE g_devType = D3DDEVTYPE_HAL;
 static bool g_msaaOn = false;
 
+static void FgFullscreenRefresh(IDirect3D9* d3d, UINT adapter, D3DPRESENT_PARAMETERS* pp);  // framegen.inc
 static void AdjustPP(IDirect3D9* d3d, UINT adapter, D3DDEVTYPE type, D3DPRESENT_PARAMETERS* pp) {
     int vs = V("gfx_vsync");
+    static DWORD s_gameInterval = 0xFFFFFFFF;  // what the game asked for, so "Game default" can go back to it after a live change
+    if (s_gameInterval == 0xFFFFFFFF) s_gameInterval = pp->PresentationInterval;
+    if (vs == 0) pp->PresentationInterval = s_gameInterval;
     if (vs == 1) pp->PresentationInterval = D3DPRESENT_INTERVAL_ONE;
     if (vs == 2) pp->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    FgFullscreenRefresh(d3d, adapter, pp);
     static const D3DMULTISAMPLE_TYPE kMs[] = {D3DMULTISAMPLE_NONE, D3DMULTISAMPLE_2_SAMPLES, D3DMULTISAMPLE_4_SAMPLES, D3DMULTISAMPLE_8_SAMPLES};
     D3DMULTISAMPLE_TYPE ms = kMs[V("gfx_msaa")];
     if (ms == D3DMULTISAMPLE_NONE || !d3d) return;
@@ -1981,6 +1987,7 @@ static void DrawFireworks(IDirect3DDevice9* dev) {
     g_inPost = false;
 }
 
+static void FgCaptureScene(IDirect3DDevice9* dev);  // framegen.inc
 static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     if (!atPresent) {  // only when the screen itself is being drawn to (not an offscreen texture)
         IDirect3DSurface9* t = nullptr;
@@ -1988,6 +1995,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         t->Release();
     }
     g_sceneDone = true;
+    struct FgAfterScene { IDirect3DDevice9* d; ~FgAfterScene() { FgCaptureScene(d); } } fgAfter = {dev};  // frame generation keeps the finished 3D picture (every return below)
     if (MirrorOn()) g_origRS(dev, D3DRS_CULLMODE, g_cullWant);  // 2D draws with the game's own culling
     bool wantScene = SceneWanted(), wantShot = g_shotPending && !V("gfx_shothud");
     if (!wantScene && !wantShot) return;
@@ -2219,6 +2227,8 @@ static void RunScreen(IDirect3DDevice9* dev) {
     bb->Release();
 }
 
+#include "framegen.inc"  // frame generation (Noah 2026-11-21)
+
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
     if ((g_presents & 63) == 0) {  // ~once a second: pick up edits THUGPro Manager made to gfx.ini
@@ -2328,11 +2338,14 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 
 static void EndFrame(IDirect3DDevice9* dev) {
     if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
+    g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame
         dev->BeginScene();
         RunScene(dev, true);
         dev->EndScene();
     }
+    FgFrame(dev);  // frame generation: keeps this frame back and puts the first in-between frame in its place
+    g_fgInEnd = false;
     RunScreen(dev);
     CheckKeysAndIni();
     UpdateWorld();
@@ -2358,20 +2371,21 @@ static void NoteDeviceLost(HRESULT hr) {
     *(volatile BYTE*)0x786AB4 = 1;
 }
 static HRESULT STDMETHODCALLTYPE HookPresent(IDirect3DDevice9* dev, const RECT* a, const RECT* b, HWND w, const RGNDATA* r) {
-    if (!g_inPost) EndFrame(dev);
+    bool ours = !g_inPost;
+    if (ours) { FgClear(); EndFrame(dev); }
     HRESULT hr = g_origPresent(dev, a, b, w, r);
     NoteDeviceLost(hr);
+    if (ours) FgQueue(dev, nullptr, a, b, w, r, 0, hr);  // frame generation: the rest of this frame's frames
     return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE HookSCPresent(IDirect3DSwapChain9* sc, const RECT* a, const RECT* b, HWND w, const RGNDATA* r, DWORD f) {
     IDirect3DDevice9* dev = nullptr;
-    if (!g_inPost && SUCCEEDED(sc->GetDevice(&dev)) && dev) {
-        EndFrame(dev);
-        dev->Release();
-    }
+    bool ours = !g_inPost && SUCCEEDED(sc->GetDevice(&dev)) && dev;
+    if (ours) { FgClear(); EndFrame(dev); }
     HRESULT hr = g_origSCPresent(sc, a, b, w, r, f);
     NoteDeviceLost(hr);
+    if (ours) { FgQueue(dev, sc, a, b, w, r, f, hr); dev->Release(); }
     return hr;
 }
 
@@ -2503,6 +2517,7 @@ static HRESULT STDMETHODCALLTYPE HookDS(IDirect3DDevice9* dev, IDirect3DSurface9
 static HRESULT STDMETHODCALLTYPE HookReset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp) {
     if (g_autoDS && g_intzBound) g_origDS(dev, g_autoDS);  // our depth texture must not be bound across a reset
     FreeTargets();
+    FgClear(); FgFree();  // frame generation's textures
     if (pp) AdjustPP(g_d3d, g_adapter, g_devType, pp);
     HRESULT hr = g_origReset(dev, pp);
     // the game retries a failed reset every frame (device lost after the monitor sleeps): log the first
@@ -2524,6 +2539,7 @@ static void PatchDevice(IDirect3DDevice9* dev) {
     void** vt = *(void***)dev;
     Patch(vt, 69, (void*)&HookSSS, (void**)&g_origSSS);
     Patch(vt, 17, (void*)&HookPresent, (void**)&g_origPresent);
+    Patch(vt, 41, (void*)&HookBS, (void**)&g_origBS);  // BeginScene: frame generation shows a held-back frame before the next one starts
     Patch(vt, 16, (void*)&HookReset, (void**)&g_origReset);
     Patch(vt, 44, (void*)&HookST, (void**)&g_origST);
     Patch(vt, 82, (void*)&HookDIP, (void**)&g_origDIP);

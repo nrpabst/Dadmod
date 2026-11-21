@@ -3,7 +3,8 @@
 # (2026-11-21: ps_sky at ~4022 made a player's galaxy sky crash), so anything near that is flagged.
 # Must run in 32-bit PowerShell (d3dx9_43 is 32-bit):
 #   C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File shaderslots.ps1 [-Inc gfx.inc] [-Limit 3500]
-param([string]$Inc = (Join-Path $PSScriptRoot 'gfx.inc'), [int]$Limit = 3500)
+param([string]$Inc = (Join-Path $PSScriptRoot 'gfx.inc'), [int]$Limit = 3500, [string]$Names = '')
+# -Names a,b,c checks only those pixel shaders (framegen.inc: -Inc framegen.inc -Limit 512 -Names ps_fg_copy,...)
 $ErrorActionPreference = 'Stop'
 if ([IntPtr]::Size -ne 4) { Write-Host 'shaderslots: needs 32-bit PowerShell (SysWOW64)'; exit 2 }
 $src = [IO.File]::ReadAllText($Inc)
@@ -37,11 +38,12 @@ public static class DxSlots {
 }
 '@
 $list = @(,@('vs_main','vs_3_0')) +(@('ps_fxaa','ps_bright','ps_down','ps_blur','ps_scene','ps_look','ps_screen','ps_galaxy','ps_ao','ps_aoblur','ps_sky','ps_sky5','ps_sky6','ps_sky7','ps_sky8','ps_sky9','ps_sky10','ps_sky11','ps_sky12','ps_sky13','ps_sky14','ps_weather','ps_fireworks','ps_lamps','ps_mirror') | ForEach-Object { ,@($_, 'ps_3_0') })
+if ($Names) { $list = @($Names.Split(',') | ForEach-Object { ,@($_.Trim(), 'ps_3_0') }) }
 $bad = 0
 foreach ($s in $list) {
   $t = [DxSlots]::Run($hlsl, $s[0], $s[1])
   if ($t.StartsWith('ERROR')) { Write-Host ("shader {0,-13} {1}" -f $s[0], $t); $bad++; continue }
-  $m = [regex]::Match($t, 'approximately (\d+) instruction slots used')
+  $m = [regex]::Match($t, 'approximately (\d+) instruction slots? used')
   $n = if ($m.Success) { [int]$m.Groups[1].Value } else { -1 }
   $flag = if ($n -gt $Limit) { "  <-- OVER $Limit (NVIDIA rejects about 4096+)" } else { '' }
   if ($n -gt $Limit) { $bad++ }

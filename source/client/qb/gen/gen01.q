@@ -9142,6 +9142,7 @@ dadmod_gfx_lists = [
 { list = gfx_shotkey names = ["Off" "On"] }
 { list = gfx_shothud names = ["Off" "On"] }
 { list = gfx_vsync names = ["Game default" "On" "Off"] }
+{ list = gfx_framegen names = ["Off" "Auto (your monitor)" "120 Hz" "144 Hz" "165 Hz" "180 Hz" "240 Hz"] }
 { list = gfx_mirror names = ["Off" "On"] }
 { list = gfx_bginput names = ["Off" "On"] }
 { list = gfx_abswap names = ["Off" "On"] }
@@ -9203,7 +9204,8 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number."
     dadmod_ui_item id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder."
     dadmod_ui_item id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture."
-    dadmod_ui_item id = gfx_vsync key = "gfx_vsync" label = "V-sync (restart)" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_vsync desc = "Locks frames to your monitor to stop tearing. Needs a restart of the game."
+    dadmod_ui_item id = gfx_vsync key = "gfx_vsync" label = "V-sync" kind = dispvsync min = 0 max = 0 def = 0 desc = "Locks frames to your monitor to stop tearing. Pick it, then press Apply." pdesc = "Locks frames to your monitor. Pick, then press Apply."
+    dadmod_ui_item id = gfx_framegen key = "gfx_framegen" label = "Frame generation" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_framegen desc = "Adds smooth in-between frames for a 120 to 240 Hz monitor (the game itself still runs at 60). Auto matches your monitor, or pick a rate. Never goes faster than your monitor. Adds a tiny bit of input lag. Changes show right away." pdesc = "In-between frames. Auto matches your monitor, or pick 120 to 240 Hz."
     dadmod_ui_item id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal." pdesc = "Flips the 3D view left to right and swaps steering to match."
     dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away."
     dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing."
@@ -9269,6 +9271,9 @@ script dadmod_ui_text
         return text = <text> value = 0
     case dispres
         THUGRECOMP_DisplayLive key = "res" step = 0
+        return text = <text> value = 0
+    case dispvsync
+        THUGRECOMP_DisplayLive key = "vsync" step = 0
         return text = <text> value = 0
     case dispapply
         THUGRECOMP_DisplayLive key = "apply" step = 0
@@ -9468,7 +9473,7 @@ endscript
 
 script dadmod_ui_change
     GetTags
-    if ( ( <kind> = dispmode ) or ( <kind> = dispres ) )
+    if ( ( <kind> = dispmode ) or ( <kind> = dispres ) or ( <kind> = dispvsync ) )
         dstep = 1
         if GotParam left
             dstep = -1
@@ -9476,7 +9481,11 @@ script dadmod_ui_change
         if (<kind> = dispmode)
             THUGRECOMP_DisplayLive key = "mode" step = <dstep>
         else
-            THUGRECOMP_DisplayLive key = "res" step = <dstep>
+            if (<kind> = dispvsync)
+                THUGRECOMP_DisplayLive key = "vsync" step = <dstep>
+            else
+                THUGRECOMP_DisplayLive key = "res" step = <dstep>
+            endif
         endif
         dadmod_disp_rows
         return

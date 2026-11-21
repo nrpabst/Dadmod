@@ -43,9 +43,13 @@
 
   Step 3   Open the "dadmod-install" folder and double-click "Setup.bat".
 
-  Step 4   Pick  1) Install   (or  1) Update  if dadmod is already in).
+  Step 4   Setup first checks for a newer dadmod. If there is one,
+           pick  1) Yes  to download it (or  2) Not now).
 
-  Step 5   Start THUG Pro as usual. The first start takes a few
+  Step 5   Pick  1) Install   (or  1) Update  or  1) Reinstall  if
+           dadmod is already in).
+
+  Step 6   Start THUG Pro as usual. The first start takes a few
            seconds longer while the main menu scenes are set up.
 
            You'll see "Dadmod @DADMOD_VERSION@ beta" at the bottom of the main menu.
@@ -78,9 +82,11 @@
 
   UPDATES
 
-  Setup.bat checks for a newer dadmod each time it opens (and with
-  4) Check for updates). If there is one, it downloads it and updates
-  your game. Your settings stay.
+  Setup.bat checks for a newer dadmod each time it opens, before it
+  unpacks anything. If there is one, it downloads it into the
+  dadmod-install folder and installs that instead. Your settings stay.
+  The game also checks when it starts and can update itself
+  (Dadmod page on the main menu).
 
 
 ==========================================================================
@@ -190,9 +196,6 @@
   NEW
     + Pause > Graphics > Sound > Teleporter sounds (0 to 100): the
       volume of the sounds teleporters and teleporting elevators play.
-    + Pause > Graphics > Sound > Sound logger (default Off): On writes
-      every sound the game plays to dadmod\soundlog.txt, for finding
-      sound bugs.
 
   FIXED
     x BHRA: your skater holds the revert pose in the air again.

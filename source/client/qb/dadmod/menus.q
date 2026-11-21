@@ -195,6 +195,8 @@ script load_level
         UnloadQB "dadmod_casidle.qb"
         LoadQB "dadmod_casidle.qb" LevelSpecific
     endif
+    UnloadQB "dadmod_levelfix.qb"
+    LoadQB "dadmod_levelfix.qb" LevelSpecific
 endscript
 
 script create_main_menu

@@ -4485,6 +4485,8 @@ script GeneralBail friction = 18 Friction2 = 20 HeavyFriction = 100
     ClearExceptions
     DisablePlayerInput AllowCameraControl
     BailSkaterTricks
+    Obj_KillSpawnedScript Name = dadmod_bail_reform
+    unhide
     Obj_KillSpawnedScript Name = dadmod_square_getup
     Obj_SpawnScript dadmod_square_getup
     StopBalanceTrick

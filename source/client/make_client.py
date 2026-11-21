@@ -424,7 +424,11 @@ def package(out, release=None):
     print('files.dad: %d MB stored -> %d MB LZMA (%d s)' % (os.path.getsize(inner) >> 20, os.path.getsize(dpk) >> 20, time.time() - t0))
     os.remove(inner)
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(os.path.join(inst, 'Setup.bat'), 'dadmod-install/Setup.bat')
+        # Setup.bat checks GitHub before it unpacks files.dad (Noah 2026-11-20), so it carries the package version itself
+        bat = open(os.path.join(inst, 'Setup.bat'), 'rb').read()
+        if b"$ver = '@DADMOD_VERSION@'" not in bat:
+            sys.exit('PACKAGE FAILED: installer/Setup.bat has no version line to fill in')
+        zf.writestr('dadmod-install/Setup.bat', bat.replace(b'@DADMOD_VERSION@', VERSION.encode('ascii')))
         # README.txt (was INSTALL.txt until Noah 2026-11-18) is UTF-8 (block-letter art, Noah 2026-11-17); a BOM so Notepad always shows it right
         txt = open(os.path.join(inst, 'README.txt'), encoding='utf-8-sig').read().replace('@DADMOD_VERSION@', VERSION)
         zf.writestr('dadmod-install/README.txt', ('\ufeff' + txt.replace('\r\n', '\n').replace('\n', '\r\n')).encode('utf-8'))  # Notepad-friendly

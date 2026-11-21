@@ -458,9 +458,11 @@ def default_settings(out):
     gfx_off = ('gfx_aniso', 'gfx_lodbias', 'gfx_uismooth', 'gfx_msaa', 'gfx_vsync', 'gfx_fxaa', 'gfx_sharpen', 'gfx_bloom',
                'gfx_ssao', 'gfx_fog', 'gfx_dof', 'gfx_outline', 'gfx_mblur', 'gfx_pixelate', 'gfx_vignette', 'gfx_grain',
                'gfx_chroma', 'gfx_crt', 'gfx_preset', 'gfx_bright', 'gfx_contrast', 'gfx_sat', 'gfx_vibrance', 'gfx_gamma',
-               'gfx_temp', 'gfx_tint', 'gfx_galaxy', 'gfx_tod', 'gfx_weather', 'gfx_fireworks', 'gfx_lamps', 'gfx_skypop',
+               'gfx_temp', 'gfx_tint', 'gfx_galaxy', 'gfx_tod', 'gfx_todfog', 'gfx_weather', 'gfx_fireworks', 'gfx_lamps', 'gfx_skypop',
                'gfx_fps', 'gfx_shothud', 'gfx_mirror')
     gl = [(l.split('=')[0].strip() + ' = 0') if l.split('=')[0].strip() in gfx_off else l for l in gl]
+    gfx_fixed = {'gfx_fogamt': 5, 'gfx_skywxver': 1}  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
+    gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
     with open(os.path.join(d, 'gfx.ini'), 'w', encoding='latin-1', newline='\r\n') as f:
         f.write('\n'.join(gl) + '\n')
     ml = [l.rstrip('\r\n') for l in open(os.path.join(dev, 'mainmenu.ini'), encoding='latin-1')

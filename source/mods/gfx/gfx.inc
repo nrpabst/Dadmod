@@ -49,18 +49,21 @@ static const Setting kSettings[] = {
     {"gfx_tint", 0, -10, 10, "tint: -10 green .. 10 magenta, 0 normal"},
     {"gfx_galaxy", 0, 0, 14, "sky (replaces the level sky): 0 off, 1 milky way, 2 nebula, 3 deep space, 4 matrix, 5 aurora, 6 synthwave, "
                                 "7 storm, 8 golden hour, 9 vaporwave, 10 hellfire, 11 underwater, 12 rainbow, 13 black hole, 14 cotton candy"},
-    {"gfx_tod", 0, 0, 6, "time of day: 0 level default, 1 morning, 2 day, 3 sunset, 4 night, 5 evening with the lights on, 6 dynamic (cycles)"},
-    {"gfx_daylen", 2, 0, 4, "dynamic time of day, length of a full day: 0 5 min, 1 10 min, 2 20 min, 3 40 min, 4 60 min"},
-    {"gfx_weather", 0, 0, 5, "weather: 0 off, 1 rain, 2 heavy rain with lightning, 3 snow, 4 fog, 5 dynamic (changes every few minutes)"},
-    {"gfx_wxclear", 1, 0, 1, "dynamic weather can pick clear skies: 0 no, 1 yes"},
-    {"gfx_wxrain", 1, 0, 1, "dynamic weather can pick rain: 0 no, 1 yes"},
-    {"gfx_wxstorm", 1, 0, 1, "dynamic weather can pick thunderstorms: 0 no, 1 yes"},
-    {"gfx_wxsnow", 1, 0, 1, "dynamic weather can pick snow: 0 no, 1 yes"},
-    {"gfx_wxfog", 1, 0, 1, "dynamic weather can pick fog: 0 no, 1 yes"},
+    {"gfx_tod", 0, 0, 6, "time of day: 0 level default, 1 morning, 2 day, 3 sunset, 4 night, 5 evening with the lights on, 6 dawn (sun coming up, lights still on)"},
+    {"gfx_daylen", 2, 0, 4, "unused since 2026-11-21 (the Dynamic time of day was removed); kept so old files load"},
+    {"gfx_weather", 0, 0, 4, "weather: 0 off, 1 rain, 2 heavy rain with lightning, 3 snow, 4 random (clear, rain, storm or snow, changes every few minutes)"},
+    {"gfx_wxclear", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
+    {"gfx_wxrain", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
+    {"gfx_wxstorm", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
+    {"gfx_wxsnow", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
+    {"gfx_wxfog", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
     {"gfx_wxamt", 6, 1, 10, "weather intensity: 1 light .. 10 heavy"},
-    {"gfx_fireworks", 0, 0, 2, "fireworks: 0 off, 1 when someone wins a game, 2 on wins and automatically every few minutes"},
-    {"gfx_fwevery", 2, 0, 3, "automatic fireworks every: 0 1 min, 1 3 min, 2 5 min, 3 10 min"},
-    {"gfx_lamps", 6, 0, 10, "street lights at night: lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
+    {"gfx_todfog", 0, 0, 4, "ground mist: 0 off, 1 knee high, 2 head high, 3 first floor, 4 rooftops"},
+    {"gfx_fogamt", 5, 1, 10, "ground mist intensity: 1 light .. 10 thick"},
+    {"gfx_fireworks", 0, 0, 5, "fireworks: 0 off, 1 when someone wins a game, 2-5 on wins and every 1 / 3 / 5 / 10 minutes"},
+    {"gfx_fwevery", 2, 0, 3, "unused since 2026-11-21 (Fireworks picks the interval itself); kept so old files load"},
+    {"gfx_skywxver", 1, 0, 1, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
+    {"gfx_lamps", 0, 0, 10, "street lights at night (no menu row since 2026-11-21, off by default): lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
     {"gfx_skypop", 5, 0, 10, "sky boost (richer sky colors to match the time of day, stars at night): 0 off .. 10 strong"},
     {"gfx_fps", 0, 0, 2, "FPS counter in the top left corner: 0 off, 1 on, 2 tiny (just the number, right in the corner)"},
     {"gfx_shotkey", 1, 0, 1, "F11 saves a screenshot to dadmod\\screenshots: 0 off, 1 on"},
@@ -268,6 +271,8 @@ static void Load() {
     for (int i = 0; i < kCount; ++i) g_val[i] = kSettings[i].def;
     g_shotDir.clear();
     std::string data;
+    int rawWeather = -1, rawFw = -1, rawVer = 0;
+    bool migrate = false;
     if (ReadWholeFile(ExeDirFile("gfx.ini"), data)) {
         size_t s = 0;
         while (s < data.size()) {
@@ -289,8 +294,25 @@ static void Load() {
                 k = "gfx_aniso";
                 v = v >= 16 ? 4 : v >= 8 ? 3 : v >= 4 ? 2 : v >= 2 ? 1 : 0;
             }
+            if (k == "gfx_weather") rawWeather = v;
+            if (k == "gfx_fireworks") rawFw = v;
+            if (k == "gfx_skywxver") rawVer = v;
             int i = Index(k.c_str());
             if (i >= 0) g_val[i] = v < kSettings[i].lo ? kSettings[i].lo : v > kSettings[i].hi ? kSettings[i].hi : v;
+        }
+        // one Sky & weather page (2026-11-21): convert old weather / fireworks values once
+        if (rawVer < 1) {
+            std::string what;
+            int iw = Index("gfx_weather"), ifw = Index("gfx_fireworks"), ifog = Index("gfx_todfog"), iev = Index("gfx_fwevery"), iver = Index("gfx_skywxver");
+            if (rawWeather == 5) { g_val[iw] = 4; what += " weather Dynamic->Random"; }
+            else if (rawWeather == 4) {
+                g_val[iw] = 0; what += " weather Fog->Off";
+                if (g_val[ifog] == 0) { g_val[ifog] = 2; what += ", Fog->Head high"; }
+            }
+            if (rawFw == 2) { g_val[ifw] = 2 + g_val[iev]; what += " fireworks Auto->every interval " + std::to_string(g_val[ifw]); }
+            g_val[iver] = 1;
+            mmenu::Log("gfx: sky & weather settings converted:%s", what.empty() ? " nothing to change" : what.c_str());
+            migrate = true;
         }
     }
     // Noah 2026-10-26: mirror mode starts off every time the game starts (later gfx.ini reloads keep it)
@@ -302,8 +324,9 @@ static void Load() {
     if (first) {
         first = false;
         int m = Index("gfx_mirror");
-        if (m >= 0 && g_val[m]) { g_val[m] = 0; Save(); }
+        if (m >= 0 && g_val[m]) { g_val[m] = 0; migrate = true; }
     }
+    if (migrate) Save();
     g_iniTime = IniTime();
     SyncInput();
     InterlockedExchange(&g_dirtyPost, 1);
@@ -486,7 +509,8 @@ static float g_nightLift = 0;  // Night time of day: how much ps_look lifts the 
 static bool WeatherOn();
 static bool FireworksLive();
 static bool LampsOn();
-static bool DepthWanted() { return V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn(); }
+static bool MistOn() { return V("gfx_todfog") > 0 && !g_mainMenu; }  // Fog row: ground mist (2026-11-21)
+static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn(); }
 static bool SceneWanted() {
     return V("gfx_fxaa") || V("gfx_sharpen") || V("gfx_bloom") || V("gfx_bright") || V("gfx_contrast") || V("gfx_sat") ||
            V("gfx_vibrance") || V("gfx_gamma") || V("gfx_preset") || V("gfx_temp") || V("gfx_tint") || DepthWanted() ||
@@ -530,6 +554,8 @@ static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
+static bool g_galaxyOff = false;  // set when this card has no shader for the galaxy: the game's own sky is kept (2026-11-21)
+static bool GalaxyOn() { return V("gfx_galaxy") != 0 && !g_galaxyOff; }
 static bool g_skyGraded = false;  // the game's own sky was graded this frame
 static bool g_skyPass = false;
 static D3DMATRIX g_view = {}, g_proj = {};
@@ -662,7 +688,7 @@ float noise3(float3 x) {
     return lerp(lerp(lerp(hash13(i), hash13(i + float3(1, 0, 0)), f.x), lerp(hash13(i + float3(0, 1, 0)), hash13(i + float3(1, 1, 0)), f.x), f.y),
                 lerp(lerp(hash13(i + float3(0, 0, 1)), hash13(i + float3(1, 0, 1)), f.x), lerp(hash13(i + float3(0, 1, 1)), hash13(i + float3(1, 1, 1)), f.x), f.y), f.z);
 }
-float fbm(float3 p) { float a = 0.5, s = 0; for (int i = 0; i < 5; i++) { s += a * noise3(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
+float fbm(float3 p) { float a = 0.5, s = 0; [loop] for (int i = 0; i < 5; i++) { s += a * noise3(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
 
 float3 fxaa(float2 uv) {
     float3 nw = tex2D(s0, uv + float2(-1, -1) * px.xy).rgb, ne = tex2D(s0, uv + float2(1, -1) * px.xy).rgb;
@@ -899,7 +925,7 @@ float4 ps_galaxy(float2 uv : TEXCOORD0) : COLOR {
 float3 hsv2rgb(float h, float s, float v) { float3 k = saturate(abs(frac(h + float3(0, 2.0 / 3, 1.0 / 3)) * 6 - 3) - 1); return v * lerp(1, k, s); }
 float3 starfield(float3 d, float t, float dens) {
     float3 col = 0;
-    [unroll] for (int k = 0; k < 2; k++) {
+    [loop] for (int k = 0; k < 2; k++) {
         float sc = k == 0 ? 90.0 : 210.0;
         float3 p = d * sc, ci = floor(p);
         float h = hash13(ci + k * 17.0);
@@ -909,13 +935,28 @@ float3 starfield(float3 d, float t, float dens) {
     }
     return col * float3(0.85, 0.9, 1.0);
 }
+// starfield(d, t, 1.0) and starfield(d, t, 0.6) in one pass: the same cells and twinkle, two densities (2026-11-21, smaller shaders)
+void starfield2(float3 d, float t, out float3 a, out float3 b) {
+    a = 0; b = 0;
+    [loop] for (int k = 0; k < 2; k++) {
+        float sc = k == 0 ? 90.0 : 210.0;
+        float3 p = d * sc, ci = floor(p);
+        float h = hash13(ci + k * 17.0);
+        float3 r = float3(hash13(ci + 1.7), hash13(ci + 3.1), hash13(ci + 5.3));
+        float g = pow(saturate(1 - length(frac(p) - r) * 2.6), 10.0) * (0.75 + 0.25 * sin(t * (1.5 + h * 3.0) + h * 40.0)) * (k == 0 ? 2.6 : 1.5);
+        a += step(1 - 1.0 * (k == 0 ? 0.10 : 0.22), h) * g;
+        b += step(1 - 0.6 * (k == 0 ? 0.10 : 0.22), h) * g;
+    }
+    a *= float3(0.85, 0.9, 1.0); b *= float3(0.85, 0.9, 1.0);
+}// the golden sky keeps the unrolled fbm3: as a loop its clouds come out in other places (2026-11-21 pixel compare)
+float fbm3u(float3 p) { float a = 0.5, s = 0; [unroll] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
 // clouds on a flat ceiling over the camera: where the ray meets it
 float2 dome(float3 d, float lift) { return d.xz / (max(d.y, 0) + lift); }
-float fbm3(float3 p) { float a = 0.5, s = 0; [unroll] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
+float fbm3(float3 p) { float a = 0.5, s = 0; [loop] for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.07 + 1.3; a *= 0.5; } return s / 0.875; }
 
 float3 sky_aurora(float3 d, float t, float az, float el) {
     float3 col = lerp(float3(0.02, 0.05, 0.08), float3(0.0, 0.01, 0.04), saturate(el * 1.4)) + starfield(d, t, 1.0) * 0.8;
-    [unroll] for (int i = 0; i < 3; i++) {
+    [loop] for (int i = 0; i < 3; i++) {
         float y0 = 0.22 + i * 0.13 + 0.07 * sin(az * 2.0 + i * 2.1 + t * 0.07) + 0.06 * (noise3(float3(az * 4.0, t * 0.12, i * 7.0)) - 0.5);
         float c = el - y0;
         float shape = c < 0 ? exp(-c * c * 900.0) : exp(-c * (9.0 - i * 2.0));
@@ -967,7 +1008,7 @@ float3 sky_golden(float3 d, float t, float az, float el) {
     float sun = saturate(dot(d, sd));
     col += pow(sun, 6.0) * float3(1.0, 0.55, 0.20) * 0.6 + smoothstep(0.9993, 0.9996, sun) * float3(1.0, 0.92, 0.7) * 2.0;
     float2 q = dome(d, 0.18) * 0.45 + float2(t * 0.02, t * 0.008);
-    float c = smoothstep(0.48, 0.78, fbm3(float3(q, 0.3)) + noise3(float3(q * 4.0, t * 0.03)) * 0.12);
+    float c = smoothstep(0.48, 0.78, fbm3u(float3(q, 0.3)) + noise3(float3(q * 4.0, t * 0.03)) * 0.12);
     float3 cl = lerp(float3(0.95, 0.55, 0.40), float3(1.0, 0.85, 0.60), pow(sun, 3.0));
     return lerp(col, cl, c * 0.85 * saturate(el * 6.0));
 }
@@ -1024,17 +1065,21 @@ float3 sky_blackhole(float3 d, float t, float az, float el) {
     float r = max(length(p), 1e-4);
     float bend = R * R * 1.6 / r;
     float3 dd = normalize(d - (bx * p.x + by * p.y) / r * bend);
-    float3 col = starfield(dd, t, 1.4) + float3(0.02, 0.02, 0.05) + lerp(float3(0.10, 0.18, 0.55), float3(0.45, 0.20, 0.60), noise3(dd * 4.0)) * pow(saturate(fbm3(dd * 2.5) * 1.3 - 0.3), 2.0) * 0.8;
     float2 dp = float2(p.x, p.y / 0.22);
     float dr = length(dp), ang = atan2(dp.y, dp.x);
-    float disk = smoothstep(R * 1.6, R * 2.0, dr) * smoothstep(R * 5.0, R * 2.6, dr);
-    float swirl = 0.55 + 0.45 * noise3(float3(dr * 60.0, ang * 3.0 - t * 1.6 + 30.0 / (dr * 40.0 + 1.0), t * 0.2));
-    float3 dcol = lerp(float3(1.0, 0.45, 0.10), float3(1.0, 0.92, 0.75), saturate(1.8 - dr / R * 0.45)) * swirl * (0.4 + (0.55 + 0.45 * cos(ang)) * 1.4);
-    float front = step(0, -p.y);
     float2 hp = float2(p.x, (p.y - R * 0.05) / 0.85);
     float hr = length(hp);
+    // the three noise3 lookups share one loop body (2026-11-21: three inlined copies put this sky over 512 slots)
+    float3 na = dd * 4.0, nb = float3(dr * 60.0, ang * 3.0 - t * 1.6 + 30.0 / (dr * 40.0 + 1.0), t * 0.2), nc = float3(hr * 70.0, atan2(hp.y, hp.x) * 3.0 + t * 1.4, 4.0);
+    float3 nz = 0;
+    [loop] for (int k = 0; k < 3; k++) nz += noise3(k == 0 ? na : (k == 1 ? nb : nc)) * float3(k == 0, k == 1, k == 2);
+    float3 col = starfield(dd, t, 1.4) + float3(0.02, 0.02, 0.05) + lerp(float3(0.10, 0.18, 0.55), float3(0.45, 0.20, 0.60), nz.x) * pow(saturate(fbm3(dd * 2.5) * 1.3 - 0.3), 2.0) * 0.8;
+    float disk = smoothstep(R * 1.6, R * 2.0, dr) * smoothstep(R * 5.0, R * 2.6, dr);
+    float swirl = 0.55 + 0.45 * nz.y;
+    float3 dcol = lerp(float3(1.0, 0.45, 0.10), float3(1.0, 0.92, 0.75), saturate(1.8 - dr / R * 0.45)) * swirl * (0.4 + (0.55 + 0.45 * cos(ang)) * 1.4);
+    float front = step(0, -p.y);
     float halo = smoothstep(R * 2.6, R * 1.7, hr) * smoothstep(R * 1.25, R * 1.45, hr) * step(0, p.y);
-    float hswirl = 0.6 + 0.4 * noise3(float3(hr * 70.0, atan2(hp.y, hp.x) * 3.0 + t * 1.4, 4.0));
+    float hswirl = 0.6 + 0.4 * nz.z;
     if (r < R) col = 0;
     col += exp(-pow((r - R * 1.08) / (R * 0.05), 2)) * float3(1.0, 0.8, 0.55) * 1.2;
     col += float3(1.0, 0.6, 0.25) * halo * hswirl * 1.2 * step(R, r);
@@ -1064,7 +1109,7 @@ float3 skies(float3 d, float style, float t) {
     return sky_candy(d, t, az, el);
 }
 // time of day + sky boost for the extra skies; sky boost 5 (the default) leaves them as designed
-float3 skylook(float3 c, float3 d, float style, float t, float tod) {
+float3 skylook(float3 c, float3 d, float style, float t, float tod, float3 st10, float3 st06) {
     float pop = sk.y, el = d.y;
     bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;  // golden, vapor, rainbow, candy
     float lum = dot(c, L);
@@ -1074,23 +1119,47 @@ float3 skylook(float3 c, float3 d, float style, float t, float tod) {
     else if (tod > 2.5 && tod < 3.5) c = c * float3(1.10, 0.92, 0.82) + float3(1.0, 0.42, 0.12) * exp(-abs(el) * 5.0) * 0.18;
     else if (tod > 3.5 && tod < 4.5) {
         c = c * (bright ? float3(0.22, 0.26, 0.42) : float3(0.75, 0.80, 0.95));
-        if (bright) c += starfield(d, t, 1.0) * saturate(el * 4.0) * 0.8;
-    } else if (tod > 4.5) {
-        c = c * (bright ? float3(0.55, 0.42, 0.55) : float3(0.88, 0.85, 0.92)) + float3(0.85, 0.32, 0.14) * exp(-abs(el) * 6.0) * 0.15;
-        if (bright) c += starfield(d, t, 0.6) * saturate(el * 3.0 - 0.3) * 0.6;
+        if (bright) c += st10 * saturate(el * 4.0) * 0.8;
+    } else if (tod > 4.5) {  // evening lights (5) or dawn (6): same shape, dawn pinker with fewer stars
+        bool dawn = tod > 5.5;
+        c = c * (bright ? (dawn ? float3(0.42, 0.38, 0.56) : float3(0.55, 0.42, 0.55)) : (dawn ? float3(0.84, 0.82, 0.94) : float3(0.88, 0.85, 0.92)))
+            + (dawn ? float3(1.0, 0.50, 0.45) : float3(0.85, 0.32, 0.14)) * exp(-abs(el) * 6.0) * 0.15;
+        if (bright) c += st06 * saturate(el * 3.0 - (dawn ? 0.9 : 0.3)) * (dawn ? 0.3 : 0.6);
     }
     return c;
 }
-float4 ps_skies(float2 uv : TEXCOORD0) : COLOR {
+// One small shader per extra sky (2026-11-21: all ten in one ps_skies came to ~4,900 then ~3,300 instruction slots;
+// D3D9 only promises 512 for ps_3_0, so each sky is its own shader, chosen by gfx_galaxy in DrawGalaxy)
+float3 skydir(float2 uv) {
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
-    float3 d = normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
-    float3 c = skies(d, p9.y, p1.w);
-    float3 a = skylook(c, d, p9.y, p1.w, sk.x);
-    [branch] if (sk.w > 0.001) a = lerp(a, skylook(c, d, p9.y, p1.w, sk.z), sk.w);
+    return normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
+}
+float4 skyout(float3 c, float3 d, float style) {
+    float3 st10 = 0, st06 = 0;  // the night/evening stars, made once
+    bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;
+    [branch] if (bright && (sk.x > 3.5 || (sk.w > 0.001 && sk.z > 3.5))) starfield2(d, p1.w, st10, st06);
+    float3 a = 0, b = 0;  // the look for this time of day and, while it fades, the next one: one loop body (2026-11-21, smaller shaders)
+    [loop] for (int i = 0; i < 2; i++) {
+        if (i == 1 && sk.w <= 0.001) break;
+        float3 l = skylook(c, d, style, p1.w, i == 0 ? sk.x : sk.z, st10, st06);
+        if (i == 0) a = l; else b = l;
+    }
+    [branch] if (sk.w > 0.001) a = lerp(a, b, sk.w);
     return float4(saturate(a), 1);
 }
+#define DADMOD_SKY(n, fn) float4 ps_sky##n(float2 uv : TEXCOORD0) : COLOR { float3 d = skydir(uv); return skyout(fn(d, p1.w, atan2(d.x, d.z), d.y), d, n); }
+DADMOD_SKY(5, sky_aurora)
+DADMOD_SKY(6, sky_synthwave)
+DADMOD_SKY(7, sky_storm)
+DADMOD_SKY(8, sky_golden)
+DADMOD_SKY(9, sky_vapor)
+DADMOD_SKY(10, sky_hell)
+DADMOD_SKY(11, sky_water)
+DADMOD_SKY(12, sky_rainbow)
+DADMOD_SKY(13, sky_blackhole)
+DADMOD_SKY(14, sky_candy)
 // the game's own sky, graded right after it is drawn: richer colors and a look that matches the time of day
-float3 skygrade(float3 c, float3 d, float tod) {
+float3 skygrade(float3 c, float3 d, float tod, float3 gx) {
     float el = d.y, pop = sk.y;
     float lum = dot(c, L);
     c = lerp(lum.xxx, c, 1 + pop * 0.9);
@@ -1109,11 +1178,12 @@ float3 skygrade(float3 c, float3 d, float tod) {
         c = lerp(c, g * (0.45 + lum * 1.2), mixv) + pow(sun, 10) * float3(1.0, 0.55, 0.2) * 0.35 + pow(sun, 300) * float3(1.0, 0.85, 0.6) * 0.5;
     } else if (tod > 3.5 && tod < 4.5) { // night: deep blue-black with stars and a faint milky way
         c = c * float3(0.30, 0.38, 0.62) * (0.6 - pop * 0.2);
-        c += galaxy(d, 1.0, p1.w) * (0.55 + pop * 0.5) * saturate(el * 5 + 0.4);
-    } else if (tod > 4.5) {              // evening, lights on: dusk glow low down, first stars up high
-        float3 g = lerp(float3(0.85, 0.32, 0.14), float3(0.07, 0.06, 0.20), saturate(el * 2.0));
-        c = lerp(c, g * (0.4 + lum), mixv) + pow(sun, 8) * float3(0.9, 0.4, 0.15) * 0.35;
-        c += galaxy(d, 1.0, p1.w) * 0.35 * saturate(el * 3 - 0.4);
+        c += gx * (0.55 + pop * 0.5) * saturate(el * 5 + 0.4);
+    } else if (tod > 4.5) {              // evening, lights on (5): dusk glow low down, first stars up high
+        bool dawn = tod > 5.5;           // dawn (6): deep blue overhead, pink-orange glow toward the sun, stars fading
+        float3 g = lerp(dawn ? float3(0.95, 0.50, 0.45) : float3(0.85, 0.32, 0.14), dawn ? float3(0.05, 0.08, 0.24) : float3(0.07, 0.06, 0.20), saturate(el * 2.0));
+        c = lerp(c, g * (0.4 + lum), mixv) + pow(sun, 8) * (dawn ? float3(1.0, 0.55, 0.45) : float3(0.9, 0.4, 0.15)) * 0.35;
+        c += gx * (dawn ? 0.25 : 0.35) * saturate(el * 3 - (dawn ? 1.0 : 0.4));
     }
     return c;
 }
@@ -1121,9 +1191,26 @@ float4 ps_sky(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
     float3 d = normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
-    float3 a = skygrade(c, d, sk.x);
-    [branch] if (sk.w > 0.001) a = lerp(a, skygrade(c, d, sk.z), sk.w);
+    float3 gx = 0;  // the milky way for night/evening, made once (2026-11-21: four inlined copies put ps_sky over NVIDIA's slot limit)
+    [branch] if (sk.x > 3.5 || (sk.w > 0.001 && sk.z > 3.5)) gx = galaxy(d, 1.0, p1.w);
+    // one copy of skygrade in a loop (2026-11-21: two inlined copies + dawn went over 512 slots)
+    float3 a = 0;
+    [loop] for (int i = 0; i < 2; i++) {
+        if (i == 1 && sk.w <= 0.001) break;
+        float3 r = skygrade(c, d, i == 0 ? sk.x : sk.z, gx);
+        a = i == 0 ? r : lerp(a, r, sk.w);
+    }
     return float4(saturate(a), 1);
+}
+// ---- night tint (scene pass, before lamps/weather): darkens buildings the game's TOD manager leaves at day brightness.
+// Drawn at the far plane with ZFUNC GREATER so only geometry (not the sky) is tinted; very bright pixels stay lit.
+float3 nighttint(float tod) { return tod > 3.5 && tod < 4.5 ? float3(0.22, 0.26, 0.40) : (tod > 5.5 ? float3(0.40, 0.40, 0.52) : (tod > 4.5 ? float3(0.62, 0.55, 0.60) : float3(1, 1, 1))); }  // night, dawn, evening lights
+float4 ps_nighttint(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float3 t = lerp(nighttint(sk.x), nighttint(sk.z), sk.w);
+    float br = max(c.r, max(c.g, c.b)), sat = br - min(c.r, min(c.g, c.b));  // keep the level's lights lit: bright or strongly colored pixels
+    t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)));
+    return float4(c * t, 1);
 }
 // ---- weather (scene pass, before the HUD): s0 color, s1 depth when p9.z > 0
 // lightning: the same slots and hash as the Storm sky, so with threshold 0.74 the two flash together
@@ -1184,12 +1271,12 @@ float4 ps_weather(float2 uv : TEXCOORD0) : COLOR {
     float az = atan2(d.x, d.z), el = asin(clamp(d.y, -1, 1));
     [branch] if (wetness > 0.01) {
         float r = 0;
-        [unroll] for (int k = 0; k < 3; k++) r += rainlayer(az, el, t, k, z, wetness);
+        [loop] for (int k = 0; k < 3; k++) r += rainlayer(az, el, t, k, z, wetness);
         c = lerp(c, float3(0.75, 0.8, 0.88) * (0.4 + 0.6 * lite) + fl * 0.5, saturate(r) * 0.45);
     }
     [branch] if (snow > 0.01) {
         float sn = 0;
-        [unroll] for (int k = 0; k < 3; k++) sn += snowlayer(az, el, t, k, z, saturate(snow));
+        [loop] for (int k = 0; k < 3; k++) sn += snowlayer(az, el, t, k, z, saturate(snow));
         c = lerp(c, float3(0.95, 0.97, 1.0) * (0.45 + 0.55 * lite), saturate(sn));
     }
     return float4(c, 1);
@@ -1271,15 +1358,43 @@ float4 ps_lamps(float2 uv : TEXCOORD0) : COLOR {
     c += (c * light * 2.4 + light * 0.05 + halo * 0.7) * lampc.x;
     return float4(c, 1);
 }
+// ---- ground mist (scene pass, after the night tint): s0 color, s1 depth. camp = camera position (c29)
+// density(h) = D * exp(-(h - ground) / Hs), integrated along the view ray; drifting 2-octave patches
+float4 gm : register(c80);   // D, Hs, ground height, cap
+float4 gmc : register(c81);  // mist color
+float vnoise(float2 p) {
+    float2 i = floor(p), f = frac(p);
+    f = f * f * (3 - 2 * f);
+    return lerp(lerp(hash12(i), hash12(i + float2(1, 0)), f.x), lerp(hash12(i + float2(0, 1)), hash12(i + float2(1, 1)), f.x), f.y);
+}
+float4 ps_groundmist(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float3 dn = normalize(dv);
+    float len = d0 >= 0.99999 ? 11800.0 : length(dv) * dist(d0);  // sky: as if 300 m away, so the horizon blends
+    float3 P = camp.xyz + dn * len;
+    float hs = gm.y, hc = max(camp.y - gm.z, -hs), hp = max(P.y - gm.z, -hs), dh = hp - hc;
+    float ec = exp(-hc / hs), ep = exp(-hp / hs);
+    float k = abs(dh) > 0.01 ? hs * (ec - ep) / dh : ec;
+    float2 q = lerp(camp.xz, P.xz, 0.5) / 400.0 + p1.w * float2(0.011, 0.007);
+    float n = vnoise(q) * 0.67 + vnoise(q * 2.03 + 5.2) * 0.33;
+    float od = gm.x * len * k * (0.6 + 0.8 * n);
+    float a = min(1 - exp(-od), gm.w);
+    return float4(lerp(c, gmc.rgb, a), 1);
+}
 )HLSL";
 
 static IDirect3DVertexShader9* g_vs = nullptr;
 static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDown = nullptr, *g_psBlur = nullptr, *g_psScene = nullptr,
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
-                             *g_psSkies = nullptr,  // skies 5-14 (optional: a failed compile only loses those skies)
+                             *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
                              *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr,  // optional too
-                             *g_psMirror = nullptr;  // optional: without it mirror mode does nothing
+                             *g_psMirror = nullptr,  // optional: without it mirror mode does nothing
+                             *g_psGroundMist = nullptr,  // optional: the Fog row (ground mist)
+                             *g_psNightTint = nullptr;  // optional: without it night/evening buildings keep the game's lighting
 static IDirect3DVertexDeclaration9* g_decl = nullptr;
 static IDirect3DTexture9 *g_texA = nullptr, *g_texB = nullptr, *g_texC = nullptr, *g_texD = nullptr, *g_texE = nullptr, *g_texF = nullptr, *g_texPrev = nullptr,
                          *g_texG = nullptr, *g_texH = nullptr;  // G/H: ambient occlusion
@@ -1330,45 +1445,161 @@ static bool CachedShaderCode(CompileShader_t compile, const char* fn, const char
     return true;
 }
 
+// ---- what this graphics card can do (2026-11-21) ---------------------------------------------------
+// A player's NVIDIA card refused ps_sky (~4000 instruction slots); the old MakeShaders then stopped halfway
+// without a log line, reported "ready" on the next call (it only checked g_vs) and the galaxy sky drew with
+// no vertex declaration: an access violation inside d3d9/the driver on every start. Now every card's limits
+// are read once and logged, shaders over the card's slot limit are skipped, and the shader set is
+// all-or-nothing. dadmod\gfx_test.ini (test builds only, never shipped) can fake a weak card:
+//   failshader = ps_sky      that shader's create is treated as failed
+//   weakcard = 1             pretend: 512 pixel/vertex shader slots, no readable depth (INTZ)
+static bool g_cardChecked = false, g_cardSM3 = true, g_cardIntz = true, g_cardPixFog = false;
+static UINT g_cardPsSlots = 32768, g_cardVsSlots = 32768;
+static std::string g_testFailShader;
+static bool g_testWeak = false;
+static void ReadGfxTest() {
+    std::string s;
+    if (!ReadWholeFile(ExeDirFile("gfx_test.ini"), s)) return;
+    size_t p = 0;
+    while (p < s.size()) {
+        size_t e = s.find('\n', p);
+        if (e == std::string::npos) e = s.size();
+        std::string line = s.substr(p, e - p);
+        p = e + 1;
+        size_t sc = line.find(';');
+        if (sc != std::string::npos) line.resize(sc);
+        size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        auto trim = [](std::string t) {
+            size_t a = t.find_first_not_of(" \t\r"), b = t.find_last_not_of(" \t\r");
+            return a == std::string::npos ? std::string() : t.substr(a, b - a + 1);
+        };
+        std::string k = trim(line.substr(0, eq)), v = trim(line.substr(eq + 1));
+        if (k == "failshader") g_testFailShader = v;
+        else if (k == "weakcard") g_testWeak = atoi(v.c_str()) != 0;
+    }
+}
+static void CardCheck(IDirect3DDevice9* dev) {
+    if (g_cardChecked) return;
+    g_cardChecked = true;
+    ReadGfxTest();
+    D3DCAPS9 c = {};
+    bool haveCaps = SUCCEEDED(dev->GetDeviceCaps(&c));
+    D3DADAPTER_IDENTIFIER9 id = {};
+    IDirect3D9* d3d = nullptr;
+    D3DDEVICE_CREATION_PARAMETERS cp = {};
+    D3DDISPLAYMODE mode = {};
+    bool haveId = SUCCEEDED(dev->GetDirect3D(&d3d)) && d3d && SUCCEEDED(dev->GetCreationParameters(&cp)) &&
+                  SUCCEEDED(d3d->GetAdapterIdentifier(cp.AdapterOrdinal, 0, &id));
+    if (haveCaps) {
+        g_cardSM3 = (c.PixelShaderVersion & 0xFFFF) >= 0x0300 && (c.VertexShaderVersion & 0xFFFF) >= 0x0300;
+        if (c.MaxPixelShader30InstructionSlots) g_cardPsSlots = c.MaxPixelShader30InstructionSlots;
+        if (c.MaxVertexShader30InstructionSlots) g_cardVsSlots = c.MaxVertexShader30InstructionSlots;
+    }
+    if (d3d) {
+        const D3DFORMAT kIntz = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');
+        d3d->GetAdapterDisplayMode(cp.AdapterOrdinal, &mode);
+        D3DFORMAT fmt = mode.Format ? mode.Format : D3DFMT_X8R8G8B8;
+        g_cardIntz = SUCCEEDED(d3d->CheckDeviceFormat(cp.AdapterOrdinal, cp.DeviceType, fmt, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_TEXTURE, kIntz));
+        bool rt = SUCCEEDED(d3d->CheckDeviceFormat(cp.AdapterOrdinal, cp.DeviceType, fmt, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8));
+        if (!rt) { g_cardSM3 = false; mmenu::Log("gfx: card can't render to A8R8G8B8 textures, effects off"); }
+        d3d->Release();
+    }
+    if (g_testWeak) { g_cardPsSlots = g_cardVsSlots = 512; g_cardIntz = false; }
+    unsigned drv = (unsigned)id.DriverVersion.HighPart, drl = (unsigned)id.DriverVersion.LowPart;
+    mmenu::Log("gfx: card %s (vendor 0x%04lX device 0x%04lX, driver %u.%u.%u.%u): ps %lu.%lu, vs %lu.%lu, ps slots %u, vs slots %u, "
+               "max texture %lux%lu, render targets %lu, readable depth %s%s%s",
+               haveId ? id.Description : "?", id.VendorId, id.DeviceId, drv >> 16, drv & 0xFFFF, drl >> 16, drl & 0xFFFF,
+               (c.PixelShaderVersion >> 8) & 0xFF, c.PixelShaderVersion & 0xFF, (c.VertexShaderVersion >> 8) & 0xFF, c.VertexShaderVersion & 0xFF,
+               g_cardPsSlots, g_cardVsSlots, c.MaxTextureWidth, c.MaxTextureHeight, c.NumSimultaneousRTs, g_cardIntz ? "yes" : "no",
+               g_testWeak ? " [TEST: weak card]" : "", g_testFailShader.empty() ? "" : " [TEST: failing a shader]");
+    if (!g_cardSM3) mmenu::Log("gfx: card has no shader model 3.0, graphics effects off");
+    // per-pixel (table) fog measured on eye distance: our time of day / weather fog uses it (2026-11-21)
+    g_cardPixFog = haveCaps && (c.RasterCaps & D3DPRASTERCAPS_FOGTABLE) && (c.RasterCaps & D3DPRASTERCAPS_WFOG);
+    mmenu::Log("gfx: per-pixel fog %s", g_cardPixFog ? "available" : "not available, the game's per-corner fog stays");
+}
+// instruction slots a compiled shader takes (opcode tokens, without declarations/constants/comments)
+static UINT ShaderSlots(const std::string& code) {
+    const DWORD* t = (const DWORD*)code.data();
+    size_t n = code.size() / 4, i = 1, slots = 0;
+    while (i < n) {
+        DWORD tok = t[i], op = tok & 0xFFFF;
+        if (op == 0xFFFF) break;                                    // end
+        if (op == 0xFFFE) { i += 1 + ((tok >> 16) & 0x7FFF); continue; }  // comment block
+        size_t len = (tok >> 24) & 0x0F;
+        if (op != 31 && op != 81 && op != 82 && op != 83) ++slots;  // dcl, def, defi, defb take no slot
+        i += 1 + len;
+    }
+    return (UINT)slots;
+}
+// one shader: compile/cache, check against the card, create. Every failure is logged with its reason.
+static bool MakeOneShader(IDirect3DDevice9* dev, CompileShader_t compile, const char* fn, const char* prof, bool vs, void** out) {
+    std::string code, err;
+    if (!CachedShaderCode(compile, fn, prof, code, err)) { mmenu::Log("gfx: shader %s failed to compile: %s", fn, err.c_str()); return false; }
+    UINT slots = ShaderSlots(code), limit = vs ? g_cardVsSlots : g_cardPsSlots;
+    if (slots > limit) { mmenu::Log("gfx: shader %s skipped: %u instruction slots, this card allows %u", fn, slots, limit); return false; }
+    HRESULT hr = g_testFailShader == fn ? D3DERR_INVALIDCALL
+                 : vs ? dev->CreateVertexShader((const DWORD*)code.data(), (IDirect3DVertexShader9**)out)
+                      : dev->CreatePixelShader((const DWORD*)code.data(), (IDirect3DPixelShader9**)out);
+    if (FAILED(hr) || !*out) {
+        if (*out) { ((IUnknown*)*out)->Release(); *out = nullptr; }
+        mmenu::Log("gfx: shader %s rejected by the card (hr 0x%08lX, %u slots)%s", fn, hr, slots, g_testFailShader == fn ? " [TEST]" : "");
+        return false;
+    }
+    return true;
+}
+// All-or-nothing: the core set (vertex shader, declaration, the post-process chain) either all exists or none
+// of it does. Optional shaders (galaxy, extra skies, sky grading, weather, fireworks, lamps, mirror) can each be
+// missing; every user checks its own pointer.
+static bool g_shadersReady = false;
+static bool AnySkyN() { for (auto p : g_psSkyN) if (p) return true; return false; }
 static bool MakeShaders(IDirect3DDevice9* dev) {
-    if (g_vs) return true;
+    if (g_shadersReady) return true;
     if (g_shaderFail) return false;
+    CardCheck(dev);
+    if (!g_cardSM3) { g_shaderFail = true; return false; }
     if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
     auto compile = g_dx ? (CompileShader_t)GetProcAddress(g_dx, "D3DXCompileShader") : nullptr;
-    struct { const char* fn; const char* prof; bool vs; void** out; } list[] = {
+    struct { const char* fn; const char* prof; bool vs; void** out; } core[] = {
         {"vs_main", "vs_3_0", true, (void**)&g_vs}, {"ps_fxaa", "ps_3_0", false, (void**)&g_psFxaa},
         {"ps_bright", "ps_3_0", false, (void**)&g_psBright}, {"ps_down", "ps_3_0", false, (void**)&g_psDown},
         {"ps_blur", "ps_3_0", false, (void**)&g_psBlur}, {"ps_scene", "ps_3_0", false, (void**)&g_psScene},
         {"ps_look", "ps_3_0", false, (void**)&g_psLook}, {"ps_screen", "ps_3_0", false, (void**)&g_psScreen},
-        {"ps_galaxy", "ps_3_0", false, (void**)&g_psGalaxy}, {"ps_ao", "ps_3_0", false, (void**)&g_psAO},
-        {"ps_aoblur", "ps_3_0", false, (void**)&g_psAOBlur}, {"ps_sky", "ps_3_0", false, (void**)&g_psSky}};
-    for (auto& s : list) {
-        std::string code, err;
-        if (!CachedShaderCode(compile, s.fn, s.prof, code, err)) {
-            mmenu::Log("gfx: shader %s failed: %s", s.fn, err.c_str());
-            g_shaderFail = true;
-            return false;
-        }
-        HRESULT hr = s.vs ? dev->CreateVertexShader((const DWORD*)code.data(), (IDirect3DVertexShader9**)s.out)
-                          : dev->CreatePixelShader((const DWORD*)code.data(), (IDirect3DPixelShader9**)s.out);
-        if (FAILED(hr)) { g_shaderFail = true; return false; }
+        {"ps_ao", "ps_3_0", false, (void**)&g_psAO}, {"ps_aoblur", "ps_3_0", false, (void**)&g_psAOBlur}};
+    bool ok = true;
+    for (auto& s : core) if (!MakeOneShader(dev, compile, s.fn, s.prof, s.vs, s.out)) { ok = false; break; }
+    if (ok) {
+        D3DVERTEXELEMENT9 el[] = {{0, 0, D3DDECLTYPE_FLOAT4, 0, D3DDECLUSAGE_POSITION, 0},
+                                  {0, 16, D3DDECLTYPE_FLOAT2, 0, D3DDECLUSAGE_TEXCOORD, 0}, D3DDECL_END()};
+        HRESULT hr = dev->CreateVertexDeclaration(el, &g_decl);
+        if (FAILED(hr) || !g_decl) { g_decl = nullptr; mmenu::Log("gfx: vertex declaration rejected by the card (hr 0x%08lX)", hr); ok = false; }
     }
-    struct { const char* fn; IDirect3DPixelShader9** out; } optional[] = {
-        {"ps_skies", &g_psSkies}, {"ps_weather", &g_psWeather}, {"ps_fireworks", &g_psFireworks}, {"ps_lamps", &g_psLamps},
-        {"ps_mirror", &g_psMirror}};
-    for (auto& o : optional) {
-        std::string code, err;
-        if (CachedShaderCode(compile, o.fn, "ps_3_0", code, err)) dev->CreatePixelShader((const DWORD*)code.data(), o.out);
-        else mmenu::Log("gfx: shader %s failed: %s", o.fn, err.c_str());
+    if (!ok) {
+        for (auto& s : core) if (*s.out) { ((IUnknown*)*s.out)->Release(); *s.out = nullptr; }
+        if (g_decl) { g_decl->Release(); g_decl = nullptr; }
+        g_shaderFail = true;
+        mmenu::Log("gfx: graphics effects off on this card (the game itself is unchanged)");
+        return false;
     }
-    D3DVERTEXELEMENT9 el[] = {{0, 0, D3DDECLTYPE_FLOAT4, 0, D3DDECLUSAGE_POSITION, 0},
-                              {0, 16, D3DDECLTYPE_FLOAT2, 0, D3DDECLUSAGE_TEXCOORD, 0}, D3DDECL_END()};
-    dev->CreateVertexDeclaration(el, &g_decl);
+    struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
+        {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
+        {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_mirror", &g_psMirror, "mirror picture"},
+        {"ps_nighttint", &g_psNightTint, "night tint"}, {"ps_groundmist", &g_psGroundMist, "ground mist"}};
+    for (auto& o : optional)
+        if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
+    for (int i = 0; i < 10; ++i) {
+        char fn[16];
+        wsprintfA(fn, "ps_sky%d", i + 5);
+        if (!MakeOneShader(dev, compile, fn, "ps_3_0", false, (void**)&g_psSkyN[i])) mmenu::Log("gfx: galaxy sky %d unavailable on this card (the milky way shows instead)", i + 5);
+    }
+    g_shadersReady = true;
     mmenu::Log("gfx: effects ready");
     return true;
 }
 
 static void Quad(IDirect3DDevice9* dev, UINT w, UINT h, float z = 0) {
+    if (!g_shadersReady || !g_vs || !g_decl) return;  // never draw with a half-made shader set
     // clip-space quad with the D3D9 half-pixel offset
     float ox = -1.0f / w, oy = 1.0f / h;
     float v[4][6] = {{-1 + ox, 1 + oy, z, 1, 0, 0}, {1 + ox, 1 + oy, z, 1, 1, 0}, {-1 + ox, -1 + oy, z, 1, 0, 1}, {1 + ox, -1 + oy, z, 1, 1, 1}};
@@ -1377,6 +1608,7 @@ static void Quad(IDirect3DDevice9* dev, UINT w, UINT h, float z = 0) {
 
 static void Pass(IDirect3DDevice9* dev, IDirect3DPixelShader9* ps, IDirect3DSurface9* dst, UINT sw, UINT sh, UINT dw, UINT dh,
                  IDirect3DBaseTexture9* t0, IDirect3DBaseTexture9* t1 = nullptr, IDirect3DBaseTexture9* t2 = nullptr, IDirect3DBaseTexture9* t3 = nullptr) {
+    if (!ps || !dst) return;  // a shader this card didn't get: skip the pass instead of drawing with none
     dev->SetRenderTarget(0, dst);
     D3DVIEWPORT9 vp = {0, 0, dw, dh, 0, 1};
     dev->SetViewport(&vp);
@@ -1519,20 +1751,9 @@ static bool BackBufferIsTarget(IDirect3DDevice9* dev, IDirect3DSurface9** bbOut)
 static double NowS() { return GetTickCount64() / 1000.0; }
 static float g_sky[4] = {0, 0.5f, 0, 0};  // c16 for the sky passes: time of day, boost, next time of day, blend
 static float g_wx[3][4] = {};             // c17-c19 for the weather pass
-static double g_todStart = 0;
-static int g_todWas = -1;
-static const int kTodOrder[5] = {1, 2, 3, 5, 4};  // morning, day, sunset, evening (lights on), night
-static double TodPos() {                          // 0..5 through the dynamic day
-    static const int kLen[] = {5, 10, 20, 40, 60};
-    double pos = fmod((NowS() - g_todStart) / (kLen[V("gfx_daylen")] * 60.0), 1.0) * 5.0;
-    return pos < 0 ? 0 : pos;
-}
 // the time of day the level lighting should use now (QB reads it as gfx_todnow)
 static int TodSetting() { int t = V("gfx_tod"); return t ? t : g_serverTod; }
-static int TodNow() {
-    int t = V("gfx_tod");
-    return t < 6 ? t : kTodOrder[(int)TodPos() % 5];
-}
+static int TodNow() { return V("gfx_tod"); }  // 2026-11-21: Dynamic (old 6) removed, 6 = dawn
 
 static float g_wxCur[4] = {};  // rain, snow, fog, storm as shown (they ease toward the target)
 static int g_dynType = 0;
@@ -1629,7 +1850,7 @@ static bool LampsOn() { return g_lampAmt > 0.01f && g_lampN > 0; }
 // lamps light up in the evening and at night (a little at sunset); picks the 24 nearest to the camera
 // Noah 2026-10-20: lamps fade on/off instead of popping: the glow eases toward its target over ~4 s.
 static void UpdateLamps(int todA, int todB, float blend, float dt) {
-    auto w = [](int t) { return t == 4 || t == 5 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
+    auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };  // 6 dawn: lights still on
     float want = (w(todA) + (w(todB) - w(todA)) * blend) * V("gfx_lamps") / 6.0f;
     static float shown = -1.0f;
     if (shown < 0) shown = want;  // first frame: no fade
@@ -1672,7 +1893,7 @@ static void UpdateWorld() {
     double now = NowS();
     float dt = last ? (float)(now - last > 0.5 ? 0.5 : now - last) : 0;
     {   // Night (Noah 2026-10-12: "night mode is waaaay too dark"): ease the dark lift in/out over ~3 s
-        float want = TodNow() == 4 ? 0.4f : 0.0f;
+        float want = TodNow() == 4 ? 0.4f : TodNow() == 6 ? 0.3f : 0.0f;  // dawn lifts a little less
         float step = dt / 3.0f * 0.4f;
         g_nightLift = g_nightLift < want ? (g_nightLift + step > want ? want : g_nightLift + step)
                                          : (g_nightLift - step < want ? want : g_nightLift - step);
@@ -1681,56 +1902,33 @@ static void UpdateWorld() {
     if (last && now - last > 0.1 && now - hitchLog > 1.0) { hitchLog = now; mmenu::Log("gfx: slow frame %d ms", (int)((now - last) * 1000)); }
     last = now;
 
-    // time of day: fixed, or a cycle that eases from one look to the next over the last fifth of each part
+    // time of day: a fixed look (the Dynamic cycle was removed 2026-11-21; 6 is now dawn)
     int tod = V("gfx_tod");
-    if (tod == 6 && g_todWas != 6) g_todStart = now;
-    g_todWas = tod;
     int a = tod, b = tod;
     float blend = 0;
-    if (tod == 6) {
-        // the sky eases from the previous part of the day over the first 8 seconds, in step with the lighting
-        // fade that QB runs when gfx_todnow changes (dadmod_tod_fade)
-        static const int kLen[] = {5, 10, 20, 40, 60};
-        double pos = TodPos(), into = (pos - floor(pos)) * kLen[V("gfx_daylen")] * 60.0 / 5.0;
-        int i = (int)pos % 5;
-        a = kTodOrder[(i + 4) % 5];
-        b = kTodOrder[i];
-        float x = into >= 8.0 ? 1.0f : (float)(into / 8.0);
-        blend = x * x * (3 - 2 * x);
-        if (now - g_todStart < 8.0) { a = b; blend = 0; }
-    }
     g_sky[0] = (float)a; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)b; g_sky[3] = blend;
     if (tod == 0 && g_serverTod > 0) UpdateLamps(g_serverTod, g_serverTod, 0, dt);  // lamps follow the server
     else UpdateLamps(a, b, blend, dt);
-    static const float kLite[6] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f};
-    static const float kFog[6][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
-                                     {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f}};
+    static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
+    static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
+                                     {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
+                                     {0.17f, 0.16f, 0.20f}};  // dawn: cold blue-pink (0.42, 0.40, 0.50) x light 0.4
     float lite = kLite[a] + (kLite[b] - kLite[a]) * blend;
     for (int k = 0; k < 3; ++k) g_wx[2][k] = kFog[a][k] + (kFog[b][k] - kFog[a][k]) * blend;
     g_wx[2][3] = 1;
 
-    // weather: a fixed kind, or dynamic (a new pick every 3-6 minutes, foggier mornings)
+    // weather: a fixed kind, or Random (a new pick every 3-6 minutes from clear, rain, storm and snow; 2026-11-21
+    // the old Dynamic picks and fog weather were dropped: the Fog row's ground mist does fog now)
     int w = V("gfx_weather"), type = w;
-    if (w == 5) {
-        static const char* kOnNow[5] = {"gfx_wxclear", "gfx_wxrain", "gfx_wxstorm", "gfx_wxsnow", "gfx_wxfog"};
-        bool anyOn = false;
-        for (auto k : kOnNow) anyOn = anyOn || V(k);
-        if (anyOn && !V(kOnNow[g_dynType])) g_dynNext = 0;
+    if (w == 4) {
         if (now >= g_dynNext) {
-            int morning = (TodNow() == 1) ? 1 : 0;
-            int weights[5] = {35, 20, 10, 12, 18 + morning * 25};  // clear, rain, storm, snow, fog
-            static const char* kOn[5] = {"gfx_wxclear", "gfx_wxrain", "gfx_wxstorm", "gfx_wxsnow", "gfx_wxfog"};
-            int total = 0;
-            for (int k = 0; k < 5; ++k) { if (!V(kOn[k])) weights[k] = 0; total += weights[k]; }
-            int pick = 0;
-            if (total > 0) {  // everything switched off = stay clear
-                int r = rand() % total;
-                while (r >= weights[pick]) r -= weights[pick++];
-            }
+            static const int weights[4] = {35, 20, 10, 12};  // clear, rain, storm, snow
+            int r = rand() % (35 + 20 + 10 + 12), pick = 0;
+            while (r >= weights[pick]) r -= weights[pick++];
             g_dynType = pick;
             g_dynNext = now + 180 + rand() % 180;
-            static const char* kNames[] = {"clear", "rain", "storm", "snow", "fog"};
-            mmenu::Log("gfx: dynamic weather -> %s", kNames[pick]);
+            static const char* kNames[] = {"clear", "rain", "storm", "snow"};
+            mmenu::Log("gfx: random weather -> %s", kNames[pick]);
         }
         type = g_dynType;
     } else g_dynNext = 0;
@@ -1739,7 +1937,6 @@ static void UpdateWorld() {
         case 1: target[0] = A; target[2] = 0.15f * A; break;
         case 2: target[0] = 1.2f * A; target[2] = 0.2f * A; target[3] = A; break;
         case 3: target[1] = A; target[2] = 0.25f * A; break;
-        case 4: target[2] = 1.2f * A; break;
     }
     float step = dt / 12.0f;  // a full change takes about 12 seconds
     for (int k = 0; k < 4; ++k) {
@@ -1760,9 +1957,9 @@ static void UpdateWorld() {
         std::string req = ExeDirFile("gfx_fireworks.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); FireworksShow(12, "THUGPro Manager"); }
     }
-    if (fwm == 2) {
+    if (fwm >= 2) {  // 2-5: on wins and every 1 / 3 / 5 / 10 minutes
         static const int kEvery[] = {1, 3, 5, 10};
-        double period = kEvery[V("gfx_fwevery")] * 60.0;
+        double period = kEvery[fwm - 2] * 60.0;
         if (!g_nextAuto || g_nextAuto > now + period) g_nextAuto = now + period;
         if (now >= g_nextAuto) { FireworksShow(10, "timer"); g_nextAuto = now + period; }
     } else g_nextAuto = 0;
@@ -1823,6 +2020,135 @@ static void DrawFireworks(IDirect3DDevice9* dev) {
     g_inPost = false;
 }
 
+// Night tint on the 3D scene (2026-11-21): on many levels (New Orleans) the TOD manager only darkens the outdoor light
+// group, so Night / Evening lights left buildings at day brightness. Tint everything with depth below the far plane
+// (the sky keeps ps_sky's grade), before lamps, fireworks and weather so those draw on top untinted.
+// Ground mist constants (Noah 2026-11-21, Fog row): heights in world units (skater ~72 tall).
+// The ground is a per-level floor (Noah: "the fog follows the skater's camera"): sample = our own skater's feet height
+// (local player's CSkater position +0x4C, the same read modes/sonic/tawhore use), or camera height - 60 without one.
+// floor = the lowest sample over the last 20 s (per-second minimums), eased over ~3 s, so vert, rooftops, jumps and
+// camera moves don't lift the mist; staying in a lower area lowers it. Reset at level load.
+static bool LocalFeetY(float* y) {
+    char* mgr = *(char**)kNetManagerPtr;
+    if (!mgr) return false;
+    int guard = 0;
+    for (DWORD node = *(DWORD*)(mgr + kPlayerList); node && *(int*)(node + 4) != -1 && guard < 64; node = *(DWORD*)(node + 0xC), ++guard) {
+        char* player = *(char**)(node + 4);
+        if (!player || !(*(DWORD*)(player + kPlayerFlags) & 1)) continue;  // local player only
+        char* skater = *(char**)(player + kPlayerSkater);
+        if (!skater) return false;
+        float v = ((float*)(skater + 0x4C))[1];
+        if (!(v > -1e6f && v < 1e6f)) return false;
+        *y = v;
+        return true;
+    }
+    return false;
+}
+static float MistFloor(float camY) {
+    static float ground = 0, ring[20], curMin = 0, logged = 0;
+    static int ringN = 0, ringAt = 0;
+    static double last = 0, secAt = 0;
+    static std::string level;
+    static bool usedSkater = false, loggedSrc = false;
+    float s;
+    bool sk = LocalFeetY(&s);
+    if (!sk) s = camY - 60.0f;
+    if (!loggedSrc || sk != usedSkater) { loggedSrc = true; usedSkater = sk; mmenu::Log("gfx: ground mist floor from %s", sk ? "the skater's feet" : "the camera (no local skater)"); }
+    double now = NowS();
+    if (!last || now - last > 5.0 || level != g_level) {  // first frame, level load, or the mist was off for a while
+        level = g_level;
+        ground = curMin = logged = s; ringN = 0; ringAt = 0; secAt = now; last = now;
+        mmenu::Log("gfx: ground mist floor %.0f", ground);
+        return ground;
+    }
+    if (s < curMin) curMin = s;
+    if (now - secAt >= 1.0) {  // close this second's minimum
+        ring[ringAt] = curMin; ringAt = (ringAt + 1) % 20; if (ringN < 20) ++ringN;
+        curMin = s; secAt = now;
+    }
+    float target = curMin;
+    for (int i = 0; i < ringN; ++i) if (ring[i] < target) target = ring[i];
+    float k = (float)((now - last) / 3.0); if (k > 1) k = 1;
+    ground += (target - ground) * k;
+    last = now;
+    if (fabsf(ground - logged) > 100.0f) { logged = ground; mmenu::Log("gfx: ground mist floor %.0f", ground); }
+    return ground;
+}
+static void MistConsts(float out[2][4]) {
+    static const float kHs[5] = {0, 0.45f * 20, 0.45f * 75, 0.45f * 170, 0.45f * 450};
+    static const float kD[5] = {0, 0.0078f, 0.0029f, 0.00147f, 0.00084f};
+    int lv = V("gfx_todfog");
+    if (lv < 1) lv = 1;
+    if (lv > 4) lv = 4;
+    const D3DMATRIX& m = g_view;
+    float camY = -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23);
+    float ground = MistFloor(camY);
+    // Fog intensity: 6 = the original thickness, default 5; above 6 it climbs fast (Noah 2026-11-21: "10 needs to be much
+    // more dense", then "even the scale out"): every step is 1.75x the one before: 1 = 0.06x, 4 = 0.33x, 6 = 1x, 8 = 3.1x, 10 = 9.4x;
+    // the mist may cover more above 6 (cap 0.92 at 6 .. 0.985 at 10)
+    int fa = V("gfx_fogamt");
+    float amt = powf(1.75f, (float)(fa - 6));
+    float cap = fa <= 6 ? 0.92f : 0.92f + (fa - 6) * 0.01625f;
+    out[0][0] = kD[lv] * amt; out[0][1] = kHs[lv]; out[0][2] = ground; out[0][3] = cap;
+    // color: the time of day fog color; at Night / Evening lights a dark blue-gray scaled by the light level
+    float k[4] = {g_sky[0], g_sky[1], g_sky[2], g_sky[3]};
+    if (V("gfx_tod") == 0) { k[0] = k[2] = (float)g_serverTod; k[3] = 0; }
+    auto nw = [](float t) { return t > 3.5f && t < 5.5f ? 1.0f : 0.0f; };  // night / evening lights
+    auto dw = [](float t) { return t > 5.5f ? 1.0f : 0.0f; };              // dawn
+    float night = nw(k[0]) + (nw(k[2]) - nw(k[0])) * k[3], dawn = dw(k[0]) + (dw(k[2]) - dw(k[0])) * k[3];
+    static const float kNight[3] = {0.30f, 0.34f, 0.44f}, kDawn[3] = {0.42f, 0.40f, 0.50f};
+    float lite = g_wx[1][0] > 0 ? g_wx[1][0] : 1.0f;
+    for (int i = 0; i < 3; ++i) out[1][i] = g_wx[2][i] + (kNight[i] * lite - g_wx[2][i]) * night + (kDawn[i] * lite - g_wx[2][i]) * dawn;
+    out[1][3] = 1;
+}
+
+static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
+    if (g_mainMenu || g_inPost) return;
+    float k[4] = {g_sky[0], g_sky[1], g_sky[2], g_sky[3]};
+    if (V("gfx_tod") == 0) {
+        if (g_serverTod <= 0) return;
+        k[0] = k[2] = (float)g_serverTod; k[3] = 0;
+    }
+    auto dark = [](float t) { return t > 3.5f; };
+    if (!dark(k[0]) && !(k[3] > 0.001f && dark(k[2]))) return;
+    if (!MakeShaders(dev) || !g_psNightTint) return;
+    D3DSURFACE_DESC d;
+    bb->GetDesc(&d);
+    if (!EnsureTargets(dev, d.Width, d.Height)) return;
+    IDirect3DSurface9* ds = nullptr;
+    dev->GetDepthStencilSurface(&ds);
+    if (!ds) return;  // no depth: can't tell the sky from geometry, leave it
+    static bool once = false;
+    if (!once) { once = true; mmenu::Log("gfx: night tint on 3D scene"); }
+    g_inPost = true;
+    g_sb->Capture();
+    IDirect3DSurface9 *sA = nullptr, *oldRT = nullptr;
+    dev->GetRenderTarget(0, &oldRT);
+    g_texA->GetSurfaceLevel(0, &sA);
+    dev->StretchRect(bb, nullptr, sA, nullptr, D3DTEXF_NONE);
+    CommonState(dev);
+    dev->SetRenderState(D3DRS_ZENABLE, TRUE);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATER);
+    dev->SetPixelShaderConstantF(16, k, 1);
+    dev->SetRenderTarget(0, bb);
+    dev->SetDepthStencilSurface(ds);
+    D3DVIEWPORT9 vp = {0, 0, d.Width, d.Height, 0, 1};
+    dev->SetViewport(&vp);
+    dev->SetPixelShader(g_psNightTint);
+    dev->SetTexture(0, g_texA); dev->SetTexture(1, nullptr); dev->SetTexture(2, nullptr); dev->SetTexture(3, nullptr);
+    float px[4] = {1.0f / d.Width, 1.0f / d.Height, (float)d.Width, (float)d.Height};
+    dev->SetPixelShaderConstantF(0, px, 1);
+    Quad(dev, d.Width, d.Height, 1.0f);
+    dev->SetTexture(0, nullptr);
+    if (oldRT) { dev->SetRenderTarget(0, oldRT); oldRT->Release(); }
+    dev->SetDepthStencilSurface(ds);
+    g_sb->Apply();
+    if (sA) sA->Release();
+    ds->Release();
+    g_inPost = false;
+}
+
 static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     if (!atPresent) {  // only when the screen itself is being drawn to (not an offscreen texture)
         IDirect3DSurface9* t = nullptr;
@@ -1831,6 +2157,13 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     }
     g_sceneDone = true;
     if (MirrorOn()) g_origRS(dev, D3DRS_CULLMODE, g_cullWant);  // 2D draws with the game's own culling
+    {   // night tint first, whether or not the other scene effects are on
+        IDirect3DSurface9* nb = nullptr;
+        if (atPresent ? SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &nb)) && nb : BackBufferIsTarget(dev, &nb)) {
+            NightTint(dev, nb);
+            nb->Release();
+        }
+    }
     bool wantScene = SceneWanted(), wantShot = g_shotPending && !V("gfx_shothud");
     if (!wantScene && !wantShot) return;
     IDirect3DSurface9* bb = nullptr;
@@ -1883,6 +2216,20 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         g_c[8][1] = mb; dev->SetPixelShaderConstantF(8, g_c[8], 1);
         cur = g_texB;
     }
+    if (MistOn() && g_psGroundMist && g_intzUsed && !g_msaaOn) {  // ground mist, before lamps / fireworks / weather
+        float mc[2][4];
+        MistConsts(mc);
+        const D3DMATRIX& m = g_view;
+        float cam[4] = {-(m._41 * m._11 + m._42 * m._12 + m._43 * m._13), -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23),
+                        -(m._41 * m._31 + m._42 * m._32 + m._43 * m._33), 1};
+        dev->SetPixelShaderConstantF(29, cam, 1);
+        dev->SetPixelShaderConstantF(80, &mc[0][0], 2);
+        static bool once = false;
+        if (!once) { once = true; mmenu::Log("gfx: ground mist on 3D scene (level %d)", V("gfx_todfog")); }
+        IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
+        Pass(dev, g_psGroundMist, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
+        cur = dst;
+    }
     if (LampsOn() && g_psLamps && g_intzUsed && !g_msaaOn) {
         dev->SetPixelShaderConstantF(28, &g_lampC[0][0], 2 + g_lampN * 2);
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
@@ -1932,9 +2279,13 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
 
 static void DrawGalaxy(IDirect3DDevice9* dev) {
     g_galaxyDone = true;
+    // no shader for it on this card: hand the sky back to the game (the hooks stop skipping its sky draws)
+    if (!MakeShaders(dev) || !(g_psGalaxy || AnySkyN())) {
+        if (!g_galaxyOff) { g_galaxyOff = true; mmenu::Log("gfx: galaxy sky off: this card has no shader for it, the game's own sky stays"); }
+        return;
+    }
     static bool once = false;
     if (!once) { once = true; mmenu::Log("gfx: galaxy sky drawing"); }
-    if (!MakeShaders(dev)) return;
     IDirect3DSurface9* rt = nullptr;
     if (FAILED(dev->GetRenderTarget(0, &rt)) || !rt) return;
     D3DSURFACE_DESC d;
@@ -1951,8 +2302,11 @@ static void DrawGalaxy(IDirect3DDevice9* dev) {
     dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
     int style = V("gfx_galaxy");
     float save9 = g_c[9][1];
-    if (style >= 5 && !g_psSkies) g_c[9][1] = 1;  // extra skies unavailable: milky way
-    dev->SetPixelShader(style >= 5 && g_psSkies ? g_psSkies : g_psGalaxy);
+    IDirect3DPixelShader9* skyN = style >= 5 && style <= 14 ? g_psSkyN[style - 5] : nullptr;
+    if (!skyN && !g_psGalaxy) for (int i = 0; i < 10 && !skyN; ++i) skyN = g_psSkyN[i];  // only some extra skies made it: the first of those
+    IDirect3DPixelShader9* ps = skyN ? skyN : g_psGalaxy;
+    if (!ps) { g_c[9][1] = save9; g_sb->Apply(); g_inPost = false; return; }
+    dev->SetPixelShader(ps);
     dev->SetPixelShaderConstantF(1, &g_c[1][0], 13);
     g_c[9][1] = save9;
     dev->SetPixelShaderConstantF(16, g_sky, 1);
@@ -1971,7 +2325,7 @@ static void SkyGrade(IDirect3DDevice9* dev) {
     if (!BackBufferIsTarget(dev, &bb)) return;
     D3DSURFACE_DESC d;
     bb->GetDesc(&d);
-    if (!MakeShaders(dev) || !EnsureTargets(dev, d.Width, d.Height)) { bb->Release(); return; }
+    if (!MakeShaders(dev) || !g_psSky || !EnsureTargets(dev, d.Width, d.Height)) { bb->Release(); return; }
     static bool once = false;
     if (!once) { once = true; mmenu::Log("gfx: sky grading (time of day %d, boost %d)", V("gfx_tod"), V("gfx_skypop")); }
     if (InterlockedExchange(&g_dirtyPost, 0)) BuildConstants();
@@ -1982,11 +2336,21 @@ static void SkyGrade(IDirect3DDevice9* dev) {
     g_texA->GetSurfaceLevel(0, &sA);
     dev->GetDepthStencilSurface(&oldDS);
     dev->StretchRect(bb, nullptr, sA, nullptr, D3DTEXF_NONE);
-    dev->SetDepthStencilSurface(nullptr);
     CommonState(dev);
     dev->SetPixelShaderConstantF(1, &g_c[1][0], 13);
     dev->SetPixelShaderConstantF(16, g_sky, 1);
-    Pass(dev, g_psSky, bb, g_w, g_h, g_w, g_h, g_texA);
+    // grade only the sky: the game draws some buildings before its sky (Noah 2026-11-21: stars and the milky way showed
+    // on walls at Night). Like the galaxy, a depth test at the far plane passes only where nothing has been drawn yet.
+    // Without a depth buffer the whole screen is graded, as before.
+    if (oldDS) { dev->SetRenderState(D3DRS_ZENABLE, TRUE); dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL); }
+    dev->SetRenderTarget(0, bb);
+    D3DVIEWPORT9 vp = {0, 0, g_w, g_h, 0, 1};
+    dev->SetViewport(&vp);
+    dev->SetPixelShader(g_psSky);
+    dev->SetTexture(0, g_texA); dev->SetTexture(1, nullptr); dev->SetTexture(2, nullptr); dev->SetTexture(3, nullptr);
+    float px[4] = {1.0f / g_w, 1.0f / g_h, (float)g_w, (float)g_h};
+    dev->SetPixelShaderConstantF(0, px, 1);
+    Quad(dev, g_w, g_h, 1.0f);
     dev->SetTexture(0, nullptr);
     dev->SetDepthStencilSurface(oldDS);
     g_sb->Apply();
@@ -2053,6 +2417,7 @@ static void RunScreen(IDirect3DDevice9* dev) {
     if (g_shotPending) SaveShot(dev, bb);
     bb->Release();
 }
+
 
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
@@ -2127,6 +2492,31 @@ static void FogStates(IDirect3DDevice9* dev, DWORD on, DWORD color, float start,
     dev->SetRenderState(D3DRS_FOGSTART, FBits(start));
     dev->SetRenderState(D3DRS_FOGEND, FBits(end));
 }
+// Per-pixel fog (Noah 2026-11-21: the night fog "clips through objects"). The game's fog is vertex fog: worked out
+// at each corner and blended across the face, so a big wall or road that runs far away gets the far fog smeared
+// onto its near part. While our own time of day or weather fog is on, the same fog values are used as table fog
+// (eye distance per pixel) instead. The level at its normal time keeps the stock vertex fog (Noah's pick).
+static bool g_pixFogSet = false;
+static bool PixelFogOn() { return g_cardPixFog && !g_mainMenu && (TodSetting() != 0 || g_fogOver); }
+// Fog with our time of day is its own option, off by default (Noah 2026-11-21): while our time of day is on and
+// the Fog row is off, the game's fog stays switched off (weather fog still works: it turns this off while it shows).
+static bool g_todFogOff = false;
+static bool TodFogOff() { return !g_mainMenu && TodSetting() != 0 && !g_fogOver; }  // our time of day never shows the game's faint TOD fog (Fog row = ground mist now)
+static void TodFogStates(IDirect3DDevice9* dev) {
+    bool off = TodFogOff();
+    if (off == g_todFogOff && !off) return;
+    if (off != g_todFogOff) mmenu::Log("gfx: time of day fog %s", off ? "off (Fog row off)" : "back to the game's");
+    g_todFogOff = off;
+    g_origRS(dev, D3DRS_FOGENABLE, off ? FALSE : *(DWORD*)kFogOnVar);
+}
+static void PixelFogStates(IDirect3DDevice9* dev) {
+    bool on = PixelFogOn();
+    if (on == g_pixFogSet && !on) return;  // while on, set every frame (a device reset puts both states back to none)
+    if (on != g_pixFogSet) mmenu::Log("gfx: fog %s", on ? "per pixel (our time of day / weather)" : "per corner (the game's own)");
+    g_pixFogSet = on;
+    g_origRS(dev, D3DRS_FOGVERTEXMODE, on ? D3DFOG_NONE : D3DFOG_LINEAR);
+    g_origRS(dev, D3DRS_FOGTABLEMODE, on ? D3DFOG_LINEAR : D3DFOG_NONE);
+}
 static void ApplyWeatherFog(IDirect3DDevice9* dev) {
     DWORD* on = (DWORD*)kFogOnVar;
     DWORD* color = (DWORD*)kFogColorVar;
@@ -2172,6 +2562,8 @@ static void EndFrame(IDirect3DDevice9* dev) {
     CheckKeysAndIni();
     UpdateWorld();
     ApplyWeatherFog(dev);
+    CardCheck(dev);
+    if (g_origRS) { PixelFogStates(dev); TodFogStates(dev); }
     g_fwDone = false;
     g_intzUsed = false;
     UpdateDepthBinding(dev);
@@ -2215,8 +2607,8 @@ static HRESULT STDMETHODCALLTYPE HookST(IDirect3DDevice9* dev, D3DTRANSFORMSTATE
         if (t == D3DTS_VIEW) g_view = *m;
         if (t == D3DTS_PROJECTION) {
             bool sky = fabsf(m->_43) < 0.001f && m->_34 < -0.5f;
-            if (sky && V("gfx_galaxy") && !g_galaxyDone) { g_origST(dev, t, m); DrawGalaxy(dev); }
-            if (!sky && g_skyPass && !g_skyGraded && !V("gfx_galaxy") && SkyWanted()) SkyGrade(dev);
+            if (sky && GalaxyOn() && !g_galaxyDone) { g_origST(dev, t, m); DrawGalaxy(dev); }
+            if (!sky && g_skyPass && !g_skyGraded && !GalaxyOn() && SkyWanted()) SkyGrade(dev);
             if (!sky && g_skyPass && !g_fwDone && FireworksLive() && (g_msaaOn || g_intzFail)) DrawFireworks(dev);
             g_skyPass = sky;
             if (!sky && m->_34 < -0.5f) { g_proj = *m; g_haveProj = true; }
@@ -2244,18 +2636,23 @@ static HRESULT STDMETHODCALLTYPE HookRS(IDirect3DDevice9* dev, D3DRENDERSTATETYP
         g_cullWant = v;
         if (MirrorOn() && !g_sceneDone) v = SwapCull(v);
     }
+    if (g_todFogOff && !g_inPost && st == D3DRS_FOGENABLE) v = FALSE;  // Fog row off with our time of day
+    if (g_pixFogSet && !g_inPost) {  // the game asks for vertex fog: keep it per pixel while ours is on
+        if (st == D3DRS_FOGVERTEXMODE) v = D3DFOG_NONE;
+        else if (st == D3DRS_FOGTABLEMODE) v = D3DFOG_LINEAR;
+    }
     return g_origRS(dev, st, v);
 }
 
 static bool ScreenSpaceDraw(IDirect3DDevice9* dev);
 static HRESULT STDMETHODCALLTYPE HookDIP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;  // the galaxy replaces the game's sky
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;  // the galaxy replaces the game's sky
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
     return g_origDIP(dev, t, b, mi, nv, si, pc);
 }
 
 static HRESULT STDMETHODCALLTYPE HookDP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT sv, UINT pc) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
     return g_origDP(dev, t, sv, pc);
 }
@@ -2276,7 +2673,7 @@ static bool ScreenSpaceDraw(IDirect3DDevice9* dev) {
 }
 
 static HRESULT STDMETHODCALLTYPE HookDPUP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT n, const void* v, UINT st) {
-    if (g_skyPass && !g_inPost && V("gfx_galaxy")) return D3D_OK;
+    if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;
     // Noah 2026-10-20 (mirror mode showed unflipped bits): the game also draws 3D effects (shadows,
     // particles, trails) with DrawPrimitiveUP, so only a screen-space draw ends the 3D scene.
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
@@ -2295,6 +2692,12 @@ static HRESULT STDMETHODCALLTYPE HookFVF(IDirect3DDevice9* dev, DWORD f) {
 static IDirect3DSurface9* MakeIntz(IDirect3DDevice9* dev) {
     if (g_intzSurf) return g_intzSurf;
     if (g_intzFail || !g_autoDS) return nullptr;
+    CardCheck(dev);
+    if (!g_cardIntz) {  // the card has no readable depth format (or a weak-card test): depth effects stay off
+        g_intzFail = true;
+        mmenu::Log("gfx: readable depth (INTZ) not supported by this card, depth effects off");
+        return nullptr;
+    }
     D3DSURFACE_DESC d;
     g_autoDS->GetDesc(&d);
     const D3DFORMAT kIntz = (D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z');

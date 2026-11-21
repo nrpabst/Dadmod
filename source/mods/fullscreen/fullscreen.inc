@@ -320,13 +320,24 @@ static std::vector<mmenu::DispMode> Sizes(bool full) {
     std::vector<mmenu::DispMode> v = mmenu::DispModes(!full);
     return v;
 }
+// V-sync (Noah 2026-11-21: "vsync should go in display and be applied with the apply button"): picked like the other
+// Display rows; Apply stores gfx_vsync and has the engine reset its device, where gfx.inc AdjustPP sets the interval.
+static int g_pendVs = -1;
+static int VsyncNow() { int v = 0; gfx::GetKey("gfx_vsync", &v); return v < 0 || v > 2 ? 0 : v; }
 static bool __cdecl CF_DisplayLive(void* params, void* script) {
     const char* key = nullptr;
     GetStringParam(params, "key", &key);
     if (!key) return false;
     int step = IntParam(params, "step", 0);
     PendSync();
+    if (g_pendVs < 0) g_pendVs = VsyncNow();
     char buf[64];
+    if (!strcmp(key, "vsync")) {
+        static const char* const kVs[] = {"Game default", "On", "Off"};
+        if (step) g_pendVs = (g_pendVs + (step > 0 ? 1 : 2)) % 3;
+        RetStr(script, "text", kVs[g_pendVs]);
+        return true;
+    }
     if (!strcmp(key, "mode")) {
         if (step) g_pendFull = !g_pendFull;
         RetStr(script, "text", g_pendFull ? "Fullscreen" : "Windowed");
@@ -357,6 +368,14 @@ static bool __cdecl CF_DisplayLive(void* params, void* script) {
     }
     if (!strcmp(key, "apply")) {
         bool changed = g_pendFull != NowFull() || (!g_pendFull && (g_pendW != CurW() || g_pendH != CurH()));
+        bool vsChanged = g_pendVs != VsyncNow();
+        if (step && vsChanged && !g_confirmUntil) {
+            gfx::SetKey("gfx_vsync", g_pendVs);
+            if (!g_waitReset) *(volatile BYTE*)kResetFlag = 1;   // the engine resets its device; AdjustPP sets the interval
+            Log("apply v-sync %d", g_pendVs);
+            vsChanged = false;
+        }
+        changed = changed || vsChanged;
         if (step) {
             if (g_confirmUntil) {
                 InterlockedExchange(&g_confirmUntil, 0);

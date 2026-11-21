@@ -81,6 +81,9 @@ script dadmod_stick_step
             <step> = ( dadmod_analog_boost )
         endif
     endif
+    if THUGRECOMP_KeyPressed key = "Shift"
+        <step> = ( dadmod_analog_boost )
+    endif
     return step = <step>
 endscript
 dadmod_color_sliders = [

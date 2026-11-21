@@ -1318,7 +1318,19 @@ static void CaptureTick() {  // game thread, from ReadControlsHook (after the en
 static bool BindBlocking() { return g_capPhase != 0; }
 static void KeyName(int dik, char* out, int n) {
     if (dik < 0) { strcpy(out, "None"); return; }
-    LONG lp = ((dik & 0x7F) << 16) | ((dik & 0x80) ? (1 << 24) : 0);
+    // the game's own key names first (Noah 2026-11-20: "KP7" like the stock menus, not Windows' "Num 7"): the stock
+    // ButtonKeyName (0x5BCD50) reads them from 0x7D42F8 + key * 0x1E (wide text, up to 15 characters, by DIK code)
+    if (dik < 256) {
+        const wchar_t* w = (const wchar_t*)(0x7D42F8 + dik * 0x1E);
+        if (w[0]) {
+            wchar_t tmp[16];
+            int k = 0;
+            while (k < 15 && w[k]) { tmp[k] = w[k]; ++k; }
+            tmp[k] = 0;
+            if (WideCharToMultiByte(CP_ACP, 0, tmp, -1, out, n, nullptr, nullptr) > 1) { out[n - 1] = 0; return; }
+        }
+    }
+    LONG lp =((dik & 0x7F) << 16) | ((dik & 0x80) ? (1 << 24) : 0);
     if (!GetKeyNameTextA(lp, out, n) || !out[0]) _snprintf(out, n, "Key %d", dik);
     out[n - 1] = 0;
 }

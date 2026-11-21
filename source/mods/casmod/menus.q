@@ -74,6 +74,11 @@ script dadmod_es_cam
 endscript
 script dadmod_es_can_pick
     <pp> = ( <item> . pad_choose_params )
+    if ChecksumEquals a = ( <item> . pad_choose_script ) b = dadmod_skc_scales_undo
+        if not IsTrue dadmod_skc_scales_ready
+            return pick = not_focusable
+        endif
+    endif
     if StructureContains structure = <pp> allowed_items
         if not ArrayContains array = ( <pp> . allowed_items ) contains = <board_now>
             return pick = not_focusable
@@ -223,7 +228,7 @@ script dadmod_es_color_menu title = "Color"
     __thugpro_color_menu_refresh part = <cpart>
 endscript
 script dadmod_es_scale_menu title = "Scaling"
-    dadmod_es_open wide name = scaling title = "Scaling" back_script = <callback> back_params = <callback_params>
+    dadmod_es_open wide name = scaling title = "Scaling" help = dadmod_help_color back_script = <callback> back_params = <callback_params>
     dadmod_es_cam <...>
     thugpro_scaling_menu_add_options_to_menu {
     <scaling_params>
@@ -249,15 +254,18 @@ dadmod_help_words = [
 { k = pick pc = "\\bn = Back" con = "\\m1 = Back" }
 { k = pick pc = "\\bm = Accept" con = "\\m0 = Accept" }
 { k = spin pc = "\\bq/\\br = Rotate" con = "\\bg/\\bh = Rotate" }
-{ k = pick pc = "Pad LT/RT = Zoom" con = "\\be/\\bf = Zoom" }
+{ k = pick pc = "KP+/KP- = Zoom" con = "\\be/\\bf = Zoom" }
 { k = skip pc = "\\bk/\\bl = Skip" con = "\\bk/\\bl = Skip" }
 { k = undo pc = "\\b0 = Undo" con = "\\b0 = Undo" }
 { k = undo pc = "\\b1 = Redo" con = "\\b1 = Redo" }
+{ k = pick pc = "PgUp/PgDn = Tilt" pconly = 1 }
+{ k = slide pc = "Shift = Fast" pconly = 1 }
 ]
 script dadmod_help_one
-    <pc> = [ { } { } { } { } { } { } { } { } { } ]
-    <con> = [ { } { } { } { } { } { } { } { } { } ]
+    <pc> = [ { } { } { } { } { } { } { } { } { } { } { } ]
+    <con> = [ { } { } { } { } { } { } { } { } { } { } { } ]
     <dm_n> = 0
+    <dm_c> = 0
     GetArraySize dadmod_help_words
     <dm_i> = 0
     begin
@@ -268,14 +276,17 @@ script dadmod_help_one
         endif
         if ( <take> = 1 )
             SetArrayElement arrayname = pc index = <dm_n> newvalue = { text = ( <w> . pc ) }
-            SetArrayElement arrayname = con index = <dm_n> newvalue = { text = ( <w> . con ) }
             <dm_n> = ( <dm_n> + 1 )
+            if not StructureContains structure = <w> pconly
+                SetArrayElement arrayname = con index = <dm_c> newvalue = { text = ( <w> . con ) }
+                <dm_c> = ( <dm_c> + 1 )
+            endif
         endif
         <dm_i> = ( <dm_i> + 1 )
     repeat <array_size>
     dadmod_help_cut row = <pc> used = <dm_n>
     <pc> = <row>
-    dadmod_help_cut row = <con> used = <dm_n>
+    dadmod_help_cut row = <con> used = <dm_c>
     return bar = { helper_text_elements_console = <row> helper_text_elements_pc = <pc> }
 endscript
 script dadmod_help_cut
@@ -284,8 +295,12 @@ script dadmod_help_cut
         <out> = [ { } { } { } { } { } { } ]
     case 7
         <out> = [ { } { } { } { } { } { } { } ]
-    default
+    case 8
         <out> = [ { } { } { } { } { } { } { } { } ]
+    case 9
+        <out> = [ { } { } { } { } { } { } { } { } { } ]
+    default
+        <out> = [ { } { } { } { } { } { } { } { } { } { } ]
     endswitch
     <dm_n> = 0
     begin
@@ -310,7 +325,7 @@ script dadmod_help_build
     Change generic_helper_text_cas = <bar>
     dadmod_help_one want = [ pick spin skip undo ]
     Change dadmod_help_part = <bar>
-    dadmod_help_one want = [ pick undo ]
+    dadmod_help_one want = [ pick slide undo ]
     Change dadmod_help_color = <bar>
     dadmod_help_one want = [ pick slide spin ]
     Change generic_helper_text_color_menu = <bar>

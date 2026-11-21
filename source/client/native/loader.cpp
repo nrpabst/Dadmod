@@ -315,6 +315,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/balance/balancelock.inc"   // infinite balance (gfx.inc forwards gfx_balancelock); client build: offline only, enforced by the client menu scripts
 #include "../../mods/skinsync/skinsync.inc"      // live skater looks online after Load Skater (dadmod to dadmod)
 #include "../../mods/gfx/gfx.inc"                // graphics settings (dadmod\gfx.ini)
+#include "../../mods/cars2/cars2.inc"        // Cars: while driving, up/down also press gas/brake (gfx.inc ReadControlsHook calls it)
 #include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
 
@@ -330,8 +331,10 @@ static bool __cdecl CF_ClientLog(void* params, void* script) {
 }
 
 // THUGRECOMP_ModelExists model="veh\\Veh_Duck\\Veh_Duck.mdl"  true when the game can find that model as a loose file,
-// <game>\User\Data\Models\<model>.xbx or <game>\data\models\<model>.xbx. 2026-11-19: Kali installs ship the veh
-// models loose in User\Data\Models, plain THUG Pro has none, so thrown cars fall back to the COMBO O there.
+// <game>\User\Data\Models\<model>.xbx, <game>\data\models\<model>.xbx or THUG2's own models
+// (<thug2_path>\Data\models\<model>.xbx, HKCU\Software\THUG Pro\Settings thug2_path, the folder the engine reads
+// THUG2's data from). 2026-11-21: the THUG2 check was missing, so on plain THUG Pro (no Kali copies in
+// User\Data\Models) thrown cars fell back to the COMBO O although the game can load them.
 static bool __cdecl CF_ModelExists(void* params, void* script) {
     (void)script;
     const char* m = NULL;
@@ -348,6 +351,22 @@ static bool __cdecl CF_ModelExists(void* params, void* script) {
         DWORD a = GetFileAttributesA(f.c_str());
         if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return true;
     }
+    char t2[MAX_PATH] = "";
+    DWORD n = sizeof t2 - 1;
+    HKEY k;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\THUG Pro\\Settings", 0, KEY_READ, &k) == ERROR_SUCCESS) {
+        DWORD type = 0;
+        if (RegQueryValueExA(k, "thug2_path", NULL, &type, (BYTE*)t2, &n) != ERROR_SUCCESS || type != REG_SZ) t2[0] = 0;
+        else t2[n < sizeof t2 ? n : sizeof t2 - 1] = 0;
+        RegCloseKey(k);
+    }
+    if (t2[0]) {
+        std::string f = t2;
+        if (f.back() != '\\' && f.back() != '/') f += '\\';
+        f += std::string("Data\\models\\") + m + ".xbx";
+        DWORD a = GetFileAttributesA(f.c_str());
+        if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return true;
+    }
     return false;
 }
 
@@ -361,6 +380,10 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },
+    { "THUGRECOMP_SkinHorn", skin::CF_SkinHorn },
+    { "THUGRECOMP_CarsHornSend", skin::CF_CarsHornSend },
+    { "THUGRECOMP_CarsDrive", cars2::CF_CarsDrive },
+    { "THUGRECOMP_CarsKeys", cars2::CF_CarsKeys },
     { "THUGRECOMP_PadPressed", padhub::CF_PadPressed },
     { "THUGRECOMP_PadHeld", padhub::CF_PadHeld },
     { "THUGRECOMP_BindName", padhub::CF_BindName },
@@ -568,6 +591,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
         gfx::Install(!safe, true);   // client: one Direct3D probe, on the game's own thread (gfx.inc PatchThread)
         soundlog::Install();
         balancelock::Install();
+        cars2::Install();   // wheel-bone guard (a car body without wheel bones crashed at 0x43BA80)
 #ifdef DADMOD_DIAG
         DiagCallSite("after patch, startup loader call", kCallLoadStartup);
         DiagTestWrite("panel_settings.txt");

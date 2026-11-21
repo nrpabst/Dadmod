@@ -37,7 +37,7 @@ USE_THUG2 = True  # read THUG2 levels from the THUG2 install
 RENAME = {'level_mainmenu2': 'THUG2 main menu'}
 # startup scripts other mods hook onto the first main menu (each guards itself so it runs once); Load_MainMenu must
 # call every one (check_boot_calls fails the build otherwise)
-BOOT_CALLS = ['dadmod_noclip_boot', 'dadmod_chatart_boot', 'dadmod_speed_boot', 'dadmod_levelthumbs_boot']
+BOOT_CALLS = ['dadmod_noclip_boot', 'dadmod_chatart_boot', 'dadmod_speed_boot', 'dadmod_levelthumbs_boot', 'dadmod_cars_boot']
 
 
 def prx_entries(path):

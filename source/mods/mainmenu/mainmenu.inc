@@ -1287,7 +1287,7 @@ static const DWORD kGameWnd = 0x7D6A28;     // HWND of the game window (the one 
 static WNDPROC g_mPrev;
 static HWND g_mWnd;
 static bool g_mUni;   // chained the same way the window was made (Unicode or not), so typing isn't changed
-static volatile LONG g_wheelL, g_wheelR, g_lClickL, g_lClickR, g_rClick, g_lClickCorner;
+static volatile LONG g_wheelL, g_wheelR, g_lClickL, g_lClickR, g_rClick, g_lClickCorner, g_mClick;
 static const int kCornerPx = 40;   // the Back button square (34 px) and a little room: never the camera's
 static volatile DWORD g_mouseEvAt;           // last wheel / button message
 static HWND GameWnd() { HWND h = *(HWND*)kGameWnd; return (h && IsWindow(h)) ? h : nullptr; }
@@ -1413,6 +1413,8 @@ static LRESULT CALLBACK MouseWndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     } else if (m == WM_RBUTTONDOWN || m == WM_RBUTTONDBLCLK) {
         InterlockedIncrement(&g_rClick);
         g_mouseEvAt = GetTickCount();
+    } else if (m == WM_MBUTTONDOWN) {
+        InterlockedIncrement(&g_mClick);   // the walk camera's reset
     }
     WNDPROC prev = (h == g_mWnd) ? g_mPrev : (WNDPROC)GetPropA(h, "dadmod_mprev");   // each hooked window keeps its own
     bool uni = IsWindowUnicode(h) != 0;
@@ -1441,13 +1443,18 @@ static bool GameInFront(HWND h) { return h && GetForegroundWindow() == h && IsWi
 static volatile DWORD g_camMouseAt;
 static volatile bool g_pointerOnUi;          // the pointer is on a menu row / Back / Next (the camera must not drag)          // Edit Skater camera read the mouse (the skater side belongs to it)
 
+static volatile bool g_camDragReset;          // set while a screen without the skater camera is up (MenuTick)
 static void CamKeysMouse(float* zin, float* zout, float* tilt, float* yaw, float* el) {
-    static bool s_drag; static POINT s_last; static DWORD s_wheelAt; static float s_wheelZ;
+    static bool s_drag, s_btnWas = true; static POINT s_last; static DWORD s_wheelAt; static float s_wheelZ;
     HWND fw = MouseHookEnsure();
     DWORD nowCam = GetTickCount();
     if (nowCam - g_camMouseAt > 2500) InterlockedExchange(&g_wheelL, 0);   // nothing left over from before
+    // back on a camera screen after another screen (2026-11-21, Noah: skater select camera swung round behind the
+    // skater after Select -> next screen -> Back): the release of the click that left this screen happened where
+    // nobody was listening, so drop any drag and treat the button as already held (only a fresh press drags)
+    if (g_camDragReset || nowCam - g_camMouseAt > 1500) { g_camDragReset = false; s_drag = false; s_btnWas = true; }
     g_camMouseAt = nowCam;
-    if (!GameInFront(fw)) { s_drag = false; InterlockedExchange(&g_wheelL, 0); return; }
+    if (!GameInFront(fw)) { s_drag = false; s_btnWas = true; InterlockedExchange(&g_wheelL, 0); return; }
     auto key = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
     // zoom is on the number pad + / - only (Noah 2026-11-20: the main-row - and = are often rotate keys);
     // Page Up / Page Down tilt unless a game action is bound to them
@@ -1464,8 +1471,11 @@ static void CamKeysMouse(float* zin, float* zout, float* tilt, float* yaw, float
     if (s_wheelAt && (LONG)(s_wheelAt - now) > 0) { if (s_wheelZ > 0) *zin = 1; else *zout = 1; }
     else s_wheelAt = 0;
     POINT cp;
-    if (key(VK_LBUTTON) && GetCursorPos(&cp)) {
+    bool btn = key(VK_LBUTTON), freshPress = btn && !s_btnWas;
+    s_btnWas = btn;
+    if (btn && GetCursorPos(&cp)) {
         if (!s_drag) {
+            if (!freshPress) return;   // a button already down when this screen opened never starts a drag
             POINT c = cp; RECT r;
             bool focusClick = g_activateAt && GetTickCount() - g_activateAt < 1000;   // not the click that focused the window
             if (!focusClick && !g_pointerOnUi && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && r.right > 0 && c.x >= 0 && c.y >= 0 && c.x < r.right * 55 / 100 && c.y < r.bottom
@@ -1473,11 +1483,134 @@ static void CamKeysMouse(float* zin, float* zout, float* tilt, float* yaw, float
                 s_drag = true; s_last = cp;
             }
         } else {
-            *yaw = (cp.x - s_last.x) * 0.4f;     // degrees per pixel
-            *el = (cp.y - s_last.y) * 0.3f;      // drag down raises the camera (look from above)
+            LONG dx = cp.x - s_last.x, dy = cp.y - s_last.y;
+            if (dx > 300 || dx < -300 || dy > 300 || dy < -300) { s_drag = false; return; }   // no real drag jumps that far in one frame
+            *yaw = dx * 0.4f;     // degrees per pixel
+            *el = dy * 0.3f;      // drag down raises the camera (look from above)
             s_last = cp;
         }
     } else s_drag = false;
+}
+
+// ---- walk-mode mouse camera (Noah 2026-11-21). THUGRECOMP_WalkCam on sx sy sz hx hz cpx cpy cpz cdx cdy cdz
+// (QB: dadmod_walkcam_tick, mouse.q). on = 1 while the skater is on foot with nothing else owning the camera,
+// s = skater position, h = his heading (Obj_GetOrientation x/z), cp/cd = the normal skater camera's position and
+// orientation dir. Nothing changes until the left button is held and dragged over the game (or the wheel turns):
+// then the camera sits on a sphere around his chest like Edit Skater (drag = yaw all the way round, pitch -10..70
+// degrees, wheel = zoom), kept relative to his heading, and follows him while he walks. Middle click or on = 0
+// eases back to the normal camera. Returns wc_state 0 = normal camera, 1 = ours (cam_pos / cam_dir), 2 = just
+// finished easing back (QB gives the skater camera back).
+static bool __cdecl CF_WalkCam(void* params, void* script) {
+    static bool s_engaged, s_out, s_drag, s_btnWas = true, s_wasOn;
+    static float s_yaw, s_yawTo, s_el, s_elTo, s_dist, s_distTo, s_w;
+    static POINT s_last;
+    static DWORD s_at;
+    const float kLook = 50.0f, kMinD = 45.0f, kMaxD = 650.0f, kRad = 3.14159265f / 180.0f;
+    DWORD now = GetTickCount();
+    float dt = s_at ? (now - s_at) / 1000.0f : 0.016f;
+    if (dt > 0.1f) dt = 0.1f;
+    if (dt < 0) dt = 0;
+    s_at = now;
+    if (IntParam(params, "quit", 0)) {   // the skater or his camera is gone (level change): no easing, just stop
+        if (s_engaged) { s_engaged = false; s_out = false; s_w = 0; s_drag = false; s_btnWas = true; s_wasOn = false; RetInt(script, "wc_state", 2); Log("walkcam: off (no skater)"); }
+        return true;
+    }
+    bool on = IntParam(params, "on", 0) != 0;
+    Vec sk = V(FloatParam(params, "sx", 0), FloatParam(params, "sy", 0), FloatParam(params, "sz", 0));
+    float hx = FloatParam(params, "hx", 0), hz = FloatParam(params, "hz", 1);
+    Vec cp = V(FloatParam(params, "cpx", 0), FloatParam(params, "cpy", 0), FloatParam(params, "cpz", 0));
+    Vec cd = V(FloatParam(params, "cdx", 0), FloatParam(params, "cdy", 0), FloatParam(params, "cdz", 1));
+    float head = (hx * hx + hz * hz > 1e-6f) ? atan2f(hx, hz) / kRad : 0.0f;
+    Vec target = Add(sk, V(0, kLook, 0));
+    HWND fw = MouseHookEnsure();
+    if (!on || !s_wasOn) {   // nothing left over from before (menus, the board) starts a zoom or a reset
+        InterlockedExchange(&g_mClick, 0);
+        if (!on) { s_drag = false; s_btnWas = true; }
+        else { InterlockedExchange(&g_wheelL, 0); InterlockedExchange(&g_wheelR, 0); }
+    }
+    s_wasOn = on;
+    if (!s_engaged) {
+        if (!on || !GameInFront(fw)) { s_btnWas = true; return true; }
+        bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
+        s_btnWas = btn;
+        LONG wd = InterlockedExchange(&g_wheelL, 0) + InterlockedExchange(&g_wheelR, 0);
+        InterlockedExchange(&g_mClick, 0);
+        bool start = wd != 0;
+        POINT cpos;
+        if (fresh && GetCursorPos(&cpos)) {
+            POINT c = cpos; RECT r;
+            bool focusClick = g_activateAt && now - g_activateAt < 1000;
+            if (!focusClick && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && c.x >= 0 && c.y >= 0 && c.x < r.right && c.y < r.bottom
+                && !(c.x < kCornerPx && c.y < kCornerPx)) { s_drag = true; s_last = cpos; }
+        }
+        if (s_drag && btn && GetCursorPos(&cpos) && (cpos.x != s_last.x || cpos.y != s_last.y)) start = true;
+        if (!btn) s_drag = false;
+        if (!start) return true;
+        // take over from exactly where the normal camera is
+        Vec off = Sub(cp, target);
+        float flat = sqrtf(off.x * off.x + off.z * off.z), d = sqrtf(flat * flat + off.y * off.y);
+        if (d < 1.0f) { off = V(-hx, 0.3f, -hz); flat = 1; d = 150; }
+        s_dist = s_distTo = d < kMinD ? kMinD : d > kMaxD ? kMaxD : d;
+        s_el = s_elTo = atan2f(off.y, flat > 1e-3f ? flat : 1e-3f) / kRad;
+        if (s_elTo < -10) s_elTo = -10;
+        if (s_elTo > 70) s_elTo = 70;
+        s_yaw = s_yawTo = atan2f(off.x, off.z) / kRad - head;
+        if (wd) { s_distTo *= powf(0.85f, (float)wd / WHEEL_DELTA); }
+        s_engaged = true; s_out = false; s_w = 0;
+        Log("walkcam: on (dist %.0f, tilt %.0f)", s_dist, s_el);
+    }
+    if (!on || InterlockedExchange(&g_mClick, 0)) {
+        if (!s_out) Log("walkcam: back to the skater camera%s", on ? " (middle click)" : "");
+        s_out = true; s_drag = false;
+    }
+    if (!s_out && GameInFront(fw)) {
+        bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
+        s_btnWas = btn;
+        POINT cpos;
+        if (btn && GetCursorPos(&cpos)) {
+            if (!s_drag) {
+                POINT c = cpos; RECT r;
+                bool focusClick = g_activateAt && now - g_activateAt < 1000;
+                if (fresh && !focusClick && ScreenToClient(fw, &c) && GetClientRect(fw, &r) && c.x >= 0 && c.y >= 0 && c.x < r.right && c.y < r.bottom
+                    && !(c.x < kCornerPx && c.y < kCornerPx)) { s_drag = true; s_last = cpos; }
+            } else {
+                LONG dx = cpos.x - s_last.x, dy = cpos.y - s_last.y;
+                if (dx > 300 || dx < -300 || dy > 300 || dy < -300) s_drag = false;
+                else { s_yawTo -= dx * 0.4f; s_elTo += dy * 0.3f; }
+                s_last = cpos;
+            }
+        } else s_drag = false;
+        LONG wd = InterlockedExchange(&g_wheelL, 0) + InterlockedExchange(&g_wheelR, 0);
+        if (wd) s_distTo *= powf(0.85f, (float)wd / WHEEL_DELTA);   // wheel up zooms in
+        if (s_elTo < -10) s_elTo = -10;
+        if (s_elTo > 70) s_elTo = 70;
+        s_distTo = s_distTo < kMinD ? kMinD : s_distTo > kMaxD ? kMaxD : s_distTo;
+    } else if (!GameInFront(fw)) { s_drag = false; s_btnWas = true; }
+    float k = 14.0f * dt; k = k > 1 ? 1 : k;
+    s_yaw += (s_yawTo - s_yaw) * k;
+    s_el += (s_elTo - s_el) * k;
+    s_dist += (s_distTo - s_dist) * k;
+    s_w += (s_out ? -dt / 0.3f : dt / 0.2f);   // eases in over 0.2 s, back out over 0.3 s
+    if (s_w > 1) s_w = 1;
+    if (s_out && s_w <= 0) {
+        s_engaged = false; s_out = false; s_w = 0; s_btnWas = true;
+        RetInt(script, "wc_state", 2);
+        return true;
+    }
+    float a = (head + s_yaw) * kRad, el = s_el * kRad;
+    Vec pos = Add(target, V(sinf(a) * cosf(el) * s_dist, sinf(el) * s_dist, cosf(a) * cosf(el) * s_dist));
+    Vec dir = Norm(Sub(pos, target));
+    float w = s_w < 0 ? 0 : s_w;
+    w = w * w * (3 - 2 * w);
+    if (w < 1) {
+        pos = Add(Mul(cp, 1 - w), Mul(pos, w));
+        Vec cdn = Norm(cd);
+        dir = Norm(Add(Mul(cdn, 1 - w), Mul(dir, w)));
+    }
+    RetInt(script, "wc_state", 1);
+    RetVec(script, "cam_pos", pos);
+    RetVec(script, "cam_dir", dir);
+    return true;
 }
 
 // ---- clickable menus (Noah 2026-11-20). THUGRECOMP_MouseMenu id = <menu> (QB: dadmod_mouse_tick, menuitem.q) returns
@@ -1763,6 +1896,8 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
     if (dev == 1 && s_lastDev != 1) s_otherAt = now;
     s_lastDev = dev;
     if (moved || click || rclick || wheel) s_mouseAt = now;
+    static DWORD s_wheelUsedAt;
+    if (wheel) s_wheelUsedAt = now;
     bool active = front && havePos && s_mouseAt && (LONG)(s_mouseAt - s_otherAt) >= 0 && true;   // stays until a key or pad press (Noah 2026-11-20)
     if (padhub::g_capPhase != 0) active = false;              // a key / button is being bound
     if (!front) { click = rclick = wheel = 0; moved = false; }
@@ -1788,6 +1923,11 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
 
     int hit = -1, side = 1; DWORD hitId = 0, hitRow = 0;
     bool settling = false;
+    bool hoverEdge = false;
+    FRect hitRect = { 0, 0, 0, 0 };
+    bool hitPartial = false;
+    FRect box = { 0, 0, 0, 0 };
+    bool haveBox = false;
     ElemRef ref;
     char* menu = havePos ? ResolveElem(params, &ref) : nullptr;
     if (menu) {
@@ -1796,13 +1936,27 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
         char* root = menu;
         for (char* a = menu; a && depth < 64; a = *(char**)(a + 0x4C), ++depth) {    // scrolling windows clip what they hold
             root = a;
-            if (*(DWORD*)(a + 0x18) != kWindowType) continue;
+            DWORD ty = *(DWORD*)(a + 0x18);
+            // WindowElement and HScrollingMenu clip. Not VScrollingMenu (Noah 2026-11-21, bottom Edit Skater options not
+            // clickable): its dims (20 per row) are shorter than the rows it shows (23 apart), and it hides rows out of
+            // its window by alpha, which the row loop already treats as hidden
+            if (ty != kWindowType && ty != 0x2900E3D0) continue;
             FRect w = ElemRect(a);
             if (w.x0 > clip.x0) clip.x0 = w.x0; if (w.y0 > clip.y0) clip.y0 = w.y0;
             if (w.x1 < clip.x1) clip.x1 = w.x1; if (w.y1 < clip.y1) clip.y1 = w.y1;
         }
         float best = 1e30f;
         int i = 0;
+        // hover must never scroll a list (Noah 2026-11-21): in a list that has rows out of view, the first and last rows
+        // in view would scroll it when focused, so they are click-only (ms_hover_edge = 1)
+        int firstVis = -1, lastVis = -1, minHidden = 1 << 30, maxHidden = -1;
+        // which lists recenter on focus (Noah 2026-11-21, level select "should work like every other menu"): a list
+        // with rows out of view still focuses on hover, like the main menu; only when hovering a fully visible row
+        // made the list itself move (Load Skater keeps the focus centered) is that list learned as click-only
+        static DWORD s_refMenu, s_refAt, s_refHitId; static int s_refIdx = -1, s_refFirst = -1; static float s_refMid, s_refH;
+        static DWORD s_recenter[32]; static int s_nRecenter;
+        DWORD curMenuId = *(DWORD*)(menu + 0x14);
+        bool refFound = false; float refMidNow = 0;
         // grid = 1 (the on-screen keyboard, Noah 2026-11-20): the menu holds rows (hmenus) and the keys are their
         // children, so the keys are tested and ms_hit_row gives the key's row
         bool grid = IntParam(params, "grid", 0) != 0;
@@ -1819,7 +1973,11 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
             char* cur = c;
             c = *(char**)(c + 0x64);
             int idx = i++;
-            if (*(const float*)(cur + 0x114) <= 0.01f) continue;   // hidden
+            if (*(const float*)(cur + 0x114) <= 0.01f) {   // hidden (a scrolling list hides rows out of view)
+                if (idx < minHidden) minHidden = idx;
+                if (idx > maxHidden) maxHidden = idx;
+                continue;
+            }
             FRect r = ElemRect(cur);
             if (r.x1 - r.x0 < 1 || r.y1 - r.y0 < 1) {   // a row with no size of its own: use what it holds
                 bool got = false; int n = 0;
@@ -1843,18 +2001,73 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
                 }
             }
             ++rows;
-            if (vx < r.x0 || vx >= r.x1 || vy < r.y0 || vy >= r.y1) continue;
-            if (vx < clip.x0 || vx >= clip.x1 || vy < clip.y0 || vy >= clip.y1) continue;
-            // only rows fully inside a scrolling window count (an edge row half scrolled out is not a target), and
-            // where rows overlap the one whose middle is nearest the pointer wins (Noah 2026-11-21: lists ran away)
-            if (clip.y0 > -1e8f && (r.y0 < clip.y0 - 0.5f || r.y1 > clip.y1 + 0.5f)) continue;
+            if (idx == s_refIdx && curMenuId == s_refMenu) { refFound = true; refMidNow = (r.y0 + r.y1) * 0.5f; }
+            {
+                bool inView = clip.y0 < -1e8f || (r.y0 >= clip.y0 - 0.5f && r.y1 <= clip.y1 + 0.5f);
+                if (inView) {
+                    if (firstVis < 0) firstVis = idx;
+                    lastVis = idx;
+                    if (!haveBox) { box = r; haveBox = true; }      // the list's on-screen box (rows in view)
+                    else { if (r.x0 < box.x0) box.x0 = r.x0; if (r.y0 < box.y0) box.y0 = r.y0; if (r.x1 > box.x1) box.x1 = r.x1; if (r.y1 > box.y1) box.y1 = r.y1; }
+                }
+                else { if (idx < minHidden) minHidden = idx; if (idx > maxHidden) maxHidden = idx; }
+            }
+            // rows get 4 menu units of extra height above and below (Noah 2026-11-21 "sometimes my clicks dont register":
+            // clicks on the gap between rows or right on a row's top edge hit nothing); the nearest row still wins
+            const float kPadY = 4.0f;
+            if (vx < r.x0 || vx >= r.x1 || vy < r.y0 - kPadY || vy >= r.y1 + kPadY) continue;
+            if (vx < clip.x0 || vx >= clip.x1 || vy < clip.y0 - kPadY || vy >= clip.y1 + kPadY) continue;
+            // a row partly cut off by a scrolling window can be clicked on its visible part but never takes hover focus
+            // (Noah 2026-11-21: "i cant click the bottom" options of Edit Skater lists); where rows overlap, the one whose
+            // middle is nearest the pointer wins
+            bool partial = clip.y0 > -1e8f && (r.y0 < clip.y0 - 0.5f || r.y1 > clip.y1 + 0.5f);
             float midY = (r.y0 + r.y1) * 0.5f;
             float area = fabsf(vy - midY) * 1000.0f + (r.x1 - r.x0) * (r.y1 - r.y0) * 0.001f;
             if (area < best) {
                 best = area; hit = idx; hitId = *(DWORD*)(cur + 0x14);
                 hitRow = grid && rowIt ? *(DWORD*)(rowIt + 0x14) : 0;
+                hitRect = r;
+                hitPartial = partial;
                 float t = (vx - r.x0) / (r.x1 - r.x0);
                 side = t < 1.0f / 3 ? 0 : t > 2.0f / 3 ? 2 : 1;
+            }
+        }
+        if (!grid) {
+            // per row (Noah 2026-11-21, "every menu like the main menu"): in a list with rows out of view, the first
+            // row in view (when rows are hidden above it) and the last (when rows are hidden below it) would scroll the
+            // list when focused, so hover leaves them alone; a click still picks them. Every other row in view focuses.
+            static DWORD s_openMenu, s_openAt;
+            if (s_openMenu != curMenuId) { s_openMenu = curMenuId; s_openAt = now; }
+            bool edgeRow = hit >= 0 && (hitPartial || (hit == firstVis && minHidden < firstVis) || (hit == lastVis && maxHidden > lastVis));
+            bool learned = false;
+            for (int k = 0; k < s_nRecenter; ++k) if (s_recenter[k] == curMenuId) learned = true;
+            // the list scrolled = a different first row in view (Noah 2026-11-21: Edit Skater rows grow when focused and
+            // push their neighbours, which the old "row moved" check took for a scroll)
+            if (!learned && s_refIdx >= 0 && s_refMenu == curMenuId && now - s_refAt < 700 && s_refFirst >= 0 && firstVis >= 0
+                && firstVis != s_refFirst && (LONG)(s_otherAt - s_refAt) < 0 && (LONG)(s_wheelUsedAt - s_refAt) < 0) {
+                if (s_nRecenter < 32) s_recenter[s_nRecenter++] = curMenuId;
+                learned = true;
+                Log("mouse: menu %08X scrolled (first row in view %d -> %d) when row %d was focused: hover is click only there", curMenuId, s_refFirst, firstVis, s_refIdx);
+            }
+            if (learned) { hoverEdge = maxHidden >= 0; s_refIdx = -1; }
+            else {
+                hoverEdge = edgeRow;
+                // a list that moves although a row well inside the view was focused recenters on every focus
+                // (Load Skater): learned as click-only. Not while the menu is still sliding in after opening.
+                if (edgeRow || now - s_openAt < 1500) s_refIdx = -1;
+                else if (hit >= 0 && moved && hitId != s_refHitId) {
+                s_refIdx = hit; s_refMenu = curMenuId; s_refAt = now; s_refHitId = hitId; s_refFirst = firstVis;
+                s_refMid = (hitRect.y0 + hitRect.y1) * 0.5f; s_refH = hitRect.y1 - hitRect.y0;
+                }
+            }
+        }
+        {
+            static DWORD s_logMenu; static int s_logScroll = -1;
+            DWORD mid = *(DWORD*)(menu + 0x14);
+            if (mid != s_logMenu) {   // once per menu (hover now changes per row)
+                s_logMenu = mid; s_logScroll = hoverEdge;
+                Log("mouse: menu %08X type %08X: %d rows, in view %d-%d, hidden %d..%d -> hover %s", mid, *(DWORD*)(menu + 0x18),
+                    rows, firstVis, lastVis, minHidden == (1 << 30) ? -1 : minHidden, maxHidden, hoverEdge ? "click only (scrolling list)" : "focuses");
             }
         }
         static DWORD s_loggedMenu;
@@ -1879,7 +2092,7 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
     // no menu: clicks still count (Next / click-anywhere screens decide in QB)
     if (overBack || overNext) hit = -1;
     if (clickL && (hit >= 0 || overBack || overNext)) click += clickL;   // on our UI: a click, not a camera drag
-    g_pointerOnUi = hit >= 0 || overBack || overNext;
+    g_pointerOnUi = hit >= 0 || overBack || overNext || IntParam(params, "nodrag", 0) != 0;
     if (settling && !overBack && !overNext) { click = 0; wheel = 0; }      // nothing to click yet: drop clicks and scrolls
     {   // hide / show the Windows arrow over the game while our pointer is up (hidecur from QB = a mouse screen)
         LONG want = (active && IntParam(params, "hidecur", 0)) ? 1 : 0;
@@ -1917,6 +2130,16 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
             menu ? "found" : "none", overBack ? 1 : 0, overNext ? 1 : 0, active ? "" : " (mouse not active)");
     if (click && IntParam(params, "grid", 0)) Log("mouse: keyboard click at %.0f,%.0f -> key %d (%08X, row %08X), %d keys", vx, vy, hit, hitId, hitRow, rows);
     RetInt(script, "ms_hit", hit);
+    RetInt(script, "ms_hover_edge", hoverEdge ? 1 : 0);
+    MouseRetFloat(script, "ms_hx0", hitRect.x0);   // the row under the pointer, for a hover-only highlight
+    MouseRetFloat(script, "ms_hy0", hitRect.y0);
+    MouseRetFloat(script, "ms_hx1", hitRect.x1);
+    MouseRetFloat(script, "ms_hy1", hitRect.y1);
+    RetInt(script, "ms_box", haveBox ? 1 : 0);
+    MouseRetFloat(script, "ms_bx0", box.x0);
+    MouseRetFloat(script, "ms_by0", box.y0);
+    MouseRetFloat(script, "ms_bx1", box.x1);
+    MouseRetFloat(script, "ms_by1", box.y1);
     if (hit >= 0) MouseRetChecksum(script, "ms_hit_id", hitId);
     if (hit >= 0 && hitRow) MouseRetChecksum(script, "ms_hit_row", hitRow);
     RetInt(script, "ms_side", side);
@@ -2185,7 +2408,7 @@ static bool __cdecl CF_MenuTick(void* params, void* script) {
         s_padAt = now;
         static int s_ctxSeen = -1;
         if (s_ctxSeen != ctx) { s_ctxSeen = ctx; s_zoomTo = 1; }  // each screen frames its own body part; your turn and tilt stay
-        if (!shop) { s_yaw = s_yawTo = 0; s_el = s_elTo = 0; s_zoom = s_zoomTo = 1; s_shotSet = false; }
+        if (!shop) { s_yaw = s_yawTo = 0; s_el = s_elTo = 0; s_zoom = s_zoomTo = 1; s_shotSet = false; g_camDragReset = true; }
         else {
             const DIJOYSTATE2* js = (const DIJOYSTATE2*)0x7D60F8;  // player 1, as padhub fills it (axes +-1000)
             auto ax = [](LONG v) { float f = v / 1000.0f; f = f > 1 ? 1 : f < -1 ? -1 : f; return fabsf(f) < 0.2f ? 0.0f : f; };
@@ -4009,6 +4232,7 @@ static const char kLayoutDefault[] =
 "  item|gfx_wxsnow|||\n"
 "  item|gfx_wxfog|||\n"
 "  item|gfx_wxamt|||\n"
+"  item|gfx_todfog|||\n"
 "  item|gfx_fireworks|||\n"
 "  item|gfx_fwevery|||\n"
 "  item|gfx_fwnow|||\n"

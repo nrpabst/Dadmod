@@ -1288,6 +1288,7 @@ static WNDPROC g_mPrev;
 static HWND g_mWnd;
 static bool g_mUni;   // chained the same way the window was made (Unicode or not), so typing isn't changed
 static volatile LONG g_wheelL, g_wheelR, g_lClickL, g_lClickR, g_rClick, g_lClickCorner, g_mClick;
+static volatile LONG g_rClickPlay;   // right clicks for pause during play (Noah 2026-11-21), taken by CF_MouseRightPause
 static const int kCornerPx = 40;   // the Back button square (34 px) and a little room: never the camera's
 static volatile DWORD g_mouseEvAt;           // last wheel / button message
 static HWND GameWnd() { HWND h = *(HWND*)kGameWnd; return (h && IsWindow(h)) ? h : nullptr; }
@@ -1412,6 +1413,7 @@ static LRESULT CALLBACK MouseWndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         g_mouseEvAt = GetTickCount();
     } else if (m == WM_RBUTTONDOWN || m == WM_RBUTTONDBLCLK) {
         InterlockedIncrement(&g_rClick);
+        InterlockedIncrement(&g_rClickPlay);
         g_mouseEvAt = GetTickCount();
     } else if (m == WM_MBUTTONDOWN) {
         InterlockedIncrement(&g_mClick);   // the walk camera's reset
@@ -1757,6 +1759,22 @@ static bool SendMenuKey(WORD scan) {
 static bool __cdecl CF_MouseBack(void*, void*) { return SendMenuKey(0x01); }    // Esc
 // Next button (Noah 2026-11-20): screens with nothing to click that wait for Accept (freeskate and the like)
 static bool __cdecl CF_MouseNext(void*, void*) { return SendMenuKey(0x1C); }    // Enter
+// Right click pauses (Noah 2026-11-21: "when in a game can you make right click pause the game"). THUGRECOMP_MouseRightPause
+// ok = 1 every frame while the skater is in play with no menu, dialog, keyboard (chat), Free Cam or noclip up (QB decides,
+// dadmod_mouse_tick); ok = 0 otherwise, which throws away clicks made then (a right click in a menu is Back, so the one
+// that closes the pause menu never pauses again). A click that only focused the window never counts (WndProc swallows
+// it). The pause is a real Esc press, so the game does exactly what it does for Esc.
+static bool __cdecl CF_MouseRightPause(void* params, void*) {
+    MenuKeyTick();
+    LONG n = InterlockedExchange(&g_rClickPlay, 0);
+    if (!IntParam(params, "ok", 0) || n <= 0) return false;
+    DWORD now = GetTickCount();
+    if (g_backUntil && (LONG)(g_backUntil - now) > 0) return false;   // our own Esc / Enter press is still going or just ended
+    HWND h = GameWnd();
+    if (!GameInFront(h) || !CursorInClient(h)) return false;
+    Log("mouse: right click in play -> pause");
+    return SendMenuKey(0x01);
+}
 
 // THUGRECOMP_MouseArrows row = <row id> left = { <row> child = left_arrow } right = { <row> child = right_arrow } x y
 // (Noah 2026-11-20: "options have arrows around them but we can't click them ... make their hitboxes generous").

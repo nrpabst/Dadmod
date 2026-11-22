@@ -7737,10 +7737,10 @@ endscript
 
 script dadmod_pause_skywx_menu
     dadmod_pause_sub_create name = dadmod_skywx title = "sky & weather" back_id = dadmod_pause_skywx
+    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
     dadmod_ui_item id = gfx_todfog_pause key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
     dadmod_ui_item id = gfx_fogamt_pause key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
-    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
     dadmod_ui_item id = gfx_weather_pause key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
     dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
@@ -7877,7 +7877,7 @@ script dadmod_pause_gfx_group
     thugpro_menu_finalize
 endscript
 
-dadmod_pause_weather_items = [ "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_tod" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
+dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
 
 script dadmod_pause_weather
     dadmod_pause_skywx_menu

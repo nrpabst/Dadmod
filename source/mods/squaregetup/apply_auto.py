@@ -11,7 +11,7 @@ item = ['    dadmod_abc_text', '    make_thugpro_menu_item {', '    id = dadmod_
         '    option_arrows_callback = dadmod_abc_toggle', '    option_arrows', '    pad_choose', '    }',
         '    dadmod_abcsnd_text', '    make_thugpro_menu_item {', '    id = dadmod_abcsnd_item', '    text = "Bail cancel effects"',
         '    extra_text = <abcsnd_text>',
-        '    description_text = "The whoosh sound and blue sparkles when you break apart on a bail cancel. Only you see and hear them."',
+        '    description_text = "The whoosh sound, blue sparkles and flash when you break apart on a bail cancel. Only you see and hear them."',
         '    option_arrows_callback = dadmod_abcsnd_toggle', '    option_arrows', '    pad_choose', '    }']
 
 s = s.replace(a, a + nl.join(item) + nl)

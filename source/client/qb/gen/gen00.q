@@ -7789,7 +7789,7 @@ script dadmod_pause_gameplay_menu
     id = dadmod_abcsnd_item
     text = "Bail cancel effects"
     extra_text = <abcsnd_text>
-    description_text = "The whoosh sound and blue sparkles when you break apart on a bail cancel. Only you see and hear them."
+    description_text = "The whoosh sound, blue sparkles and flash when you break apart on a bail cancel. Only you see and hear them."
     option_arrows_callback = dadmod_abcsnd_toggle
     option_arrows
     pad_choose

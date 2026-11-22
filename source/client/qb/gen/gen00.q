@@ -3081,68 +3081,6 @@ script thugpro_bankdrops_chat
     return handled = 1
 endscript
 
-script dadmod_chatkeep_save
-    if ObjectExists id = keyboard_anchor
-        if keyboard_anchor : GetSingleTag no_buttons
-            if ObjectExists id = keyboard_current_string
-                GetTextElementString id = keyboard_current_string
-                if GotParam String
-                    KillSpawnedScript Name = dadmod_chatkeep_restore
-                    SpawnScript dadmod_chatkeep_restore params = { text = <String> }
-                endif
-            endif
-        endif
-    endif
-endscript
-
-script dadmod_chatkeep_restore
-    tries = 0
-    begin
-        wait 5 gameframes
-        if ObjectExists id = keyboard_anchor
-            return
-        endif
-        blocked = 0
-        if ObjectExists id = ped_speech_dialog
-            blocked = 1
-        endif
-        if ObjectExists id = goal_start_dialog
-            blocked = 1
-        endif
-        if ObjectExists id = goal_description_anchor
-            blocked = 1
-        endif
-        if ObjectExists id = dialog_box_anchor
-            blocked = 1
-        endif
-        if ( <blocked> = 0 )
-            break
-        endif
-        tries = ( <tries> + 1 )
-        if ( <tries> > 36 )
-            return
-        endif
-    repeat
-    DestroyIfObjectExist id = current_menu_anchor
-    DestroyIfObjectExist id = bg_container
-    create_onscreen_keyboard {
-    allow_cancel no_buttons text_block
-    Pos = (3.2e+02,2.6e+02)
-    keyboard_cancel_script = cancel_enter_chat_menu
-    keyboard_done_script = entered_chat_message
-    display_text = "Enter message"
-    keyboard_title = "Enter message"
-    min_length = 1
-    max_length = 75
-    display_text_scale = 0.5
-    text = <text>
-    }
-    if ObjectExists id = keyboard_display_string
-        FormatText TextName = shown "%s_" s = <text>
-        SetScreenElementProps id = keyboard_display_string text = <shown>
-    endif
-endscript
-
 dadmod_titlefx_block = "Menu UI Title effect (Noah, 2026-11-03). Lives in ButtonScripts.q because procrastination.qb is at its 512 KB limit"
 
 script dadmod_ui_title_rgb lmode = 0

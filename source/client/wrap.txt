@@ -45,3 +45,13 @@ Wallride
 CreatureScaryGrindEffect
 # menus.q: Options (and Kali's Features page) keep the main menu camera instead of jumping to the stock options camera
 thugpro_menu_camera_create
+# menukeep.q (Noah 2026-11-22): pause menu / chat box stay open when a game ends or starts, long chat lines are split instead of dropped
+create_rankings
+create_console_message
+create_onscreen_keyboard
+enter_kb_chat
+launch_chat_keyboard
+launch_quick_menu_keyboard
+entered_chat_message
+cancel_enter_chat_menu
+cancel_chat_menu

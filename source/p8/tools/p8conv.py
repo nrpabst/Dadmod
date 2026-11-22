@@ -1964,6 +1964,7 @@ def nodes_from_qb(qb_bytes):
 
 
 RAIL = crc('RailNode')
+CLIMB = crc('ClimbingNode')
 ABSENT_NET = crc('AbsentInNetGames')
 
 
@@ -1972,6 +1973,8 @@ def link_ok(src, dst):
     that hash until it finds the target - forever if the target isn't there. So a rail may only link to a rail
     the engine also creates: a RailNode, and not one dropped in net games (AbsentInNetGames, 0x565BB0) unless
     the source is dropped too. (P8Suburbs node 100 linked to a Restart and hung the level load.)"""
+    if src.get(crc('Class')) == CLIMB:
+        return dst.get(crc('Class')) == CLIMB       # ladders link ladder -> ladder (validate_p8 checks the same)
     if src.get(crc('Class')) != RAIL:
         return True
     if dst.get(crc('Class')) != RAIL:
@@ -2000,6 +2003,7 @@ def write_nodearray_q(path, level, nodes, sectors=None, trigger_ok=None, col=Non
     lines = ['%s_NodeArray = [' % level]
     counts = {}
     actor_scripts = []
+    ghosts = []           # loop-sound Ghost objects (loop_ghost_nodes), written after every P8 node
     arm_groups([nodes[i] for i in keep])
     ALL_NODES[:] = nodes
     machine_plan([nodes[i] for i in keep])
@@ -2009,6 +2013,11 @@ def write_nodearray_q(path, level, nodes, sectors=None, trigger_ok=None, col=Non
         counts[cls] = counts.get(cls, 0) + 1
         if n.get(crc('Class')) in amb:
             lines += ambience_node(n, prox_trig)
+            if n.get(crc('Class')) == crc('EmitterObject'):
+                # NOT inline: every P8 node keeps index remap[i] (Links point at those indices), so nodes we add
+                # go after the last P8 node. (2026-11-22: ghosts written right after their emitter shifted every
+                # later node, rail Links then hit LevelGeometry and the rail builder 0x57E960 hung the load.)
+                ghosts += loop_ghost_nodes(n[crc('Name')], '(%s)' % ','.join(q_value(float(x)) for x in n[crc('Pos')]))
             continue
         if n.get(crc('Class')) in (crc('Pedestrian'), crc('Vehicle')):
             links = [remap[x] for x in (n.get(crc('Links')) or []) if x in remap]
@@ -2055,6 +2064,7 @@ def write_nodearray_q(path, level, nodes, sectors=None, trigger_ok=None, col=Non
     for k, v in extra:
         counts[k] = counts.get(k, 0) + 1
         lines += v
+    lines += ghosts
     lines.append(']')
     lines += scripts + actor_scripts
     if counts.get('Pedestrian'):
@@ -2466,7 +2476,7 @@ def ambience_node(n, prox_trig):
     ang = '(%s)' % ','.join(q_value(float(x)) for x in n.get(crc('Angles'), (0.0, 0.0, 0.0)))
     out = ['{', 'Name = #"0x%08x"' % name, 'Pos = %s' % pos, 'Angles = %s' % ang]
     if n[crc('Class')] == crc('EmitterObject'):
-        return out + ['Class = EmitterObject', 'Type = BoundingBox', 'CreatedAtStart', '}'] + loop_ghost_nodes(name, pos)
+        return out + ['Class = EmitterObject', 'Type = BoundingBox', 'CreatedAtStart', '}']
     typ = n.get(crc('Type'))
     out += ['Class = ProximNode', 'Type = %s' % ('object' if typ == crc('object') else 'camera'), 'CreatedAtStart']
     out += ['ProximObject'] if crc('ProximObject') in n['_flags'] else []

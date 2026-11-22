@@ -320,6 +320,11 @@ def build_level(level, zone, sky):
         text = text[:k + 1] + '\n'.join(entries) + text[k:] + '\n'.join(cscripts) + '\n'
         open(q, 'w', encoding='latin1', newline='\n').write(text)
         print('  classic goals: %d objects' % entries.count('{'))
+    import validate_p8
+    bad, _ = validate_p8.node_link_errors(open(q, encoding='latin1').read())
+    if bad:
+        # a rail / ladder Link to the wrong node hangs the level load forever (rail builder 0x57E960)
+        sys.exit('BUILD FAILED %s: %d bad node links, first: %s' % (level, len(bad), bad[0]))
     compile_q(q, os.path.join(tmp, level + '.qb'))
     sq = info.get('scripts_q') or '\n'     # converted P8 trigger scripts: gaps, kill zones, doors
     if cg:

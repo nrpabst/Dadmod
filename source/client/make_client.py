@@ -532,6 +532,14 @@ def vault_files():
             sys.exit('PACKAGE FAILED: level file missing: ' + src)
         if hashlib.md5(open(src, 'rb').read()).hexdigest() != md5.lower():
             sys.exit('PACKAGE FAILED: %s changed (md5 is not the one in vault_levels.txt)' % src)
+        if rel.lower().endswith('_scripts.prx'):
+            # a rail / ladder Link to the wrong node hangs that level's load forever (rail builder 0x57E960):
+            # 2026-11-22 the P8 sound work shipped such links into Dev
+            sys.path.insert(0, os.path.join(WORK, 'p8', 'tools'))
+            from validate_p8 import prx_link_errors
+            bad = prx_link_errors(src)
+            if bad:
+                sys.exit('PACKAGE FAILED: %d bad node links in %s, first: %s' % (len(bad), rel, bad[0]))
         for d in PLAIN_GAMES:
             p = os.path.join(d, rel)
             if os.path.exists(p):     # Windows: not case-sensitive

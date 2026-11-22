@@ -6131,8 +6131,8 @@ script dadmod_bhra_easy_time RevertTime = 5
     endif
 endscript
 
-script dadmod_bhra_poll frames = 12
-    SetTags bhra_x = 0
+script dadmod_bhra_poll frames = 12 x0 = 0
+    SetTags bhra_x = <x0>
     begin
         if Held x
             SetTags bhra_x = 3
@@ -6166,8 +6166,13 @@ script dadmod_bhra_land2_arm RevertTime = 5
         SetTags bhra_pivot = 0
     endif
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
+    hx = 0
+    if Held x
+        hx = 3
+    endif
+    SetTags bhra_x = <hx>
     pf = ( <RevertTime> + 4 )
-    Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> }
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> x0 = <hx> }
     dadmod_bhra_dbg what = "land2 vert window armed"
     return bhra_arm = 1
 endscript
@@ -6188,7 +6193,12 @@ script dadmod_bhra_dd_arm
     endif
     SetTags bhra_pivot = 0
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
-    Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 }
+    hx = 0
+    if Held x
+        hx = 3
+    endif
+    SetTags bhra_x = <hx>
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 x0 = <hx> }
     dadmod_bhra_dbg what = "skate-in window armed"
     return bhra_arm = 1
 endscript
@@ -6259,7 +6269,7 @@ script dadmod_bhra_ollie_mark
     GetSingleTag bhra_wait
     if GotParam bhra_wait
         if ( <bhra_wait> > 0 )
-            SetTags bhra_wait = 0 bhra_hopped = <bhra_wait>
+            SetTags bhra_wait = 0 bhra_hopped = <bhra_wait> bhra_hop_now = 1
             pv = 0
             if ( <bhra_wait> = 1 )
                 GetSingleTag bhra_pivot
@@ -6296,7 +6306,7 @@ endscript
 script dadmod_bhra_watch src = 1
     wait 1 gameframe
     GetSingleTag bhra_hopped
-    SetTags bhra_wait = 0
+    SetTags bhra_wait = 0 bhra_hop_now = 0
     hop = 0
     if GotParam bhra_hopped
         hop = <bhra_hopped>
@@ -6340,7 +6350,7 @@ script dadmod_bhra_flush
     GetSingleTag bhra_pending
     if GotParam bhra_pending
         if ( <bhra_pending> = 1 )
-            SetTags bhra_pending = 0
+            SetTags bhra_pending = 0 bhra_hop_now = 0
             dadmod_bhra_dbg what = "pending combo banked"
             LandSkaterTricks
         endif
@@ -6353,7 +6363,16 @@ script dadmod_bhra_revert_check
         if ( <bhra_pending> = 1 )
             SetTags bhra_pending = 0
             Obj_KillSpawnedScript Name = dadmod_bhra_watch
+            bhra_up = 0
+            GetSingleTag bhra_hop_now
+            if GotParam bhra_hop_now
+                bhra_up = <bhra_hop_now>
+            endif
+            SetTags bhra_hop_now = 0
             if InAir
+                bhra_up = 1
+            endif
+            if ( <bhra_up> = 1 )
                 if IsTrue dadmod_bhra_keep
                     dadmod_bhra_dbg what = "air revert after a hop: combo kept"
                     GetSingleTag bhra_pivot

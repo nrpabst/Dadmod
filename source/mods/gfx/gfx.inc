@@ -16,6 +16,7 @@
 //         -> screen effects (Present; these cover the HUD too: CRT, grain, chromatic aberration, vignette).
 #include <d3d9.h>
 #include <tlhelp32.h>
+#include <algorithm>
 namespace gfx {
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -65,6 +66,13 @@ static const Setting kSettings[] = {
     {"gfx_fwevery", 2, 0, 3, "unused since 2026-11-21 (Fireworks picks the interval itself); kept so old files load"},
     {"gfx_skywxver", 1, 0, 1, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
     {"gfx_lamps", 0, 0, 10, "street lights at night (no menu row since 2026-11-21, off by default): lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
+    {"gfx_lampbulbs", 1, 0, 1, "lamp bulbs and pools (mods/lamplights): 1 on, 0 off (for testing)"},
+    {"gfx_bulbsize", 10, 1, 30, "lamp bulb glow size x0.1 (10 = normal)"},
+    {"gfx_bulbstr", 10, 0, 30, "lamp bulb glow brightness x0.1 (10 = normal, 0 = no bulbs, pools stay)"},
+    {"gfx_lampreach", 920, 200, 3000, "lamp engine lights (amber wash on the level around each lamp): reach; applied within a second"},
+    {"gfx_lamppool", 16, 2, 40, "lamp light pools (mods/lamplights): radius x0.1 (16 = 1.6x the lamp list radius)"},
+    {"gfx_lampstr", 22, 0, 60, "lamp light pools: strength x0.1 (lights the ground by its own brightness)"},
+    {"gfx_lamplift", 14, 0, 60, "lamp light pools: amber lift x0.01 added even on dark ground"},
     {"gfx_skypop", 0, 0, 10, "sky boost (richer sky colors to match the time of day, stars at night): 0 off .. 10 strong"},
     {"gfx_fps", 0, 0, 2, "FPS counter in the top left corner: 0 off, 1 on, 2 tiny (just the number, right in the corner)"},
     {"gfx_shotkey", 1, 0, 1, "F11 saves a screenshot to dadmod\\screenshots: 0 off, 1 on"},
@@ -260,6 +268,22 @@ static void SyncInput() {  // Dadmod > Controls -> padhub
     padhub::SetLaunchBinds(V("gfx_launchbinds") != 0);
 }
 
+// lamp settings: written together at the end of gfx.ini under their own header (Noah 2026-11-22)
+struct LampKeyInfo { const char* key; const char* text; };
+static const LampKeyInfo kLampKeys[] = {
+    {"gfx_lampbulbs", "lamp bulbs and light pools at night: 1 on, 0 off"},
+    {"gfx_bulbsize", "size of the glow around each bulb: 1 .. 30, 10 = normal"},
+    {"gfx_bulbstr", "brightness of the bulb glow: 0 .. 30, 10 = normal, 0 = no bulb glow (the pools stay)"},
+    {"gfx_lamppool", "size of the light pool on the ground under each lamp: 2 .. 40, 16 = normal"},
+    {"gfx_lampstr", "how much the light pool brightens the ground: 0 .. 60, 22 = normal"},
+    {"gfx_lamplift", "amber added to the pool even where the ground is very dark: 0 .. 60, 14 = normal (high looks foggy)"},
+    {"gfx_lampreach", "how far each lamp's amber light reaches onto walls and buildings: 200 .. 3000, 920 = normal"},
+    {"gfx_lamps", "the OLD street light glow from before (its positions are off): 0 off .. 10 bright"},
+};
+static bool IsLampKey(const char* k) {
+    for (const auto& l : kLampKeys) if (!_stricmp(k, l.key)) return true;
+    return false;
+}
 static FILETIME IniTime() {
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (GetFileAttributesExA(ExeDirFile("gfx.ini").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
@@ -337,8 +361,14 @@ static void Save() {
     std::string out = "; Dadmod graphics settings (Dadmod > Graphics in game, or THUGPro Manager). Changes apply live\r\n"
                       "; except MSAA and v-sync, which need a restart. Delete this file for the defaults.\r\n";
     for (int i = 0; i < kCount; ++i)
-        out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
+        if (!IsLampKey(kSettings[i].key))
+            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
     out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + g_shotDir + "\r\n";
+    out += "\r\n; ---- Street lamps ----\r\n";
+    for (const auto& l : kLampKeys) {
+        int i = Index(l.key);
+        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(g_val[i]) + "\r\n";
+    }
     WriteWholeFile(ExeDirFile("gfx.ini"), out);
     g_iniTime = IniTime();
 }
@@ -353,6 +383,7 @@ static bool g_menuUp = true;  // a menu is open (QB dadmod_mirror_watch sends gf
 // Noah 2026-10-26: the main menu is never mirrored (view or steering). QB dadmod_mirror_watch sends gfx_mainmenu;
 // until it does (boot), assume the main menu.
 static bool g_mainMenu = true;
+static int g_keepLit = 1;  // night tint spares bright / colored pixels (THUG2-era maps' own lights); QB sends 0 for THPS1-4 maps (lamplights.q)
 static void FireworksShow(double seconds, const char* why);
 static void SetLevel(const char* name);
 static void LampMark(bool add);
@@ -365,6 +396,7 @@ bool SetKey(const char* key, int value) {
     if (!_strnicmp(key, "gfx_level_", 10)) { SetLevel(key + 10); return true; }
     if (!_stricmp(key, "gfx_lampadd")) { LampMark(true); return true; }
     if (!_stricmp(key, "gfx_lampdel")) { LampMark(false); return true; }
+    if (!_stricmp(key, "gfx_keeplit")) { g_keepLit = value ? 1 : 0; return true; }
     if (!_stricmp(key, "gfx_servertod")) { g_serverTod = value < 0 || value > 5 ? 0 : value; return true; }
     if (!_stricmp(key, "gfx_balancing")) { g_balancing = value != 0; return true; }
     if (!_stricmp(key, "gfx_balancelock")) { balancelock::Set(value != 0); return true; }
@@ -510,12 +542,13 @@ static float g_nightLift = 0;  // Night time of day: how much ps_look lifts the 
 static bool WeatherOn();
 static bool FireworksLive();
 static bool LampsOn();
+static bool BulbsOn();
 static bool MistOn() { return V("gfx_todfog") > 0 && !g_mainMenu; }  // Fog row: ground mist (2026-11-21)
-static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn(); }
+static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn(); }
 static bool SceneWanted() {
     return V("gfx_fxaa") || V("gfx_sharpen") || V("gfx_bloom") || V("gfx_bright") || V("gfx_contrast") || V("gfx_sat") ||
            V("gfx_vibrance") || V("gfx_gamma") || V("gfx_preset") || V("gfx_temp") || V("gfx_tint") || DepthWanted() ||
-           V("gfx_mblur") || V("gfx_pixelate") || WeatherOn() || FireworksLive() || LampsOn() || g_nightLift > 0.01f;
+           V("gfx_mblur") || V("gfx_pixelate") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || g_nightLift > 0.01f;
 }
 static bool ScreenWanted() { return V("gfx_vignette") || V("gfx_grain") || V("gfx_chroma") || V("gfx_crt"); }
 
@@ -1215,7 +1248,7 @@ float4 ps_nighttint(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float3 t = lerp(nighttint(sk.x), nighttint(sk.z), sk.w);
     float br = max(c.r, max(c.g, c.b)), sat = br - min(c.r, min(c.g, c.b));  // keep the level's lights lit: bright or strongly colored pixels
-    t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)));
+    t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)) * wx.x);  // wx.x here = keep lit (0 on THPS1-4 maps: no real lights)
     return float4(c * t, 1);
 }
 // ---- weather (scene pass, before the HUD): s0 color, s1 depth when p9.z > 0
@@ -1364,6 +1397,41 @@ float4 ps_lamps(float2 uv : TEXCOORD0) : COLOR {
     c += (c * light * 2.4 + light * 0.05 + halo * 0.7) * lampc.x;
     return float4(c, 1);
 }
+// ---- lamp bulbs (mods/lamplights, 2026-11-22): soft glow at each lamp head + a warm round pool under it, after the night tint
+// lp[i*2] = bulb position (world), lp[i*2+1] = color rgb, pool radius. lampc: amount, count, pool strength
+float4 ps_bulbs(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    bool sky = d0 >= 0.99999;
+    float z = sky ? 50000.0 : dist(d0);
+    float3 P = camp.xyz + dv * z;
+    float3 dn = normalize(dv);
+    float far = length(dv) * z;
+    float3 light = 0, halo = 0;
+    [loop] for (int i = 0; i < 24; i++) {
+        if (i >= lampc.y) break;
+        float4 a = lp[i * 2], col = lp[i * 2 + 1];
+        float3 dl = P - (a.xyz - float3(0, a.w, 0));
+        float x = saturate(1 - dot(dl, dl) / (col.w * col.w));
+        light += x * x * (sky ? 0 : 1);
+        float tl = dot(a.xyz - camp.xyz, dn);
+        if (tl > 0 && tl < far + 30) {
+            float3 q = camp.xyz + dn * tl - a.xyz;
+            float r2 = dot(q, q);
+            float nr = saturate(tl / 600.0), fs = 1 + tl * 0.0015;
+            float cs = 100.0 * lerp(0.35, 1.0, nr) * fs * fs * camp.w * camp.w, hs = (1250.0 * nr * nr + 40.0) * fs * camp.w * camp.w;
+            halo += col.rgb * exp(-r2 / cs) * 0.9 + col.rgb * float3(1.0, 0.85, 0.62) * exp(-r2 / hs) * 0.2 * nr;
+        }
+    }
+    float3 warm = float3(1.0, 0.55, 0.16);
+    float lum = dot(c, float3(0.3, 0.5, 0.2));
+    float pl = saturate(light.x) * lampc.x;
+    c = lerp(c, c * float3(1.2, 0.95, 0.7), pl);
+    c += warm * pl * (lum * lampc.z + lampc.w) + halo * lampc.x;
+    return float4(c, 1);
+}
 // ---- ground mist (scene pass, after the night tint): s0 color, s1 depth. camp = camera position (c29)
 // density(h) = D * exp(-(h - ground) / Hs), integrated along the view ray; drifting 2-octave patches
 float4 gm : register(c80);   // D, Hs, ground height, cap
@@ -1397,7 +1465,7 @@ static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDo
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
                              *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
-                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr,  // optional too
+                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr,  // optional too
                              *g_psMirror = nullptr,  // optional: without it mirror mode does nothing
                              *g_psGroundMist = nullptr,  // optional: the Fog row (ground mist)
                              *g_psNightTint = nullptr;  // optional: without it night/evening buildings keep the game's lighting
@@ -1604,7 +1672,7 @@ static bool MakeShaders(IDirect3DDevice9* dev) {
     struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
         {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
         {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
-        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_mirror", &g_psMirror, "mirror picture"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_mirror", &g_psMirror, "mirror picture"},
         {"ps_nighttint", &g_psNightTint, "night tint"}, {"ps_groundmist", &g_psGroundMist, "ground mist"}};
     for (auto& o : optional)
         if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
@@ -1867,6 +1935,91 @@ static void LampMark(bool add) {
     SetLevel(lv.c_str());
 }
 static bool LampsOn() { return g_lampAmt > 0.01f && g_lampN > 0; }
+// lamp bulbs (mods/lamplights): head positions sent by QB per level (THUGRECOMP_LampBulb), game coordinates = D3D world
+static std::vector<Lamp> g_bulbs;
+static std::vector<float> g_bulbDrop;  // pool center = bulb - drop (height)
+static bool g_bulbNight = false;     // evening lights / night / dawn: QB turns the level lamps' engine lights on
+static float g_bulbAmt = 0;
+static const int kBulbMax = 192;   // drawn in passes of 24 (ps_bulbs loop)
+static float g_bulbC[2 + 2 * kBulbMax][4];
+static int g_bulbN = 0;
+static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); }
+static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b) {
+    if (g_bulbs.size() >= 1024) return;
+    g_bulbDrop.push_back(drop);
+    Lamp l; l.x = x; l.y = y; l.z = z; l.r = pool; l.cr = r; l.cg = g; l.cb = b;
+    g_bulbs.push_back(l);
+}
+// screen rectangle (pixels) that a sphere covers; false = off screen. Any corner behind the camera = whole screen.
+static bool SphereRect(float x, float y, float z, float r, int w, int h, RECT& out) {
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+    int behind = 0;
+    for (int i = 0; i < 8; ++i) {
+        float p[3] = {x + (i & 1 ? r : -r), y + (i & 2 ? r : -r), z + (i & 4 ? r : -r)};
+        float v[4], c[4];
+        const D3DMATRIX& m = g_view;
+        for (int k = 0; k < 4; ++k) v[k] = p[0] * m.m[0][k] + p[1] * m.m[1][k] + p[2] * m.m[2][k] + m.m[3][k];
+        const D3DMATRIX& q = g_proj;
+        for (int k = 0; k < 4; ++k) c[k] = v[0] * q.m[0][k] + v[1] * q.m[1][k] + v[2] * q.m[2][k] + v[3] * q.m[3][k];
+        if (c[3] <= 1.0f) { ++behind; continue; }
+        float sx = (c[0] / c[3] * 0.5f + 0.5f) * w, sy = (0.5f - c[1] / c[3] * 0.5f) * h;
+        if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy < y0) y0 = sy; if (sy > y1) y1 = sy;
+    }
+    if (behind == 8) return false;
+    if (behind) { out.left = 0; out.top = 0; out.right = w; out.bottom = h; return true; }
+    out.left = x0 < 0 ? 0 : (LONG)x0; out.top = y0 < 0 ? 0 : (LONG)y0;
+    out.right = x1 > w ? w : (LONG)x1 + 1; out.bottom = y1 > h ? h : (LONG)y1 + 1;
+    return out.right > out.left && out.bottom > out.top;
+}
+static void UnionRect2(RECT& a, const RECT& b) {
+    if (b.left < a.left) a.left = b.left; if (b.top < a.top) a.top = b.top;
+    if (b.right > a.right) a.right = b.right; if (b.bottom > a.bottom) a.bottom = b.bottom;
+}
+// GPU time of the lamp passes (timestamp queries, every few seconds into mainmenu.log; skipped if the card can't)
+static IDirect3DQuery9 *g_lqDis = nullptr, *g_lqFreq = nullptr, *g_lqA = nullptr, *g_lqB = nullptr;
+static int g_lqState = 0, g_lqDrawn = 0;
+static double g_lqArea = 0, g_lqAreaNow = 0;  // screens of pixels the lamp passes covered
+static double g_lqNext = 0;
+static bool BulbsOn() { return g_bulbAmt > 0.01f && g_bulbN > 0 && V("gfx_lampbulbs"); }
+static void UpdateBulbs(int todA, int todB, float blend, float dt) {
+    auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
+    float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
+    g_bulbNight = want > 0.5f;
+    float step = dt / 3.0f + 0.0001f;
+    g_bulbAmt = g_bulbAmt < want ? (g_bulbAmt + step > want ? want : g_bulbAmt + step) : (g_bulbAmt - step < want ? want : g_bulbAmt - step);
+    g_bulbN = 0;
+    if (g_bulbAmt <= 0.01f || g_bulbs.empty()) return;
+    const D3DMATRIX& m = g_view;
+    float cx = -(m._41 * m._11 + m._42 * m._12 + m._43 * m._13);
+    float cy = -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23);
+    float cz = -(m._41 * m._31 + m._42 * m._32 + m._43 * m._33);
+    // every bulb within 20000 (nearest first, up to kBulbMax): the glow never cuts off while a lamp is in sight
+    static std::vector<std::pair<float, int>> bnear;
+    bnear.clear();
+    for (size_t i = 0; i < g_bulbs.size(); ++i) {
+        const Lamp& l = g_bulbs[i];
+        float d = (l.x - cx) * (l.x - cx) + (l.y - cy) * (l.y - cy) + (l.z - cz) * (l.z - cz);
+        if (d < 20000.0f * 20000.0f) bnear.push_back(std::make_pair(d, (int)i));
+    }
+    if ((int)bnear.size() > kBulbMax) {
+        std::partial_sort(bnear.begin(), bnear.begin() + kBulbMax, bnear.end());
+        bnear.resize(kBulbMax);
+    }
+    g_bulbN = (int)bnear.size();
+    g_bulbC[0][0] = g_bulbAmt; g_bulbC[0][1] = (float)g_bulbN; g_bulbC[0][2] = V("gfx_lampstr") / 10.0f; g_bulbC[0][3] = V("gfx_lamplift") / 100.0f;
+    g_bulbC[1][0] = cx; g_bulbC[1][1] = cy; g_bulbC[1][2] = cz; g_bulbC[1][3] = V("gfx_bulbsize") / 10.0f;
+    for (int i = 0; i < g_bulbN; ++i) {
+        int bi = bnear[i].second;
+        const Lamp& l = g_bulbs[bi];
+        float* a = g_bulbC[2 + i * 2];
+        float* c = g_bulbC[3 + i * 2];
+        float dist = sqrtf(bnear[i].first);
+        float poolFade = dist < 6000.0f ? 1.0f : dist > 9000.0f ? 0.0f : (9000.0f - dist) / 3000.0f;  // far pools shrink away
+        a[0] = l.x; a[1] = l.y; a[2] = l.z; a[3] = g_bulbDrop[bi];
+        float bs = V("gfx_bulbstr") / 10.0f;  // the halo uses the color, the pool its own amber
+        c[0] = l.cr * bs; c[1] = l.cg * bs; c[2] = l.cb * bs; c[3] = l.r * V("gfx_lamppool") / 10.0f * poolFade;
+    }
+}
 // lamps light up in the evening and at night (a little at sunset); picks the 24 nearest to the camera
 // Noah 2026-10-20: lamps fade on/off instead of popping: the glow eases toward its target over ~4 s.
 static void UpdateLamps(int todA, int todB, float blend, float dt) {
@@ -1874,7 +2027,7 @@ static void UpdateLamps(int todA, int todB, float blend, float dt) {
     float want = (w(todA) + (w(todB) - w(todA)) * blend) * V("gfx_lamps") / 6.0f;
     static float shown = -1.0f;
     if (shown < 0) shown = want;  // first frame: no fade
-    float step = dt * (V("gfx_lamps") / 6.0f) / 4.0f + 0.0001f;
+    float step = dt / 4.0f + 0.0001f;  // 2026-11-22: was scaled by gfx_lamps, so with 0 it took minutes to fade out
     shown = shown < want ? (shown + step > want ? want : shown + step) : (shown - step < want ? want : shown - step);
     g_lampAmt = shown;
     g_lampN = 0;
@@ -1929,6 +2082,8 @@ static void UpdateWorld() {
     g_sky[0] = (float)a; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)b; g_sky[3] = blend;
     if (tod == 0 && g_serverTod > 0) UpdateLamps(g_serverTod, g_serverTod, 0, dt);  // lamps follow the server
     else UpdateLamps(a, b, blend, dt);
+    if (tod == 0 && g_serverTod > 0) UpdateBulbs(g_serverTod, g_serverTod, 0, dt);
+    else UpdateBulbs(a, b, blend, dt);
     static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
     static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
                                      {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
@@ -2151,6 +2306,8 @@ static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
     dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATER);
     dev->SetPixelShaderConstantF(16, k, 1);
+    float keep[4] = {(float)g_keepLit, 0, 0, 0};
+    dev->SetPixelShaderConstantF(17, keep, 1);  // ps_nighttint reads c17 (wx) .x as keep lit; the weather pass sets its own c17
     dev->SetRenderTarget(0, bb);
     dev->SetDepthStencilSurface(ds);
     D3DVIEWPORT9 vp = {0, 0, d.Width, d.Height, 0, 1};
@@ -2259,6 +2416,63 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psLamps, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
         cur = dst;
+    }
+    if (BulbsOn() && g_psBulbs && g_intzUsed && !g_msaaOn) {
+        static bool once = false;
+        if (!once) { once = true; mmenu::Log("gfx: lamp bulbs on 3D scene (%d near)", g_bulbN); }
+        bool timing = false;
+        static IDirect3DDevice9* lqDev = nullptr;
+        if (lqDev != dev) { lqDev = dev; g_lqDis = g_lqFreq = g_lqA = g_lqB = nullptr; g_lqState = 0; }  // new device: old queries belong to the old one
+        if (g_lqState == 0 && NowS() > g_lqNext) {
+            if (!g_lqDis && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMPDISJOINT, &g_lqDis))) g_lqState = 9;
+            if (g_lqState == 0 && !g_lqFreq && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMPFREQ, &g_lqFreq))) g_lqState = 9;
+            if (g_lqState == 0 && !g_lqA && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMP, &g_lqA))) g_lqState = 9;
+            if (g_lqState == 0 && !g_lqB && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMP, &g_lqB))) g_lqState = 9;
+            if (g_lqState == 0) { timing = true; g_lqDis->Issue(D3DISSUE_BEGIN); g_lqA->Issue(D3DISSUE_END); }
+        }
+        // one bulb per pass, only inside the screen rectangle its glow and pool can touch (scissor);
+        // src always holds the whole picture: each pass writes dst inside the rectangle, then that rectangle is copied back
+        IDirect3DTexture9* srcT = cur;
+        IDirect3DTexture9* dstT = cur == g_texA ? g_texB : g_texA;
+        IDirect3DSurface9* srcS = cur == g_texA ? sA : sB;
+        IDirect3DSurface9* dstS = cur == g_texA ? sB : sA;
+        int drawn = 0;
+        double area = 0;
+        float hdr[4] = {g_bulbC[0][0], 1.0f, g_bulbC[0][2], g_bulbC[0][3]};
+        dev->SetPixelShaderConstantF(28, hdr, 1);
+        dev->SetPixelShaderConstantF(29, g_bulbC[1], 1);
+        for (int i = 0; i < g_bulbN; ++i) {
+            const float* a = g_bulbC[2 + i * 2];
+            const float* c = g_bulbC[3 + i * 2];
+            float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
+            float tl = sqrtf(dx * dx + dy * dy + dz * dz), fs = 1 + tl * 0.0015f;
+            float hr = (2.2f * sqrtf((1250.0f + 40.0f) * fs) + 2.2f * sqrtf(100.0f) * fs) * g_bulbC[1][3];  // halo reach in world units
+            RECT r, pr;
+            bool any = g_haveProj ? SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r) : (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true);
+            if (c[3] > 1.0f && g_haveProj && SphereRect(a[0], a[1] - a[3], a[2], c[3], g_w, g_h, pr)) {
+                if (any) UnionRect2(r, pr); else { r = pr; any = true; }
+            }
+            if (!any) continue;
+            dev->SetPixelShaderConstantF(30, a, 2);
+            dev->SetScissorRect(&r);
+            dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+            Pass(dev, g_psBulbs, dstS, g_w, g_h, g_w, g_h, srcT, g_intz);
+            dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+            dev->StretchRect(dstS, &r, srcS, &r, D3DTEXF_NONE);
+            ++drawn;
+            area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
+        }
+        (void)dstT;
+        cur = srcT;
+        if (timing) { g_lqB->Issue(D3DISSUE_END); g_lqDis->Issue(D3DISSUE_END); g_lqFreq->Issue(D3DISSUE_END); g_lqState = 1; g_lqDrawn = drawn; g_lqArea = area; }
+        if (g_lqState == 1) {
+            BOOL dis = TRUE; UINT64 f = 0, t0 = 0, t1 = 0;
+            if (g_lqDis->GetData(&dis, sizeof dis, 0) == S_OK && g_lqFreq->GetData(&f, sizeof f, 0) == S_OK &&
+                g_lqA->GetData(&t0, sizeof t0, 0) == S_OK && g_lqB->GetData(&t1, sizeof t1, 0) == S_OK) {
+                if (!dis && f) mmenu::Log("gfx: lamp passes %.2f ms GPU (%d of %d bulbs on screen, %.2f screens of pixels)", (t1 - t0) * 1000.0 / f, g_lqDrawn, g_bulbN, g_lqArea);
+                g_lqState = 0; g_lqNext = NowS() + 5.0;
+            }
+        }
     }
     if (FireworksLive() && g_psFireworks && g_intzUsed && !g_msaaOn) {
         float c[8][4];
@@ -2465,10 +2679,14 @@ static void CheckKeysAndIni() {
     HWND fg = GetForegroundWindow();
     if (fg) GetWindowThreadProcessId(fg, &pid);
     bool now = pid == GetCurrentProcessId() && (GetAsyncKeyState(VK_F11) & 0x8000) != 0;
-    if (now && !down && V("gfx_shotkey")) g_shotPending = true;
+    bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (now && !down && shift) FgDebugAsk();  // Shift+F11: frame generation debugger records the next frames (framegen.inc)
+    else if (now && !down && V("gfx_shotkey")) g_shotPending = true;
     if ((g_presents & 31) == 0) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
         std::string req = ExeDirFile("gfx_shot.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); g_shotPending = true; }
+        std::string fq = ExeDirFile("fgdebug.txt");  // ... or a frame generation recording
+        if (GetFileAttributesA(fq.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(fq.c_str()); FgDebugAsk(); }
     }
     down = now;
 }

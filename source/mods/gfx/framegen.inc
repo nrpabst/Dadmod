@@ -160,14 +160,23 @@ float4 ps_fg_make(float2 uv : TEXCOORD0) : COLOR {
     float3 b = tex2Dlod(fs1, float4(uv + (1 - t) * dv, 0, 0)).rgb;
     // how well the two moved pictures agree around this pixel (3x3): where they don't, the vector is wrong here
     // (or something appeared from behind something else) and the nearer real picture is shown unmoved instead
-    float e = 0;
+    // Also: what is at this pixel in one real picture must be found one whole vector away in the other (in at least
+    // one direction). 2026-11-22 recording: on a dark floor the search found "floor here, floor there" vectors
+    // that skip right over the skater's legs and board; both moved pictures showed floor, so they agreed and the
+    // legs vanished from the made-up frames (flashing at 60 Hz). Such a vector can't carry what is really here.
+    float e = 0, ef = 0, eb = 0;
     [unroll] for (int y = -1; y <= 1; y++) {
         [unroll] for (int x = -1; x <= 1; x++) {
             float2 q = uv + float2(x, y) * fgpx.xy;
             float3 e3 = abs(tex2Dlod(fs0, float4(q - t * dv, 0, 0)).rgb - tex2Dlod(fs1, float4(q + (1 - t) * dv, 0, 0)).rgb);
+            float3 f3 = abs(tex2Dlod(fs0, float4(q, 0, 0)).rgb - tex2Dlod(fs1, float4(q + dv, 0, 0)).rgb);
+            float3 b3 = abs(tex2Dlod(fs1, float4(q, 0, 0)).rgb - tex2Dlod(fs0, float4(q - dv, 0, 0)).rgb);
             e += max(e3.r, max(e3.g, e3.b));
+            ef += max(f3.r, max(f3.g, f3.b));
+            eb += max(b3.r, max(b3.g, b3.b));
         }
     }
+    e = max(e, min(ef, eb));
     float w = saturate((e / 9.0 - 0.035) * 15.0);
     float3 n0 = tex2Dlod(fs0, float4(uv, 0, 0)).rgb;
     float3 n1 = tex2Dlod(fs1, float4(uv, 0, 0)).rgb;
@@ -175,7 +184,13 @@ float4 ps_fg_make(float2 uv : TEXCOORD0) : COLOR {
     float3 full = tex2Dlod(fs3, float4(uv, 0, 0)).rgb;
     float3 h3 = abs(full - n1);
     float hud = max(h3.r, max(h3.g, h3.b)) > 0.004 ? 1.0 : 0.0;
-    return float4(lerp(c, full, hud), 1);
+    float3 o = lerp(c, full, hud);
+    if (fgB.y > 0.5) {  // debug view (gfx_test.ini fgshow = 1): red = motion guess rejected, blue = HUD, magenta corner = made-up frame
+        o = lerp(o, float3(1, 0, 0), w * 0.5);
+        o = lerp(o, float3(0, 0.3, 1), hud * 0.5);
+        if (uv.x > 1 - 24 * fgpx.x && uv.y < 24 * fgpx.y) o = float3(1, 0, 1);
+    }
+    return float4(o, 1);
 }
 )HLSL";
 
@@ -183,6 +198,7 @@ static IDirect3DPixelShader9 *g_fgCopy = nullptr, *g_fgLuma = nullptr, *g_fgSear
 static bool g_fgShadersTried = false, g_fgShadersOk = false;
 static bool g_fgDead = false;        // a shader or texture could not be made: off for this session
 static int g_fgTestMult = 0;         // gfx_test.ini fgmult
+static int g_fgDebugView = 0;        // gfx_test.ini fgshow
 
 static double FgFreq() {
     static LARGE_INTEGER f = {};
@@ -205,6 +221,15 @@ static void FgReadTest() {
     if (eq == std::string::npos) return;
     int m = atoi(s.c_str() + eq + 1);
     if (m >= 1 && m <= 4) { g_fgTestMult = m; mmenu::Log("gfx: frame generation [TEST: %dx forced, frames spaced by the clock]", m); }
+}
+static void FgReadShow() {  // gfx_test.ini fgshow = 1: debug view in the made-up frames
+    std::string s;
+    g_fgDebugView = 0;
+    if (!ReadWholeFile(ExeDirFile("gfx_test.ini"), s)) return;
+    size_t p = s.find("fgshow");
+    if (p == std::string::npos) return;
+    size_t eq = s.find('=', p);
+    if (eq != std::string::npos && atoi(s.c_str() + eq + 1) == 1) { g_fgDebugView = 1; mmenu::Log("gfx: frame generation [TEST: debug view]"); }
 }
 
 // ---- compiling (any thread: the compiler and the cache files are guarded by CompileLock in gfx.inc) ----
@@ -291,6 +316,7 @@ static bool FgMakeShaders(IDirect3DDevice9* dev) {
     if (g_fgShadersTried) return g_fgShadersOk;
     g_fgShadersTried = true;
     FgReadTest();
+    FgReadShow();
     CardCheck(dev);
     if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
     auto compile = g_dx ? (CompileShader_t)GetProcAddress(g_dx, "D3DXCompileShader") : nullptr;
@@ -334,7 +360,11 @@ static int g_fgCur = 0;             // slot of the newest 3D picture
 static bool g_fgSceneThis = false;  // the 3D picture of this frame was copied at the HUD boundary
 static bool g_fgVpValid = false;    // g_fgVp holds the motion of the frame pair right before this one
 
+static void FgRecFree();   // the debugger's surfaces (below)
+static void FgQueryFree();
 static void FgFree() {
+    FgRecFree();
+    FgQueryFree();
     IDirect3DTexture9** all[] = {&g_fgS[0], &g_fgS[1], &g_fgF, &g_fgL[0][0], &g_fgL[0][1], &g_fgL[0][2], &g_fgL[0][3],
                                  &g_fgL[1][0], &g_fgL[1][1], &g_fgL[1][2], &g_fgL[1][3], &g_fgV[0], &g_fgV[1], &g_fgV[2], &g_fgV[3],
                                  &g_fgVt, &g_fgVp};
@@ -508,7 +538,9 @@ static bool FgCameraCut(const D3DMATRIX& m) {
 // The game's Present (via EndFrame, before RunScreen): keep this frame back and put the first in-between frame
 // in the back buffer. Returns true when it did.
 static void FgDraw(IDirect3DDevice9* dev, IDirect3DSurface9* bb, int prev, int cur, float t, bool search);
+static const char* g_fgNoPair = "off";  // why this tick shows no in-between frames (the debugger's sheet)
 static bool FgFrame(IDirect3DDevice9* dev) {
+    g_fgNoPair = "off";
     g_fgGenNow = false;
     g_fgBbGenerated = false;
     g_fgPlanN = 0;
@@ -533,7 +565,7 @@ static bool FgFrame(IDirect3DDevice9* dev) {
         return false;
     }
     g_fgBsThis = false;
-    auto stop = [&](const char* why) { g_fgRunning = false; g_fgHave[0] = g_fgHave[1] = false; if (why) FgWhy(why); return false; };
+    auto stop = [&](const char* why) { g_fgRunning = false; g_fgHave[0] = g_fgHave[1] = false; if (why) FgWhy(why); g_fgNoPair = "not running"; return false; };
     if (g_reshadeLoaded) return stop("off: ReShade is loaded");
     if (V("gfx_framegen") != g_fgPickWas) { g_fgPickWas = V("gfx_framegen"); g_fgRefresh = 0; g_fgFsAsked = false; }  // a new pick: check again now
     if (g_fgPresentKnown && g_fgWindowed && !g_fgImmediate) {  // turned on in a window: reset once so presents stop waiting
@@ -580,6 +612,7 @@ static bool FgFrame(IDirect3DDevice9* dev) {
     // a pair = this frame and the one right before it, on time, with no camera cut between them. Without one
     // (first frame, a skipped or late tick, a cut) only the pyramid is built and the real frame goes out now.
     bool pair = g_fgHave[p] && g_fgSeq[p] + 1 == g_presents && gap < 1.5 / 60;
+    g_fgNoPair = !g_fgHave[p] ? "first frame" : g_fgSeq[p] + 1 != g_presents ? "skipped tick" : gap >= 1.5 / 60 ? "late tick" : cut ? "camera cut" : "";
     if (pair && cut) { ++g_fgStats[3]; pair = false; }
     if (pair) FgMakePlan();
     pair = pair && g_fgPlanN >= 1 && g_fgPlan[0] < 1.0f;
@@ -640,7 +673,7 @@ static void FgDraw(IDirect3DDevice9* dev, IDirect3DSurface9* bb, int prev, int c
         }
     }
     if (t > 0) {
-        float a[4] = {1.0f / g_fgLw[0], 1.0f / g_fgLh[0], (float)g_fgLw[0], (float)g_fgLh[0]}, b[4] = {t, 0, 0, 0};
+        float a[4] = {1.0f / g_fgLw[0], 1.0f / g_fgLh[0], (float)g_fgLw[0], (float)g_fgLh[0]}, b[4] = {t, g_fgDebugView ? 1.0f : 0.0f, 0, 0};
         dev->SetPixelShaderConstantF(90, a, 1);
         dev->SetPixelShaderConstantF(91, b, 1);
         Pass(dev, g_fgMake, bb, w, h, w, h, g_fgS[prev], g_fgS[cur], g_fgVp, g_fgF);
@@ -682,8 +715,16 @@ static FgVb FgVblankInfo(IDirect3DDevice9* dev) {
             *(UINT32*)buf = sizeof buf;
             if (SUCCEEDED(dwm(nullptr, buf))) {
                 ULONGLONG per = *(ULONGLONG*)(buf + 12), vb = *(ULONGLONG*)(buf + 28);
+                UINT32 num = *(UINT32*)(buf + 4), den = *(UINT32*)(buf + 8);
                 double p = (double)per / FgFreq();
-                if (per && vb && fabs(p - want) < want * 0.05) { r.ok = true; r.vb = (double)vb / FgFreq(); r.per = p; src = 1; }
+                static double keep = 0;  // one fixed period: refresh numbers must stay the same from call to call
+                if (per && vb && fabs(p - want) < want * 0.05) {
+                    if (keep <= 0 || fabs(p - keep) > keep * 0.01) {
+                        keep = p;
+                        mmenu::Log("gfx: frame generation: Windows reports the refresh as %u/%u Hz (%.4f ms)", num, den, p * 1000.0);
+                    }
+                    r.ok = true; r.vb = (double)vb / FgFreq(); r.per = keep; src = 1;
+                }
             }
         }
         if (!r.ok) {
@@ -714,7 +755,7 @@ static long long FgIv(const FgVb& v, double t, double* ph) {
     if (ph) *ph = x - (double)iv;
     return iv;
 }
-static double FgIvTime(const FgVb& v, long long iv) { return v.vb + ((double)iv - floor(v.vb / v.per) + 0.15) * v.per; }
+static double FgIvStart(const FgVb& v, long long iv) { return v.vb + ((double)iv - floor(v.vb / v.per)) * v.per; }
 static void FgWaitUntil(double t) { while (FgNow() < t) Sleep(0); }  // the game's own wait does the same (Sleep(0) spin)
 
 // which refresh each frame really went to (just before its Present), for the log
@@ -732,8 +773,178 @@ static void FgNoteShown(IDirect3DDevice9* dev) {
     g_fgShownIv = iv;
 }
 
+// ---- waiting for the card: a frame is presented only once the card has finished drawing it, so its refresh is
+// decided by when we present it, not by how busy the card is (event queries exist on every D3D9 card; if one
+// can't be made, frames aren't waited for)
+static IDirect3DQuery9* g_fgQuery = nullptr;
+static bool g_fgQueryTried = false;
+static void FgQueryFree() { if (g_fgQuery) { g_fgQuery->Release(); g_fgQuery = nullptr; } g_fgQueryTried = false; }
+static double FgGpuWait(IDirect3DDevice9* dev) {
+    if (!g_fgQueryTried) {
+        g_fgQueryTried = true;
+        if (FAILED(dev->CreateQuery(D3DQUERYTYPE_EVENT, &g_fgQuery)) || !g_fgQuery) {
+            g_fgQuery = nullptr;
+            static bool said = false;
+            if (!said) { said = true; mmenu::Log("gfx: frame generation: no event query on this card (frames aren't waited for)"); }
+        }
+    }
+    if (!g_fgQuery) return 0;
+    double t0 = FgNow();
+    if (FAILED(g_fgQuery->Issue(D3DISSUE_END))) return 0;
+    while (g_fgQuery->GetData(nullptr, 0, D3DGETDATA_FLUSH) == S_FALSE && FgNow() - t0 < 0.02) Sleep(0);
+    return FgNow() - t0;
+}
+
+// ---- the debugger (Noah 2026-11-22: "create a debugger so you can see whats happening, im seeing flashing now") ----
+// Shift+F11 (or a file dadmod\fgdebug.txt) records the next 120 frames that go to the screen, exactly as presented,
+// at half size, then saves them as PNGs plus frames.csv (time, kind, t, which refresh it was aimed at and which it
+// got, card wait, our wait) to dadmod\fgdebug\<date_time>\. The game pauses for a few seconds while it saves.
+static const int kFgRecN = 120;
+static IDirect3DSurface9* g_fgRec[kFgRecN] = {};
+struct FgRecRow { double tm, phase, gpu, wait; long long ivWant, ivReal; float t; int kind, tick, src; const char* why; };
+static FgRecRow g_fgRecRow[kFgRecN];
+static int g_fgRecI = -1;
+static UINT g_fgRecW = 0, g_fgRecH = 0;
+static D3DFORMAT g_fgRecFmt = D3DFMT_X8R8G8B8;  // the back buffer's own format (as screenshots do)
+static bool g_fgRecAsk = false;
+static const char* const kFgKind[] = {"real_nofg", "gen_first", "gen", "real", "real_noroom"};
+static void FgDebugAsk() { g_fgRecAsk = true; }
+static std::string g_fgRecDir;      // the last recording's folder
+static bool g_fgSnapAsk = false;    // after a recording: save the next made-up frame's inputs at full size
+static void FgSaveSurf(IDirect3DDevice9* dev, IDirect3DSurface9* src, const std::string& path) {
+    if (!src) return;
+    if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
+    auto save = g_dx ? (SaveSurface_t)GetProcAddress(g_dx, "D3DXSaveSurfaceToFileW") : nullptr;
+    if (!save) return;
+    D3DSURFACE_DESC d;
+    src->GetDesc(&d);
+    IDirect3DSurface9 *plain = nullptr, *mem = nullptr;
+    if (FAILED(dev->CreateRenderTarget(d.Width, d.Height, d.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &plain, nullptr))) return;
+    if (SUCCEEDED(dev->StretchRect(src, nullptr, plain, nullptr, D3DTEXF_NONE)) &&
+        SUCCEEDED(dev->CreateOffscreenPlainSurface(d.Width, d.Height, d.Format, D3DPOOL_SYSTEMMEM, &mem, nullptr)) &&
+        SUCCEEDED(dev->GetRenderTargetData(plain, mem))) {
+        wchar_t wpath[1024];
+        if (MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, wpath, 1024) > 0) save(wpath, 3 /*D3DXIFF_PNG*/, mem, nullptr, nullptr);
+    }
+    if (mem) mem->Release();
+    plain->Release();
+}
+static void FgSaveTex(IDirect3DDevice9* dev, IDirect3DTexture9* t, const std::string& path) {
+    IDirect3DSurface9* s = FgSurf(t);
+    FgSaveSurf(dev, s, path);
+    if (s) s->Release();
+}
+// the 3D pictures (before/after), the whole held-back frame, the luma, the motion vectors (RGBA = x hi, x lo,
+// y hi, y lo; 128,0 = 0) and the made-up frame itself, full size
+static void FgSnap(IDirect3DDevice9* dev) {
+    g_fgSnapAsk = false;
+    if (g_fgRecDir.empty()) return;
+    int p = g_fgCur ^ 1, c = g_fgCur;
+    FgSaveTex(dev, g_fgS[p], g_fgRecDir + "\\snap_scene_before.png");
+    FgSaveTex(dev, g_fgS[c], g_fgRecDir + "\\snap_scene_after.png");
+    FgSaveTex(dev, g_fgF, g_fgRecDir + "\\snap_full_frame_after.png");
+    FgSaveTex(dev, g_fgL[p][0], g_fgRecDir + "\\snap_luma_before.png");
+    FgSaveTex(dev, g_fgL[c][0], g_fgRecDir + "\\snap_luma_after.png");
+    FgSaveTex(dev, g_fgVp, g_fgRecDir + "\\snap_vectors.png");
+    IDirect3DSurface9* bb = nullptr;
+    if (SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb) {
+        FgSaveSurf(dev, bb, g_fgRecDir + "\\snap_made_up_frame.png");
+        bb->Release();
+    }
+    mmenu::Log("gfx: frame generation debugger: saved one made-up frame's inputs (snap_*.png) to %s", g_fgRecDir.c_str());
+}
+static void FgRecFree() {
+    for (auto& r : g_fgRec) if (r) { r->Release(); r = nullptr; }
+    g_fgRecI = -1;
+}
+static void FgRecStart(IDirect3DDevice9* dev) {
+    g_fgRecAsk = false;
+    if (g_fgRecI >= 0) return;
+    IDirect3DSurface9* bb = nullptr;
+    if (FAILED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    D3DSURFACE_DESC d;
+    bb->GetDesc(&d);
+    bb->Release();
+    g_fgRecW = d.Width / 2 ? d.Width / 2 : 1;
+    g_fgRecH = d.Height / 2 ? d.Height / 2 : 1;
+    g_fgRecFmt = d.Format;
+    for (int i = 0; i < kFgRecN; ++i) {
+        HRESULT hr = dev->CreateRenderTarget(g_fgRecW, g_fgRecH, g_fgRecFmt, D3DMULTISAMPLE_NONE, 0, FALSE, &g_fgRec[i], nullptr);
+        if (FAILED(hr) || !g_fgRec[i]) {
+            g_fgRec[i] = nullptr;
+            FgRecFree();
+            mmenu::Log("gfx: frame generation debugger: not enough video memory to record (hr 0x%08lX)", hr);
+            return;
+        }
+    }
+    g_fgRecI = 0;
+    mmenu::Log("gfx: frame generation debugger: recording the next %d frames shown", kFgRecN);
+}
+static void FgRecSave(IDirect3DDevice9* dev) {
+    if (!g_dx) g_dx = LoadLibraryA("d3dx9_43.dll");
+    auto save = g_dx ? (SaveSurface_t)GetProcAddress(g_dx, "D3DXSaveSurfaceToFileW") : nullptr;
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    char sub[64];
+    snprintf(sub, sizeof sub, "fgdebug\\%04d%02d%02d_%02d%02d%02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    CreateDirectoryA(ExeDirFile("fgdebug").c_str(), nullptr);
+    std::string dir = ExeDirFile(sub);
+    CreateDirectoryA(dir.c_str(), nullptr);
+    IDirect3DSurface9* mem = nullptr;
+    dev->CreateOffscreenPlainSurface(g_fgRecW, g_fgRecH, g_fgRecFmt, D3DPOOL_SYSTEMMEM, &mem, nullptr);
+    std::string csv = "frame,ms,kind,t,refresh_aimed,refresh_got,phase_in_refresh,card_wait_ms,our_wait_ms,timing,tick,no_frames_because\n";
+    static const char* kSrc[] = {"clock", "windows", "scanline", "vsync"};
+    const FgRecRow& r0 = g_fgRecRow[0];
+    int saved = 0;
+    for (int i = 0; i < kFgRecN; ++i) {
+        const FgRecRow& r = g_fgRecRow[i];
+        char line[320];
+        long long base = r0.ivReal >= 0 ? r0.ivReal : 0;
+        snprintf(line, sizeof line, "%d,%.2f,%s,%.3f,%lld,%lld,%.2f,%.2f,%.2f,%s,%d,%s\n", i, (r.tm - r0.tm) * 1000.0, kFgKind[r.kind], r.t,
+                 r.ivWant >= 0 ? r.ivWant - base : -1, r.ivReal >= 0 ? r.ivReal - base : -1, r.phase, r.gpu * 1000.0, r.wait * 1000.0,
+                 r.src >= 0 && r.src <= 3 ? kSrc[r.src] : "?", r.tick, r.why ? r.why : "");
+        csv += line;
+        if (save && mem && g_fgRec[i] && SUCCEEDED(dev->GetRenderTargetData(g_fgRec[i], mem))) {
+            char name[96];
+            snprintf(name, sizeof name, "\\%03d_%s_t%.2f.png", i, kFgKind[r.kind], r.t);
+            std::string path = dir + name;
+            wchar_t wpath[1024];
+            if (MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, wpath, 1024) > 0 && SUCCEEDED(save(wpath, 3 /*D3DXIFF_PNG*/, mem, nullptr, nullptr))) ++saved;
+        }
+    }
+    WriteWholeFile(dir + "\\frames.csv", csv);
+    if (mem) mem->Release();
+    FgRecFree();
+    g_fgRecDir = dir;
+    g_fgSnapAsk = true;
+    mmenu::Log("gfx: frame generation debugger: saved %d frames + frames.csv to %s", saved, dir.c_str());
+    snprintf(g_shotMsg, sizeof g_shotMsg, "Frame generation recording saved: dadmod\\%s", sub);
+    g_shotMsgUntil = GetTickCount() + 600;
+}
+// right before every Present (the game's and ours): kind 0 real frame with no in-between frames, 1 the first
+// in-between frame (the game's Present), 2 a later in-between frame, 3 the real frame after them, 4 real frame
+// shown instead because there was no room
+static void FgRec(IDirect3DDevice9* dev, int kind, float t, long long ivWant, double gpu, double wait) {
+    if (g_fgRecAsk) FgRecStart(dev);
+    if (g_fgRecI < 0) return;
+    IDirect3DSurface9* bb = nullptr;
+    if (SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb) {
+        dev->StretchRect(bb, nullptr, g_fgRec[g_fgRecI], nullptr, D3DTEXF_LINEAR);
+        bb->Release();
+    }
+    FgRecRow& r = g_fgRecRow[g_fgRecI];
+    r.tm = FgNow();
+    FgVb v = FgVblankInfo(dev);
+    r.phase = -1;
+    r.ivReal = v.ok ? FgIv(v, r.tm, &r.phase) : -1;
+    r.ivWant = ivWant;
+    r.t = t; r.kind = kind; r.gpu = gpu; r.wait = wait; r.tick = g_fgTicks; r.src = g_fgVbSrc;
+    r.why = kind == 0 ? g_fgNoPair : "";
+    if (++g_fgRecI == kFgRecN) FgRecSave(dev);
+}
+
 // ---- the frames of one real frame ----
-struct FgItem { double due; float t; };  // t < 0: the real frame
+struct FgItem { double due; float t; long long iv; };  // t < 0: the real frame
 static FgItem g_fgQ[5];
 static int g_fgQn = 0, g_fgQi = 0;
 static double g_fgDue[5];
@@ -753,8 +964,10 @@ static void FgRun(bool late);
 // and hold the game's Present (the first in-between frame) until its refresh starts. If they don't all fit before
 // the game would skip its next render, show only the real frame now (2026-11-22: the real frame used to go out
 // right behind the in-between frame, which was then never seen).
+static long long g_fgIv0 = -1;      // the refresh the first frame of this real frame is aimed at
 static void FgBeforePresent(IDirect3DDevice9* dev) {
-    if (!g_fgGenNow) { FgNoteShown(dev); return; }
+    if (!g_fgGenNow) { FgNoteShown(dev); FgRec(dev, 0, 1.0f, -1, 0, 0); return; }
+    double gpu = FgGpuWait(dev);  // the game's frame (and our first in-between frame) finished on the card
     double now = FgNow();
     double begin = g_fgBegin > 0 && g_fgBegin <= now ? g_fgBegin : now;
     // a tick that starts 1.5 ticks behind its schedule skips its render (0x44EEF0); the schedule's next tick is at
@@ -766,12 +979,21 @@ static void FgBeforePresent(IDirect3DDevice9* dev) {
     FgVb v = FgVblankInfo(dev);
     long long iv0 = -1;
     if (v.ok) {
+        // The frame is finished on the card (FgGpuWait), so it can go out anywhere inside a refresh except right
+        // at its edges, where the compositor takes the picture. Go now if we can (2026-11-22 recording: holding
+        // the game's frame to mid-refresh delayed the game, its frames drifted, and every ~7th real frame had
+        // no room); the frames after it follow at exactly one refresh (or gap) each.
         double ph;
         long long iv = FgIv(v, now, &ph);
-        iv0 = iv + (ph > 0.7 ? 1 : 0);  // too late in this refresh: the compositor may not take it in time
-        if (g_fgLastIv >= 0 && iv0 < g_fgLastIv + g_fgGap && g_fgLastIv + g_fgGap - iv0 < 8) iv0 = g_fgLastIv + g_fgGap;
-        for (int j = 0; j < n; ++j) g_fgDue[j] = FgIvTime(v, iv0 + (long long)j * g_fgGap);
-        if (g_fgDue[0] < now) g_fgDue[0] = now;
+        iv0 = iv;
+        double t0 = now;
+        if (ph < 0.05) t0 = FgIvStart(v, iv) + 0.05 * v.per;
+        else if (ph > 0.95) { iv0 = iv + 1; t0 = FgIvStart(v, iv0) + 0.05 * v.per; }
+        if (g_fgLastIv >= 0 && iv0 < g_fgLastIv + g_fgGap && g_fgLastIv - iv0 < 8) {  // the previous frame still owns this refresh
+            iv0 = g_fgLastIv + g_fgGap;
+            t0 = FgIvStart(v, iv0) + 0.05 * v.per;
+        }
+        for (int j = 0; j < n; ++j) g_fgDue[j] = t0 + j * g_fgGap * v.per;
     } else if (g_fgVbSrc == 3) {
         for (int j = 0; j < n; ++j) g_fgDue[j] = now;  // the card shows one per refresh
     } else {
@@ -791,12 +1013,17 @@ static void FgBeforePresent(IDirect3DDevice9* dev) {
         g_fgPhase = 0;
         g_fgLastIv = v.ok ? FgIv(v, now, nullptr) : -1;
         FgNoteShown(dev);
+        FgRec(dev, 4, 1.0f, -1, gpu, 0);
         return;
     }
+    if (g_fgSnapAsk) FgSnap(dev);
+    double w0 = FgNow();
     FgWaitUntil(g_fgDue[0]);
+    g_fgIv0 = iv0;
     g_fgLastIv = iv0 >= 0 ? iv0 + (long long)(n - 1) * g_fgGap : -1;
     ++g_fgStats[0];
     FgNoteShown(dev);
+    FgRec(dev, 1, g_fgPlan[0], iv0, gpu, FgNow() - w0);
 }
 
 // after the game's Present returned: show the rest of this real frame's frames at their times
@@ -808,7 +1035,8 @@ static void FgQueueInner(IDirect3DDevice9* dev, IDirect3DSwapChain9* sc, const R
     g_fgHasA = a != nullptr; if (a) g_fgRa = *a;
     g_fgHasB = b != nullptr; if (b) g_fgRb = *b;
     g_fgQn = g_fgQi = 0;
-    for (int j = 1; j < g_fgPlanN; ++j) g_fgQ[g_fgQn++] = {g_fgDue[j], g_fgPlan[j] >= 1.0f ? -1.0f : g_fgPlan[j]};
+    for (int j = 1; j < g_fgPlanN; ++j)
+        g_fgQ[g_fgQn++] = {g_fgDue[j], g_fgPlan[j] >= 1.0f ? -1.0f : g_fgPlan[j], g_fgIv0 >= 0 ? g_fgIv0 + (long long)j * g_fgGap : -1};
     FgRun(false);
 }
 static void FgQueue(IDirect3DDevice9* dev, IDirect3DSwapChain9* sc, const RECT* a, const RECT* b, HWND w, const RGNDATA* r, DWORD f, HRESULT hr) {
@@ -822,7 +1050,7 @@ static void FgQueue(IDirect3DDevice9* dev, IDirect3DSwapChain9* sc, const RECT* 
                        g_fgRate, g_fgStats[0], g_fgStats[2], g_fgStats[3], g_fgStats[4], g_fgIvStats[0], g_fgIvStats[1], g_fgIvStats[2]);
     }
 }
-static void FgShow(const FgItem& it) {
+static void FgShow(const FgItem& it, bool wait) {
     IDirect3DDevice9* dev = g_fgDev;
     IDirect3DSurface9* bb = nullptr;
     if (!dev || FAILED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) { FgClear(); return; }
@@ -830,9 +1058,12 @@ static void FgShow(const FgItem& it) {
     bb->Release();
     g_fgBbGenerated = it.t > 0;
     RunScreen(dev);  // the screen effects, FPS counter and screenshot (real frames only) on this frame too
+    double gpu = FgGpuWait(dev), w0 = FgNow();
+    if (wait) FgWaitUntil(it.due);
     const RECT* a = g_fgHasA ? &g_fgRa : nullptr;
     const RECT* b = g_fgHasB ? &g_fgRb : nullptr;
     FgNoteShown(dev);
+    FgRec(dev, it.t > 0 ? 2 : 3, it.t > 0 ? it.t : 1.0f, it.iv, gpu, FgNow() - w0);
     bool wasIn = g_inPost;
     g_inPost = true;
     HRESULT hr = g_fgSc ? g_origSCPresent(g_fgSc, a, b, g_fgWnd, nullptr, g_fgFlags) : g_origPresent(dev, a, b, g_fgWnd, nullptr);
@@ -845,12 +1076,11 @@ static void FgRun(bool late) {
     while (g_fgQi < g_fgQn) {
         FgItem it = g_fgQ[g_fgQi];
         bool real = it.t < 0;
-        if (!late) FgWaitUntil(it.due);
         ++g_fgQi;
         if (late) ++g_fgStats[4];
         if (late && !real) continue;
         if (!real) ++g_fgStats[0];
-        FgShow(it);
+        FgShow(it, !late);  // draws it, waits for the card, then for its refresh
     }
     FgClear();
 }

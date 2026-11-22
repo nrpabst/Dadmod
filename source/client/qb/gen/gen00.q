@@ -1806,7 +1806,27 @@ script dadmod_noclip_void_watch
 endscript
 
 script dadmod_homelevel_tick
+    dadmod_hl_go = 0
     if THUGRECOMP_KeyPressed key = "Home"
+        dadmod_hl_go = 1
+    endif
+    dadmod_hl_sticks = 0
+    if THUGRECOMP_PadHeld button = "leftstick"
+        if THUGRECOMP_PadHeld button = "rightstick"
+            dadmod_hl_sticks = 1
+        endif
+    endif
+    if (<dadmod_hl_sticks> = 1)
+        if root_window : GetSingleTag dadmod_hl_sticks_was
+            if (<dadmod_hl_sticks_was> = 0)
+                dadmod_hl_go = 1
+            endif
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
+    endif
+    if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open
             SpawnScript dadmod_homelevel_open NotSessionSpecific = 1
@@ -7922,6 +7942,9 @@ script dadmod_pause_graphics
     show_gradient
     boxed
     }
+    if ScriptExists dadmod_safestart_gfx_rows
+        dadmod_safestart_gfx_rows
+    endif
     dadmod_layout_item name = "gfx_postfx" label = "" grey = 0 dadmod_pause = 1
     GetArraySize dadmod_pause_gfx_groups
     i = 0
@@ -8320,221 +8343,6 @@ more_level_qbs = [
 "levels\\BA\\BA_cutscene_fast_particle_data.qb"
 "levels\\BA\\BA_level_fast_particle_data.qb"
 "levels\\ba\\ba_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_be = {
-structure_name = level_Mainmenu_be
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 14.58
-COIM_size = 1331200
-tod_manager_active = 1
-pre = "BE_scripts.pre"
-scnpre = "BEscn.pre"
-level = "BE"
-sky = "BE_Sky"
-colpre = "BEcol.pre"
-pedpre = "BEped.pre"
-level_sfx_qb = "levels\\BE\\BE_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 3
-num_f_heads = 3
-num_f_torsos = 3
-num_f_legs = 3
-overview_cam_angle = 0
-overview_cam_zoom = (3e+03,8e+03,-5e+03)
-thugpro_prx = "mainmenu_be_scripts.pre"
-qb = "levels\\mainmenu_be\\BE.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\BE\\BE_scripts.qb"
-"levels\\BE\\BE_cutscene_particle_data.qb"
-"levels\\BE\\BE_level_particle_data.qb"
-"levels\\BE\\BE_cutscene_fast_particle_data.qb"
-"levels\\BE\\BE_level_fast_particle_data.qb"
-"levels\\be\\be_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_au = {
-structure_name = level_Mainmenu_au
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 12.28
-tod_manager_active = 1
-pre = "AU_scripts.pre"
-scnpre = "AUscn.pre"
-level = "AU"
-sky = "AU_Sky"
-colpre = "AUcol.pre"
-pedpre = "AUped.pre"
-level_sfx_qb = "levels\\AU\\AU_sfx.qb"
-sun_theta = [ 5e+01 65.0 9e+01 9e+01 ]
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-num_f_heads = 4
-num_f_torsos = 4
-num_f_legs = 4
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_04 }
-{ Name = shrimpvendor Type = guest }
-{ Name = minikartdriver Type = flavor }
-]
-overview_cam_zoom = (3.5e+03,6.5e+03,0.0)
-thugpro_prx = "mainmenu_au_scripts.pre"
-qb = "levels\\mainmenu_au\\au.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\AU\\AU_scripts.qb"
-"levels\\AU\\AU_cutscene_particle_data.qb"
-"levels\\AU\\AU_level_particle_data.qb"
-"levels\\AU\\AU_cutscene_fast_particle_data.qb"
-"levels\\AU\\AU_level_fast_particle_data.qb"
-"levels\\au\\au_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_no = {
-structure_name = level_Mainmenu_no
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 13.93
-COIM_size = 1331200
-tod_manager_active = 1
-pre = "NO_scripts.pre"
-scnpre = "NOscn.pre"
-level = "NO"
-sky = "NO_Sky"
-colpre = "NOcol.pre"
-pedpre = "NOped.pre"
-level_sfx_qb = "levels\\NO\\NO_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 1.3
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 3
-num_m_torsos = 3
-num_m_legs = 3
-num_f_heads = 4
-num_f_torsos = 4
-num_f_legs = 3
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_05 }
-{ Type = guest Name = jester }
-{ Type = flavor Name = voodoo }
-]
-overview_cam_angle = 90
-overview_cam_zoom = (-1.5e+03,6e+03,-1e+03)
-thugpro_prx = "mainmenu_no_scripts.pre"
-qb = "levels\\mainmenu_no\\NO.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\NO\\NO_scripts.qb"
-"levels\\NO\\NO_cutscene_particle_data.qb"
-"levels\\NO\\NO_level_particle_data.qb"
-"levels\\NO\\NO_cutscene_fast_particle_data.qb"
-"levels\\NO\\NO_level_fast_particle_data.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

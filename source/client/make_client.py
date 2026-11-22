@@ -237,6 +237,18 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
     shutil.copyfile(os.path.join(inst, 'dadmod.ps1'), os.path.join(out, 'dadmod', 'updater', 'dadmod.ps1'))
     want.append(os.path.join('dadmod', 'updater', 'dadmod.ps1'))
+    # lit windows at night (mods/lamplights, 0.10.1): the window list + pane masks gfx.inc reads from <game>\dadmod\
+    # (our own masks: one pane number per texel, made by mods/lamplights/gen_windows.py; no game texture bytes)
+    lsrc = os.path.join(WORK, 'mods', 'lamplights', 'data')
+    if os.path.isdir(os.path.join(out, 'dadmod', 'lampwindows')):
+        shutil.rmtree(os.path.join(out, 'dadmod', 'lampwindows'))
+    os.makedirs(os.path.join(out, 'dadmod', 'lampwindows'))
+    shutil.copyfile(os.path.join(lsrc, 'lampwindows.txt'), os.path.join(out, 'dadmod', 'lampwindows.txt'))
+    want.append(os.path.join('dadmod', 'lampwindows.txt'))
+    for n in sorted(os.listdir(os.path.join(lsrc, 'lampwindows'))):
+        if n.lower().endswith('.raw'):
+            shutil.copyfile(os.path.join(lsrc, 'lampwindows', n), os.path.join(out, 'dadmod', 'lampwindows', n))
+            want.append(os.path.join('dadmod', 'lampwindows', n))
     if os.path.isfile(os.path.join(out, 'data', 'pre', 'dadmod_levelselect.prx')):     # built only when there are pictures
         want.append(os.path.join('data', 'pre', 'dadmod_levelselect.prx'))
     ml = os.path.join('dadmod', 'menulevels')
@@ -502,6 +514,37 @@ def default_settings(out):
     gfx_fixed = {'gfx_fogamt': 5, 'gfx_skywxver': 1,  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
                  'gfx_tricksfx': 30, 'gfx_levelsfx': 100, 'gfx_telesfx': 100}  # 0.9.19: sound sliders as shipped before (Dev has them muted for testing); Frame generation default Off (gfx_off)
     gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
+    # street lamps + lit windows (mods/lamplights, 0.10.1): Dev's lamp test values never ship; a fresh install gets the
+    # values Noah picked on 2026-11-22 (moonlight was not accepted: off), as one block at the end of the file
+    lamp_keys = ('gfx_lampbulbs', 'gfx_bulbsize', 'gfx_bulbstr', 'gfx_lamppool', 'gfx_lampstr', 'gfx_lamplift', 'gfx_lampreach',
+                 'gfx_windows', 'gfx_windowstr', 'gfx_windowshare', 'gfx_lamps', 'gfx_windowspill', 'gfx_moonlight', 'gfx_moonaz')
+    if any(l.strip() == '; ---- Street lamps ----' for l in gl):
+        gl = gl[:next(i for i, l in enumerate(gl) if l.strip() == '; ---- Street lamps ----')]
+    keep_gl = []
+    for l in gl:
+        if l.split('=')[0].strip() in lamp_keys:
+            if keep_gl and keep_gl[-1].lstrip().startswith(';'):
+                keep_gl.pop()
+            continue
+        keep_gl.append(l)
+    gl = keep_gl
+    while gl and not gl[-1].strip():
+        gl.pop()
+    gl += ['', '; ---- Street lamps ----',
+           '; lamp bulbs and light pools at night: 1 on, 0 off', 'gfx_lampbulbs = 1',
+           '; size of the glow around each bulb: 1 .. 30, 8 = normal', 'gfx_bulbsize = 8',
+           '; brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)', 'gfx_bulbstr = 7',
+           '; size of the light pool on the ground under each lamp: 2 .. 40, 10 = normal', 'gfx_lamppool = 10',
+           '; how much the light pool brightens the ground: 0 .. 60, 10 = normal', 'gfx_lampstr = 10',
+           '; amber added to the pool even where the ground is very dark: 0 .. 60, 3 = normal (high looks foggy)', 'gfx_lamplift = 3',
+           "; how far each lamp's amber light reaches onto walls and buildings: 200 .. 3000, 1000 = normal", 'gfx_lampreach = 1000',
+           '; lit windows at night (warm light in building windows): 1 on, 0 off', 'gfx_windows = 1',
+           '; brightness of the lit windows: 0 .. 20, 10 = normal', 'gfx_windowstr = 10',
+           '; how many windows are lit: 0 .. 10, 3 = 30%', 'gfx_windowshare = 3',
+           '; the OLD street light glow from before (its positions are off): 0 off .. 10 bright', 'gfx_lamps = 0',
+           '; soft warm light spilling around lit windows: 0 .. 20, 0 = off', 'gfx_windowspill = 0',
+           '; moonlight: cool light on walls and ground facing the moon at night: 0 .. 20, 0 = off', 'gfx_moonlight = 0',
+           '; direction the moonlight comes from: 0 .. 359 degrees', 'gfx_moonaz = 135']
     with open(os.path.join(d, 'gfx.ini'), 'w', encoding='latin-1', newline='\r\n') as f:
         f.write('\n'.join(gl) + '\n')
     ml = [l.rstrip('\r\n') for l in open(os.path.join(dev, 'mainmenu.ini'), encoding='latin-1')

@@ -435,6 +435,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "../../mods/skatercopy/skatercopy.inc"  // Copy Scales From / Copy Tricks From another saved skater (reads Save\*.SKA)
 #include "../../mods/fullscreen/fullscreen.inc"    // Graphics > Display live (THUGRECOMP_DisplayLive) + Alt+Enter fullscreen toggle (Noah 2026-11-21: in the player build)
+#include "../../mods/lamplights/lamplights.inc"    // street lamps + lit windows at night (Chicago): engine LevelLights, bulbs/pools/windows drawn by gfx.inc
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
 
 // ---- script functions
@@ -521,6 +522,10 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_CarsKeys", cars2::CF_CarsKeys },
     { "THUGRECOMP_GfxReset", gfx::CF_GfxReset },
     { "THUGRECOMP_ReShadeInfo", gfx::CF_ReShadeInfo },
+    { "THUGRECOMP_AddLevelLight", lamplights::CF_AddLevelLight },
+    { "THUGRECOMP_LampBulbsClear", lamplights::CF_LampBulbsClear },
+    { "THUGRECOMP_LampBulb", lamplights::CF_LampBulb },
+    { "THUGRECOMP_LampNight", lamplights::CF_LampNight },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },

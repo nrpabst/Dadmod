@@ -1,5 +1,66 @@
 dadmod_gen02_names = [ IsTrue GotParam ScreenElementExists ]
 
+script create_dadmod_gfx_items
+    dadmod_ui_item id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen (a borderless window that fills the screen). Pick it, then press Apply. Alt+Enter switches it anytime." pdesc = "Window or fullscreen. Pick, then press Apply. Alt+Enter switches anytime."
+    dadmod_ui_item id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The window size the game draws at (the sizes that fit your screen). Fullscreen always uses your monitor's own size. Pick it, then press Apply." pdesc = "Window size. Fullscreen always uses your monitor's size. Pick, then Apply."
+    dadmod_ui_item id = gfx_dispapply key = "none" label = "Apply" kind = dispapply min = 0 max = 0 def = 0 desc = "Makes the picked display mode and resolution happen now. Press it again within 15 seconds to keep them, or they go back." pdesc = "Apply the picks. Press again within 15 seconds to keep them."
+    dadmod_ui_item id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show."
+    dadmod_ui_item id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little."
+    dadmod_ui_item id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer."
+    dadmod_ui_item id = gfx_uismooth key = "gfx_uismooth" label = "Smooth menu graphics" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_uismooth desc = "Smooths blocky scaled-up menu and HUD graphics. Changes show right away."
+    dadmod_ui_item id = gfx_fxaa key = "gfx_fxaa" label = "FXAA" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fxaa desc = "Smooths jagged edges of the 3D scene (menus and HUD stay sharp). High quality runs it twice for smoother edges. Changes show right away." pdesc = "Smooths jagged edges of the 3D scene; menus and HUD stay sharp."
+    dadmod_ui_item id = gfx_msaa key = "gfx_msaa" label = "MSAA (restart)" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_msaa desc = "Proper anti-aliasing of geometry edges. Needs a restart of the game. Turns off ambient occlusion, haze, depth of field and outlines, which need the depth buffer." pdesc = "Smooths geometry edges. Needs a restart. Turns off the depth effects."
+    dadmod_ui_item id = gfx_sharpen key = "gfx_sharpen" label = "Sharpening" kind = num min = 0 max = 10 def = 0 desc = "Contrast-adaptive sharpening (like AMD FidelityFX CAS): brings out texture detail without halos. 3 to 5 is a good start. Changes show right away." pdesc = "Brings out texture detail without halos. 3 to 5 is a good start."
+    dadmod_ui_item id = gfx_bloom key = "gfx_bloom" label = "Bloom" kind = num min = 0 max = 10 def = 0 desc = "A soft glow around bright lights and sky. 2 to 4 is subtle. Changes show right away."
+    dadmod_ui_item id = gfx_ssao key = "gfx_ssao" label = "Ambient occlusion" kind = num min = 0 max = 10 def = 0 desc = "Soft shadows where walls meet floors, under rails and in corners, so the world looks less flat. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Soft shadows in corners and under rails. Off while MSAA is on."
+    dadmod_ui_item id = gfx_fog key = "gfx_fog" label = "Distance haze" kind = num min = 0 max = 10 def = 0 desc = "A light atmospheric haze that grows with distance and softens far-away pop-in. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Haze that grows with distance and softens pop-in. Off while MSAA is on."
+    dadmod_ui_item id = gfx_dof key = "gfx_dof" label = "Depth of field" kind = num min = 0 max = 10 def = 0 desc = "Blurs things far away like a camera lens, keeping you and the area around you sharp. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Blurs far-away things like a camera lens. Off while MSAA is on."
+    dadmod_ui_item id = gfx_outline key = "gfx_outline" label = "Outlines" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_outline desc = "Dark outlines around shapes, or a full cartoon cel-shaded look. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Dark outlines, or a cartoon cel-shaded look. Off while MSAA is on."
+    dadmod_ui_item id = gfx_mblur key = "gfx_mblur" label = "Motion blur" kind = num min = 0 max = 10 def = 0 desc = "Blends in a little of the last frame for a smooth, fast feel. High values leave ghost trails. Changes show right away." pdesc = "Blends in a little of the last frame. High values leave ghost trails."
+    dadmod_ui_item id = gfx_preset key = "gfx_preset" label = "Color look" kind = gfxlist min = 0 max = 10 def = 0 list = gfx_preset desc = "A one-click color grade on top of the sliders. None leaves the colors as the game made them. Changes show right away." pdesc = "A one-click color grade on top of the sliders. None leaves the colors alone."
+    dadmod_ui_item id = gfx_bright key = "gfx_bright" label = "Brightness" kind = num min = -10 max = 10 def = 0 desc = "Lifts or lowers the whole picture. 0 is normal. Changes show right away."
+    dadmod_ui_item id = gfx_contrast key = "gfx_contrast" label = "Contrast" kind = num min = -10 max = 10 def = 0 desc = "Difference between darks and lights. 0 is normal. Changes show right away."
+    dadmod_ui_item id = gfx_sat key = "gfx_sat" label = "Saturation" kind = num min = -10 max = 10 def = 0 desc = "Color strength. -10 is black and white, 0 is normal. Changes show right away."
+    dadmod_ui_item id = gfx_vibrance key = "gfx_vibrance" label = "Vibrance" kind = num min = 0 max = 10 def = 0 desc = "Boosts dull colors while leaving already strong colors alone. 0 is off. Changes show right away." pdesc = "Boosts dull colors and leaves strong ones alone. 0 is off."
+    dadmod_ui_item id = gfx_gamma key = "gfx_gamma" label = "Gamma" kind = num min = -10 max = 10 def = 0 desc = "Brightens or darkens the midtones without washing out blacks and whites. 0 is normal. Changes show right away." pdesc = "Brightens or darkens the midtones. 0 is normal."
+    dadmod_ui_item id = gfx_temp key = "gfx_temp" label = "Color temperature" kind = num min = -10 max = 10 def = 0 desc = "Cooler (blue) below 0, warmer (orange) above 0. Changes show right away."
+    dadmod_ui_item id = gfx_tint key = "gfx_tint" label = "Tint" kind = num min = -10 max = 10 def = 0 desc = "Greener below 0, more magenta above 0. Changes show right away."
+    dadmod_ui_item id = gfx_pixelate key = "gfx_pixelate" label = "Pixelate" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_pixelate desc = "Chunky retro pixels for the 3D scene, like an old console. Changes show right away."
+    dadmod_ui_item id = gfx_crt key = "gfx_crt" label = "CRT TV" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_crt desc = "Old TV look: scanlines, a shadow mask and optionally a curved screen. Covers menus and HUD too. Changes show right away." pdesc = "Old TV look: scanlines, a shadow mask, optionally a curved screen."
+    dadmod_ui_item id = gfx_grain key = "gfx_grain" label = "Film grain" kind = num min = 0 max = 10 def = 0 desc = "Light film noise that hides blocky textures and color banding. Changes show right away."
+    dadmod_ui_item id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens."
+    dadmod_ui_item id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away."
+    dadmod_ui_item id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
+    dadmod_ui_item id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
+    dadmod_ui_item id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
+    dadmod_ui_item id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp."
+    dadmod_ui_item id = gfx_lampdel key = "gfx_lampdel" label = "Remove nearest street light" kind = gfxact min = 0 max = 0 def = 0 desc = "Removes the street light closest to the camera."
+    dadmod_ui_item id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
+    dadmod_ui_item id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
+    dadmod_ui_item id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
+    dadmod_ui_item id = gfx_todfog key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
+    dadmod_ui_item id = gfx_fogamt key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
+    dadmod_ui_item id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
+    dadmod_ui_item id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
+    dadmod_ui_item id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number."
+    dadmod_ui_item id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder."
+    dadmod_ui_item id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture."
+    dadmod_ui_item id = gfx_vsync key = "gfx_vsync" label = "V-sync" kind = dispvsync min = 0 max = 0 def = 0 desc = "Locks frames to your monitor to stop tearing. Pick it, then press Apply." pdesc = "Locks frames to your monitor. Pick, then press Apply."
+    dadmod_ui_item id = gfx_framegen key = "gfx_framegen" label = "Frame generation" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_framegen desc = "Adds smooth in-between frames for a 120 to 240 Hz monitor (the game itself still runs at 60). Auto matches your monitor, or pick a rate. Never goes faster than your monitor. Adds a tiny bit of input lag. Changes show right away." pdesc = "In-between frames. Auto matches your monitor, or pick 120 to 240 Hz."
+    dadmod_ui_item id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal." pdesc = "Flips the 3D view left to right and swaps steering to match."
+    dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away."
+    dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing."
+    dadmod_ui_item id = gfx_telesfx key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sounds teleporters and teleporting elevators play in some levels. 0 turns them off. Changes apply to the next teleport."
+    dadmod_ui_item id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away."
+    dadmod_ui_item id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away."
+    dadmod_ui_item id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away."
+    dadmod_ui_item id = gfx_launchbinds key = "gfx_launchbinds" label = "Use launcher button layout" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_launchbinds desc = "On uses the button bindings you set in the THUG Pro launcher. Off uses the standard dadmod Xbox-style layout. Changes apply right away."
+    dadmod_ui_item id = gfx_bind_kb key = "none" label = "Keyboard bindings" kind = uiaction min = 0 max = 0 def = 0 action = dadmod_binds_kb_open desc = "Pick the key for each action while skating. Changes apply right away."
+    dadmod_ui_item id = gfx_bind_pad key = "none" label = "Controller bindings" kind = uiaction min = 0 max = 0 def = 0 action = dadmod_binds_pad_open desc = "Pick the controller button for each action. Changes apply right away."
+    dadmod_ui_item id = gfx_padpopup key = "gfx_padpopup" label = "Controller popups" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_padpopup desc = "Shows a short message when a controller is plugged in or unplugged."
+    dadmod_ui_item id = gfx_reset key = "gfx_aniso" label = "Reset graphics" kind = gfxreset min = 0 max = 0 def = 0 desc = "Puts every graphics setting back to its default (16x texture filtering, F11 screenshots on, effects off). Weather settings are not changed" pdesc = "Puts every graphics setting back to its default. Weather is not changed."
+endscript
+
 script dadmod_ui_text
     dadmod_ui_get key = <key> def = <def> raw
     switch <kind>
@@ -12380,335 +12441,4 @@ script dadmod_cars_prop_items
     dadmod_cars_item_x t = "Mini Car" c = dadmod_prop_mini
     dadmod_cars_item_x t = "Half Pipe" c = dadmod_prop_halfpipe
 endscript
-
-script dadmod_throw_menu
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_throw
-    scrolling
-    num_items_to_show = 13
-    menu_title = "throwables"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_menu
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    make_thugpro_menu_item {
-    text = "Stop throwing"
-    description_text = "Drop your ammo so Square goes back to normal"
-    pad_choose_script = dadmod_throw_pick
-    pad_choose_params = { dadmod_tstop }
-    }
-    make_thugpro_menu_item {
-    text = "Everyone sees these"
-    not_focusable
-    }
-    dadmod_throw_item t = "COMBO letter O" a = none d = "The COMBO O. \\b1 throws it, it works in any server and everyone sees it"
-    dadmod_throw_item t = "Tomatoes" a = tomato d = "Story mode tomatoes. No tomato model in THUG Pro, so they look like a COMBO O"
-    dadmod_throw_item t = "Apples" a = apple d = "Story mode apples. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Beads" a = beads d = "Story mode beads. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Shrimp" a = shrimp d = "Story mode shrimp. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Smoke bombs" a = smokebomb d = "Story mode smoke bombs. They look like a COMBO O, everyone sees it"
-    dadmod_throw_item t = "Paint cans" a = PaintCan d = "Story mode paint cans. They look like a COMBO O, everyone sees it"
-    make_thugpro_menu_item {
-    text = "DadMod players see these"
-    not_focusable
-    }
-    dadmod_throw_item t = "Cars" a = dadmod_throw_cars d = "Throw cars, a different one each time. DadMod players see the car, others a COMBO O"
-    dadmod_throw_item t = "Random Animal" a = dadmod_throw_animals d = "Throw animals, a different one each time. Others see a COMBO O"
-    dadmod_throw_item t = "Random Pedestrian" a = dadmod_throw_peds d = "Throw people, a different one each time. Others see a COMBO O"
-    dadmod_throw_item t = "Random Junk" a = dadmod_throw_junk d = "Throw junk, a different thing each time. Others see a COMBO O"
-    dadmod_throw_item t = "Skateboard" a = dadmod_throw_board d = "Throw skateboards. DadMod players see the board, others a COMBO O"
-    dadmod_throw_item t = "Bowling Ball" a = dadmod_throw_ball d = "Throw a heavy ball. DadMod players see it, others a COMBO O"
-    dadmod_throw_item t = "Mystery Box" a = dadmod_throw_mystery d = "Every throw is a surprise: cars, animals, people, junk. Others see a COMBO O"
-    thugpro_menu_finalize
-endscript
-
-script dadmod_throw_item
-    make_thugpro_menu_item {
-    text = <t>
-    description_text = <d>
-    pad_choose_script = dadmod_throw_pick
-    pad_choose_params = { a = <a> t = <t> }
-    }
-endscript
-
-script dadmod_throw_pick
-    exit_pause_menu
-    KillSpawnedScript Name = dadmod_throw_go
-    SpawnScript dadmod_throw_go params = { <...> } NotSessionSpecific = 1
-endscript
-
-script dadmod_throw_msg_clear
-    wait 2.5 seconds
-    if ScreenElementExists id = dadmod_throw_msg
-        DestroyScreenElement id = dadmod_throw_msg
-    endif
-endscript
-
-script dadmod_throw_label
-    switch <ammo_type>
-    case tomato
-        return dadmod_tl = "Tomatoes"
-    case apple
-        return dadmod_tl = "Apples"
-    case beads
-        return dadmod_tl = "Beads"
-    case shrimp
-        return dadmod_tl = "Shrimp"
-    case smokebomb
-        return dadmod_tl = "Smoke bombs"
-    case PaintCan
-        return dadmod_tl = "Paint cans"
-    endswitch
-    if ObjectExists id = skater
-        skater : GetTags
-        if GotParam dadmod_throw_lbl
-            return dadmod_tl = <dadmod_throw_lbl>
-        endif
-    endif
-    if StructureContains structure = ( dadmod_throw_cat_label ) <ammo_type>
-        return dadmod_tl = ( dadmod_throw_cat_label . <ammo_type> )
-    endif
-    return dadmod_tl = "COMBO O"
-endscript
-
-script dadmod_ammo_hud_start
-    KillSpawnedScript Name = dadmod_ammo_hud_watch
-    SpawnScript dadmod_ammo_hud_watch NotSessionSpecific = 1
-endscript
-
-script dadmod_ammo_hud_watch
-    wait 10 gameframes
-    begin
-        if not ObjectExists id = skater
-            break
-        endif
-        skater : GetAmmo
-        if not ( <ammo> > 0 )
-            break
-        endif
-        skater : GetAmmoType
-        dadmod_throw_label ammo_type = <ammo_type>
-        FormatText TextName = dadmod_tt "%l: %a" l = <dadmod_tl> a = <ammo>
-        if ScreenElementExists id = dadmod_ammo_hud
-            SetScreenElementProps id = dadmod_ammo_hud text = <dadmod_tt>
-        else
-            SetScreenElementLock id = root_window off
-            CreateScreenElement {
-            Type = TextElement
-            parent = root_window
-            id = dadmod_ammo_hud
-            font = dialog
-            text = <dadmod_tt>
-            Pos = (6.2e+02,3.9e+02)
-            just = [ right center ]
-            scale = 0.8
-            rgba = [ 128 128 128 128 ]
-            z_priority = 900
-            }
-        endif
-        dadmod_ta = 1.0
-        root_window : GetSingleTag menu_state
-        if GotParam menu_state
-            if ( <menu_state> = on )
-                dadmod_ta = 0.0
-            endif
-        endif
-        DoScreenElementMorph id = dadmod_ammo_hud alpha = <dadmod_ta> time = 0
-        wait 0.15 seconds
-    repeat
-    if ScreenElementExists id = dadmod_ammo_hud
-        DestroyScreenElement id = dadmod_ammo_hud
-    endif
-endscript
-
-script dadmod_throw_random_go
-    skater : SetTags dadmod_throw_rand = 0
-    if GotParam t
-        skater : SetTags dadmod_throw_lbl = <t>
-    endif
-    dadmod_tr = none
-    switch <a>
-    case dadmod_throw_cars
-        dadmod_tr = dadmod_throw_vehicles
-    case dadmod_throw_animals
-        dadmod_tr = dadmod_throw_animals
-    case dadmod_throw_peds
-        dadmod_tr = dadmod_throw_peds
-    case dadmod_throw_junk
-        dadmod_tr = dadmod_throw_junk
-    case dadmod_throw_mystery
-        dadmod_tr = dadmod_throw_all
-    endswitch
-    if ( <dadmod_tr> = none )
-        return a = <a>
-    endif
-    skater : SetTags dadmod_throw_rand = <dadmod_tr>
-    dadmod_throw_random_car dadmod_tr = <dadmod_tr>
-    return a = <dadmod_tc>
-endscript
-
-script dadmod_throw_random_car dadmod_tr = dadmod_throw_vehicles
-    dadmod_tc = dadmod_throw_car
-    dadmod_tk = 0
-    begin
-        GetRandomArrayElement <dadmod_tr>
-        if not GotParam dadmod_tlast
-            break
-        endif
-        if not ( <element> = <dadmod_tlast> )
-            break
-        endif
-        dadmod_tk = ( <dadmod_tk> + 1 )
-        if ( <dadmod_tk> > 8 )
-            break
-        endif
-    repeat
-    return dadmod_tc = <element>
-endscript
-
-script dadmod_throw_next_car
-    if not GotParam owner_id
-        return
-    endif
-    if not ObjectExists id = skater
-        return
-    endif
-    skater : Obj_GetId
-    if not ( <objID> = <owner_id> )
-        return
-    endif
-    skater : GetTags
-    if not GotParam dadmod_throw_rand
-        return
-    endif
-    if ( <dadmod_throw_rand> = 0 )
-        return
-    endif
-    skater : GetAmmo
-    if not ( <ammo> > 0 )
-        return
-    endif
-    dadmod_throw_random_car dadmod_tlast = <ammo_type> dadmod_tr = <dadmod_throw_rand>
-    skater : SetAmmoType <dadmod_tc>
-endscript
-
-script dadmod_throw_model
-    switch <ammo_type>
-    case dadmod_throw_car
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Chevy_Impala\\Veh_Chevy_Impala.mdl" } ]
-    case dadmod_throw_limo
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Limo\\Veh_Limo.mdl" } ]
-    case dadmod_throw_truck
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Pickup\\Veh_Pickup.mdl" } ]
-    case dadmod_throw_van
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_OldVan\\Veh_OldVan.mdl" } ]
-    case dadmod_throw_hearse
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Hearse\\Veh_Hearse.mdl" } ]
-    case dadmod_throw_bus
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_TourBus\\Veh_TourBus.mdl" } ]
-    case dadmod_throw_blimp
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Blimp\\Veh_Blimp.mdl" } ]
-    case dadmod_throw_boat
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Duck\\Veh_Duck.mdl" } ]
-    case dadmod_throw_halfpipe
-        return dadmod_tmodel = [ { component = model model = "veh\\Veh_Half_Pipe\\Veh_Half_Pipe.mdl" } ]
-    case dadmod_throw_anl_dog
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_dog } { component = model model = "animals\\anl_dog\\anl_dog.skin" } ]
-    case dadmod_throw_anl_dog_grey
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_dog } { component = model model = "animals\\anl_dog\\anl_dog_grey.skin" } ]
-    case dadmod_throw_anl_cat
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_cat } { component = model model = "animals\\anl_cat\\anl_cat.skin" } ]
-    case dadmod_throw_anl_pigeon
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_pigeon } { component = model model = "animals\\anl_pigeon\\anl_pigeon.skin" } ]
-    case dadmod_throw_anl_seagull
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_seagull } { component = model model = "animals\\anl_seagull\\anl_seagull.skin" } ]
-    case dadmod_throw_anl_bat
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_pigeon } { component = model model = "animals\\anl_bat\\anl_bat.skin" } ]
-    case dadmod_throw_anl_parrot
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_pigeon } { component = model model = "animals\\anl_parrot\\anl_parrot.skin" } ]
-    case dadmod_throw_anl_bull
-        return dadmod_tmodel = [ { component = skeleton skeletonName = anl_bull } { component = model model = "animals\\anl_bull\\anl_bull.skin" } ]
-    case dadmod_throw_anl_shark
-        return dadmod_tmodel = [ { component = skeleton skeletonName = Anl_shark } { component = model model = "animals\\anl_shark\\anl_shark.skin" } ]
-    case dadmod_throw_anl_fish
-        return dadmod_tmodel = [ { component = skeleton skeletonName = Anl_shark } { component = model model = "animals\\anl_fish\\anl_fish.skin" } ]
-    case dadmod_throw_anl_eel
-        return dadmod_tmodel = [ { component = skeleton skeletonName = Anl_shark } { component = model model = "animals\\anl_electriceel\\anl_electriceel.skin" } ]
-    case dadmod_throw_ped_mime
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_mime\\ped_mime.skin" } ]
-    case dadmod_throw_ped_pirate
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_pirate\\ped_pirate.skin" } ]
-    case dadmod_throw_ped_jester
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_jester\\ped_jester.skin" } ]
-    case dadmod_throw_ped_natas
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_natas\\ped_natas.skin" } ]
-    case dadmod_throw_ped_bigfoot
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_bigfoot\\ped_bigfoot.skin" } ]
-    case dadmod_throw_ped_benfranklin
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_benfranklin\\ped_benfranklin.skin" } ]
-    case dadmod_throw_ped_zombie
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_zombiemale01\\ped_zombiemale01.skin" } ]
-    case dadmod_throw_ped_boxer
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_boxer\\ped_boxer.skin" } ]
-    case dadmod_throw_ped_wienerman
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_wienerman\\ped_wienerman.skin" } ]
-    case dadmod_throw_ped_bullfighter
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_bullfighter\\ped_bullfighter.skin" } ]
-    case dadmod_throw_ped_lifeguard
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_lifeguard\\ped_lifeguard.skin" } ]
-    case dadmod_throw_ped_copaussie
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_copaussie\\ped_copaussie.skin" } ]
-    case dadmod_throw_ped_germancop
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_germancop\\ped_germancop.skin" } ]
-    case dadmod_throw_ped_alien
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_alien\\ped_alien.skin" } ]
-    case dadmod_throw_ped_imp
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_imp\\ped_imp.skin" } ]
-    case dadmod_throw_ped_judge
-        return dadmod_tmodel = [ { component = skeleton skeletonName = THPS6_human } { component = model model = "peds\\ped_judge\\ped_judge.skin" } ]
-    case dadmod_throw_ped_nurse
-        return dadmod_tmodel = [ { component = skeleton skeletonName = Ped_Female } { component = model model = "peds\\ped_nurse\\ped_nurse.skin" } ]
-    case dadmod_throw_ped_zombiefem
-        return dadmod_tmodel = [ { component = skeleton skeletonName = Ped_Female } { component = model model = "peds\\ped_zombiefem01\\ped_zombiefem01.skin" } ]
-    case dadmod_throw_junk_cone
-        return dadmod_tmodel = [ { component = model model = "mdl_cone\\mdl_cone.mdl" } ]
-    case dadmod_throw_junk_dogfood
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\dog_food\\dog_food.mdl" } ]
-    case dadmod_throw_junk_hoagie
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\hoagie\\hoagie.mdl" } ]
-    case dadmod_throw_junk_skunk
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\skunk\\skunk.mdl" } ]
-    case dadmod_throw_junk_chest
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\treasure_chest\\treasure_chest.mdl" } ]
-    case dadmod_throw_junk_pot
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\flower_pot\\flower_pot.mdl" } ]
-    case dadmod_throw_junk_shoebox
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\vc\\shoebox_pickup\\shoebox_pickup.mdl" } ]
-    case dadmod_throw_junk_tomato
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\projectiles\\tomato\\tomato.mdl" } ]
-    case dadmod_throw_junk_apple
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\projectiles\\apple\\apple.mdl" } ]
-    case dadmod_throw_junk_paintcan
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\projectiles\\paintcan\\paintcan.mdl" } ]
-    case dadmod_throw_junk_crown
-        return dadmod_tmodel = [ { component = model model = "crown\\crown.mdl" } ]
-    case dadmod_throw_junk_letter_s
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\skate\\letter_s\\letter_s.mdl" } ]
-    case dadmod_throw_board
-        return dadmod_tmodel = [ { component = model model = "board_default\\board_default.mdl" } ]
-    case dadmod_throw_ball
-        return dadmod_tmodel = [ { component = model model = "gameobjects\\pickups\\crystal_ball\\crystal_ball.mdl" } ]
-    endswitch
-endscript
-
-dadmod_throw_animals = [ dadmod_throw_anl_dog dadmod_throw_anl_dog_grey dadmod_throw_anl_cat dadmod_throw_anl_pigeon dadmod_throw_anl_seagull dadmod_throw_anl_bat dadmod_throw_anl_parrot dadmod_throw_anl_bull dadmod_throw_anl_shark dadmod_throw_anl_fish dadmod_throw_anl_eel ]
-
-dadmod_throw_peds = [ dadmod_throw_ped_mime dadmod_throw_ped_pirate dadmod_throw_ped_jester dadmod_throw_ped_natas dadmod_throw_ped_bigfoot dadmod_throw_ped_benfranklin dadmod_throw_ped_zombie dadmod_throw_ped_boxer dadmod_throw_ped_wienerman dadmod_throw_ped_bullfighter dadmod_throw_ped_lifeguard dadmod_throw_ped_copaussie dadmod_throw_ped_germancop dadmod_throw_ped_alien dadmod_throw_ped_imp dadmod_throw_ped_judge dadmod_throw_ped_nurse dadmod_throw_ped_zombiefem ]
-
-dadmod_throw_junk = [ dadmod_throw_junk_cone dadmod_throw_junk_dogfood dadmod_throw_junk_hoagie dadmod_throw_junk_skunk dadmod_throw_junk_chest dadmod_throw_junk_pot dadmod_throw_junk_shoebox dadmod_throw_junk_tomato dadmod_throw_junk_apple dadmod_throw_junk_paintcan dadmod_throw_junk_crown dadmod_throw_junk_letter_s ]
 

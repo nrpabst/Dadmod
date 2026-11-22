@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.10.0 beta · for THUG Pro**
+**0.10.1 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.10.0](#6-whats-new-in-0100)
+6. [What's new in 0.10.1](#6-whats-new-in-0101)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.10.0 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.10.1 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -129,9 +129,34 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * Faster boot.
 * A fix for a crash some skater parts cause.
 
-## 6. What's new in 0.10.0
+## 6. What's new in 0.10.1
 
 ### New
+* **Chicago at night:** street lamps glow and light the ground around them, and building windows light up (Time of day Evening lights, Night or Dawn). Always on, nothing to set.
+* On a controller, click both sticks in (**L3 + R3**) to open Change Level, like the Home key (offline, or when you host).
+* **Noclip with the mouse:** hold the left button and drag to turn the camera, right click pauses, and Continue can be clicked.
+
+### Changed
+* The pause menu and the chat box stay open when a game ends or a new one starts. Long chat lines are split instead of cut off.
+* Sky & weather: Time of day is the first row.
+* Bail cancel effects Off also turns off the flicker.
+* Frame generation: steadier frame pacing, and turning it on no longer freezes the game for a few seconds.
+* Project 8 maps: real looping level sounds. The Suburbs fountain is quieter and the pool-deck planters have their own sound.
+* Auto-Goto now starts Off.
+
+### Fixed
+* Crash as a level starts from Level Select, or when going back to the main menu (skater camera).
+* Crash when quitting the game after playing a level.
+* Rare crash while drawing particle effects (low video memory).
+* Safe start tries a normal start again after an update.
+* Setup.bat finds new dadmod versions again on Windows PowerShell 5.1 (before, it never offered an update).
+* With a CAS mod installed, some main menu scenes showed the skate shop instead. Every scene is set up now.
+* Level select: creator credits keep their size, and Larxian's Philadelphia shows the right creator.
+* Noclip: A/D and W/S on the keyboard no longer get stuck going one way.
+
+### 0.10.0
+
+#### New
 * **Cars:** Pause > dadmod > Cars lets you drive 17 THUG Pro cars, 20 more THUG2 cars and 9 props (cone, shopping cart, robot and more) with the game's own car physics. H (L3) honks the horn. Players without dadmod see your car (the green tuner for the extra cars and props).
 * **Throwables:** Random Animal, Random Pedestrian, Random Junk, Skateboard, Bowling Ball and Mystery Box. Cars is one option now (a random car each throw) and shows on plain THUG Pro too.
 * **Bail cancel effect:** your skater flickers out with blue sparkles and flickers back in on the board, like THPS1+2.
@@ -146,12 +171,12 @@ Kali's welcome is replaced by dadmod's, so you get one, not two.
 * **Sky & weather** is one page. New: Dawn, ground mist Fog (Off, Knee high, Head high, First floor, Rooftops) and Fog intensity (1 to 10, default 5).
 * Edit Skater: **Copy Scales From** and **Copy Tricks From** another saved skater, each with an Undo.
 
-### Changed
+#### Changed
 * Night, Evening lights and Dawn darken the whole level, not just the sky; the level's own lights stay lit.
 * The Dynamic time of day, Fog weather and the Street lights slider are gone (old settings are converted).
 * New Orleans: the manhole scream ("Into the Underworld" gap) is off.
 
-### Fixed
+#### Fixed
 * Stuck on the main menu background with the galaxy sky on (NVIDIA cards). The sky shaders are much smaller now; a shader a card can't make only turns that one effect off.
 * The Sound logger is gone from the player build (0.9.16 and 0.9.17 shipped it switched on by mistake).
 * Skater select camera could swing behind the skater after Back.

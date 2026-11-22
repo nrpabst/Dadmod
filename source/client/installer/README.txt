@@ -184,6 +184,45 @@
 ==========================================================================
 
   NEW
+    + Chicago at night: street lamps glow and light the ground around
+      them, and building windows light up (Time of day Evening lights,
+      Night or Dawn). Always on, nothing to set.
+    + On a controller, click both sticks in (L3 + R3) to open Change
+      Level, like the Home key (offline, or when you host).
+    + Noclip with the mouse: hold the left button and drag to turn the
+      camera, right click pauses, and Continue can be clicked.
+
+  CHANGED
+    ~ The pause menu and the chat box stay open when a game ends or a
+      new one starts. Long chat lines are split instead of cut off.
+    ~ Sky & weather: Time of day is the first row.
+    ~ Bail cancel effects Off also turns off the flicker.
+    ~ Frame generation: steadier frame pacing, and turning it on no
+      longer freezes the game for a few seconds.
+    ~ Project 8 maps: real looping level sounds. The Suburbs fountain
+      is quieter and the pool-deck planters have their own sound.
+    ~ Auto-Goto now starts Off.
+
+  FIXED
+    x Crash as a level starts from Level Select, or when going back to
+      the main menu (skater camera).
+    x Crash when quitting the game after playing a level.
+    x Rare crash while drawing particle effects (low video memory).
+    x Safe start tries a normal start again after an update.
+    x Setup.bat finds new dadmod versions again on Windows PowerShell
+      5.1 (before, it never offered an update).
+    x With a CAS mod installed, some main menu scenes showed the skate
+      shop instead. Every scene is set up now.
+    x Level select: creator credits keep their size, and Larxian's
+      Philadelphia shows the right creator.
+    x Noclip: A/D and W/S on the keyboard no longer get stuck going
+      one way.
+
+
+  0.10.0
+  ------
+
+  NEW
     + Cars: Pause > dadmod > Cars lets you drive 17 THUG Pro cars, 20
       more THUG2 cars and 9 props (cone, shopping cart, robot and more)
       with the game's own car physics. H (L3) honks the horn. Players

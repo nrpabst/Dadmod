@@ -200,6 +200,7 @@ script load_level
         RemoveParameter dadmod_alt
         load_level_orig <...>
     endif
+    dadmod_lamplights_level load_script = <load_script> level = <level> game = <game>
     if GotParam frontend_level
         UnloadQB "dadmod_casidle.qb"
         LoadQB "dadmod_casidle.qb" LevelSpecific

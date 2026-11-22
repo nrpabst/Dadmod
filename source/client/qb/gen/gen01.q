@@ -1,5 +1,220 @@
 dadmod_gen01_names = [ IsTrue GotParam ScreenElementExists ]
 
+level_Mainmenu_be = {
+structure_name = level_Mainmenu_be
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = thug2
+loading_time = 14.58
+COIM_size = 1331200
+tod_manager_active = 1
+pre = "BE_scripts.pre"
+scnpre = "BEscn.pre"
+level = "BE"
+sky = "BE_Sky"
+colpre = "BEcol.pre"
+pedpre = "BEped.pre"
+level_sfx_qb = "levels\\BE\\BE_sfx.qb"
+ambient_red = 54
+ambient_green = 63
+ambient_blue = 64
+ambient_mod_factor_lo = 1.1
+ambient_mod_factor_hi = 0.0
+heading_0 = 159
+pitch_0 = 308
+red_0 = 136
+green_0 = 120
+blue_0 = 110
+mod_factor_0_lo = 0
+mod_factor_0_hi = 0
+heading_1 = 305
+pitch_1 = 37
+red_1 = 72
+green_1 = 70
+blue_1 = 66
+mod_factor_1_lo = 1.3
+mod_factor_1_hi = 0.0
+fog_red = 0
+fog_blue = 0
+fog_green = 0
+fog_alpha = 0
+fog_dist = 0
+num_m_heads = 4
+num_m_torsos = 4
+num_m_legs = 3
+num_f_heads = 3
+num_f_torsos = 3
+num_f_legs = 3
+overview_cam_angle = 0
+overview_cam_zoom = (3e+03,8e+03,-5e+03)
+thugpro_prx = "mainmenu_be_scripts.pre"
+qb = "levels\\mainmenu_be\\BE.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\BE\\BE_scripts.qb"
+"levels\\BE\\BE_cutscene_particle_data.qb"
+"levels\\BE\\BE_level_particle_data.qb"
+"levels\\BE\\BE_cutscene_fast_particle_data.qb"
+"levels\\BE\\BE_level_fast_particle_data.qb"
+"levels\\be\\be_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_au = {
+structure_name = level_Mainmenu_au
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = thug2
+loading_time = 12.28
+tod_manager_active = 1
+pre = "AU_scripts.pre"
+scnpre = "AUscn.pre"
+level = "AU"
+sky = "AU_Sky"
+colpre = "AUcol.pre"
+pedpre = "AUped.pre"
+level_sfx_qb = "levels\\AU\\AU_sfx.qb"
+sun_theta = [ 5e+01 65.0 9e+01 9e+01 ]
+ambient_red = 54
+ambient_green = 63
+ambient_blue = 64
+ambient_mod_factor_lo = 1.1
+ambient_mod_factor_hi = 0.0
+heading_0 = 159
+pitch_0 = 308
+red_0 = 136
+green_0 = 120
+blue_0 = 110
+mod_factor_0_lo = 0
+mod_factor_0_hi = 0
+heading_1 = 305
+pitch_1 = 37
+red_1 = 72
+green_1 = 70
+blue_1 = 66
+mod_factor_1_lo = 1.3
+mod_factor_1_hi = 0.0
+fog_red = 0
+fog_blue = 0
+fog_green = 0
+fog_alpha = 0
+fog_dist = 0
+num_m_heads = 4
+num_m_torsos = 4
+num_m_legs = 4
+num_f_heads = 4
+num_f_torsos = 4
+num_f_legs = 4
+special_ped_info = [
+{ Type = pro flag = PRO_FOUND_04 }
+{ Name = shrimpvendor Type = guest }
+{ Name = minikartdriver Type = flavor }
+]
+overview_cam_zoom = (3.5e+03,6.5e+03,0.0)
+thugpro_prx = "mainmenu_au_scripts.pre"
+qb = "levels\\mainmenu_au\\au.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\AU\\AU_scripts.qb"
+"levels\\AU\\AU_cutscene_particle_data.qb"
+"levels\\AU\\AU_level_particle_data.qb"
+"levels\\AU\\AU_cutscene_fast_particle_data.qb"
+"levels\\AU\\AU_level_fast_particle_data.qb"
+"levels\\au\\au_thugpro.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
+level_Mainmenu_no = {
+structure_name = level_Mainmenu_no
+load_script = Load_MainMenu
+Name = "Skate Shop"
+level_name = "skateshop"
+game = thug2
+loading_time = 13.93
+COIM_size = 1331200
+tod_manager_active = 1
+pre = "NO_scripts.pre"
+scnpre = "NOscn.pre"
+level = "NO"
+sky = "NO_Sky"
+colpre = "NOcol.pre"
+pedpre = "NOped.pre"
+level_sfx_qb = "levels\\NO\\NO_sfx.qb"
+ambient_red = 54
+ambient_green = 63
+ambient_blue = 64
+ambient_mod_factor_lo = 1.1
+ambient_mod_factor_hi = 0.0
+heading_0 = 159
+pitch_0 = 308
+red_0 = 136
+green_0 = 120
+blue_0 = 110
+mod_factor_0_lo = 0
+mod_factor_0_hi = 0
+heading_1 = 305
+pitch_1 = 37
+red_1 = 72
+green_1 = 70
+blue_1 = 66
+mod_factor_1_lo = 1.3
+mod_factor_1_hi = 1.3
+fog_red = 0
+fog_blue = 0
+fog_green = 0
+fog_alpha = 0
+fog_dist = 0
+num_m_heads = 3
+num_m_torsos = 3
+num_m_legs = 3
+num_f_heads = 4
+num_f_torsos = 4
+num_f_legs = 3
+special_ped_info = [
+{ Type = pro flag = PRO_FOUND_05 }
+{ Type = guest Name = jester }
+{ Type = flavor Name = voodoo }
+]
+overview_cam_angle = 90
+overview_cam_zoom = (-1.5e+03,6e+03,-1e+03)
+thugpro_prx = "mainmenu_no_scripts.pre"
+qb = "levels\\mainmenu_no\\NO.qb"
+level_qb = "levels\\skateshop\\skateshop_scripts.qb"
+more_level_qbs = [
+"levels\\NO\\NO_scripts.qb"
+"levels\\NO\\NO_cutscene_particle_data.qb"
+"levels\\NO\\NO_level_particle_data.qb"
+"levels\\NO\\NO_cutscene_fast_particle_data.qb"
+"levels\\NO\\NO_level_fast_particle_data.qb"
+"levels\\skateshop\\skateshop.qb"
+"levels\\skateshop\\skateshop_cas.qb"
+"levels\\skateshop\\colormenu.qb"
+]
+startup_script = skateshop_startup
+default_stats = 8
+level_number = LevelNum_Skateshop
+frontend_level = 1
+skip_teammate_pro
+}
+
 level_Mainmenu_st = {
 structure_name = level_Mainmenu_st
 load_script = Load_MainMenu
@@ -9662,65 +9877,4 @@ dadmod_gfx_lists = [
 { list = gfx_tricksfx names = ["Off" "On"] }
 { list = gfx_postfx names = ["dadmod" "ReShade"] }
 ]
-
-script create_dadmod_gfx_items
-    dadmod_ui_item id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen (a borderless window that fills the screen). Pick it, then press Apply. Alt+Enter switches it anytime." pdesc = "Window or fullscreen. Pick, then press Apply. Alt+Enter switches anytime."
-    dadmod_ui_item id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The window size the game draws at (the sizes that fit your screen). Fullscreen always uses your monitor's own size. Pick it, then press Apply." pdesc = "Window size. Fullscreen always uses your monitor's size. Pick, then Apply."
-    dadmod_ui_item id = gfx_dispapply key = "none" label = "Apply" kind = dispapply min = 0 max = 0 def = 0 desc = "Makes the picked display mode and resolution happen now. Press it again within 15 seconds to keep them, or they go back." pdesc = "Apply the picks. Press again within 15 seconds to keep them."
-    dadmod_ui_item id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show."
-    dadmod_ui_item id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little."
-    dadmod_ui_item id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer."
-    dadmod_ui_item id = gfx_uismooth key = "gfx_uismooth" label = "Smooth menu graphics" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_uismooth desc = "Smooths blocky scaled-up menu and HUD graphics. Changes show right away."
-    dadmod_ui_item id = gfx_fxaa key = "gfx_fxaa" label = "FXAA" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fxaa desc = "Smooths jagged edges of the 3D scene (menus and HUD stay sharp). High quality runs it twice for smoother edges. Changes show right away." pdesc = "Smooths jagged edges of the 3D scene; menus and HUD stay sharp."
-    dadmod_ui_item id = gfx_msaa key = "gfx_msaa" label = "MSAA (restart)" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_msaa desc = "Proper anti-aliasing of geometry edges. Needs a restart of the game. Turns off ambient occlusion, haze, depth of field and outlines, which need the depth buffer." pdesc = "Smooths geometry edges. Needs a restart. Turns off the depth effects."
-    dadmod_ui_item id = gfx_sharpen key = "gfx_sharpen" label = "Sharpening" kind = num min = 0 max = 10 def = 0 desc = "Contrast-adaptive sharpening (like AMD FidelityFX CAS): brings out texture detail without halos. 3 to 5 is a good start. Changes show right away." pdesc = "Brings out texture detail without halos. 3 to 5 is a good start."
-    dadmod_ui_item id = gfx_bloom key = "gfx_bloom" label = "Bloom" kind = num min = 0 max = 10 def = 0 desc = "A soft glow around bright lights and sky. 2 to 4 is subtle. Changes show right away."
-    dadmod_ui_item id = gfx_ssao key = "gfx_ssao" label = "Ambient occlusion" kind = num min = 0 max = 10 def = 0 desc = "Soft shadows where walls meet floors, under rails and in corners, so the world looks less flat. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Soft shadows in corners and under rails. Off while MSAA is on."
-    dadmod_ui_item id = gfx_fog key = "gfx_fog" label = "Distance haze" kind = num min = 0 max = 10 def = 0 desc = "A light atmospheric haze that grows with distance and softens far-away pop-in. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Haze that grows with distance and softens pop-in. Off while MSAA is on."
-    dadmod_ui_item id = gfx_dof key = "gfx_dof" label = "Depth of field" kind = num min = 0 max = 10 def = 0 desc = "Blurs things far away like a camera lens, keeping you and the area around you sharp. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Blurs far-away things like a camera lens. Off while MSAA is on."
-    dadmod_ui_item id = gfx_outline key = "gfx_outline" label = "Outlines" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_outline desc = "Dark outlines around shapes, or a full cartoon cel-shaded look. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Dark outlines, or a cartoon cel-shaded look. Off while MSAA is on."
-    dadmod_ui_item id = gfx_mblur key = "gfx_mblur" label = "Motion blur" kind = num min = 0 max = 10 def = 0 desc = "Blends in a little of the last frame for a smooth, fast feel. High values leave ghost trails. Changes show right away." pdesc = "Blends in a little of the last frame. High values leave ghost trails."
-    dadmod_ui_item id = gfx_preset key = "gfx_preset" label = "Color look" kind = gfxlist min = 0 max = 10 def = 0 list = gfx_preset desc = "A one-click color grade on top of the sliders. None leaves the colors as the game made them. Changes show right away." pdesc = "A one-click color grade on top of the sliders. None leaves the colors alone."
-    dadmod_ui_item id = gfx_bright key = "gfx_bright" label = "Brightness" kind = num min = -10 max = 10 def = 0 desc = "Lifts or lowers the whole picture. 0 is normal. Changes show right away."
-    dadmod_ui_item id = gfx_contrast key = "gfx_contrast" label = "Contrast" kind = num min = -10 max = 10 def = 0 desc = "Difference between darks and lights. 0 is normal. Changes show right away."
-    dadmod_ui_item id = gfx_sat key = "gfx_sat" label = "Saturation" kind = num min = -10 max = 10 def = 0 desc = "Color strength. -10 is black and white, 0 is normal. Changes show right away."
-    dadmod_ui_item id = gfx_vibrance key = "gfx_vibrance" label = "Vibrance" kind = num min = 0 max = 10 def = 0 desc = "Boosts dull colors while leaving already strong colors alone. 0 is off. Changes show right away." pdesc = "Boosts dull colors and leaves strong ones alone. 0 is off."
-    dadmod_ui_item id = gfx_gamma key = "gfx_gamma" label = "Gamma" kind = num min = -10 max = 10 def = 0 desc = "Brightens or darkens the midtones without washing out blacks and whites. 0 is normal. Changes show right away." pdesc = "Brightens or darkens the midtones. 0 is normal."
-    dadmod_ui_item id = gfx_temp key = "gfx_temp" label = "Color temperature" kind = num min = -10 max = 10 def = 0 desc = "Cooler (blue) below 0, warmer (orange) above 0. Changes show right away."
-    dadmod_ui_item id = gfx_tint key = "gfx_tint" label = "Tint" kind = num min = -10 max = 10 def = 0 desc = "Greener below 0, more magenta above 0. Changes show right away."
-    dadmod_ui_item id = gfx_pixelate key = "gfx_pixelate" label = "Pixelate" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_pixelate desc = "Chunky retro pixels for the 3D scene, like an old console. Changes show right away."
-    dadmod_ui_item id = gfx_crt key = "gfx_crt" label = "CRT TV" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_crt desc = "Old TV look: scanlines, a shadow mask and optionally a curved screen. Covers menus and HUD too. Changes show right away." pdesc = "Old TV look: scanlines, a shadow mask, optionally a curved screen."
-    dadmod_ui_item id = gfx_grain key = "gfx_grain" label = "Film grain" kind = num min = 0 max = 10 def = 0 desc = "Light film noise that hides blocky textures and color banding. Changes show right away."
-    dadmod_ui_item id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens."
-    dadmod_ui_item id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away."
-    dadmod_ui_item id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
-    dadmod_ui_item id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
-    dadmod_ui_item id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
-    dadmod_ui_item id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp."
-    dadmod_ui_item id = gfx_lampdel key = "gfx_lampdel" label = "Remove nearest street light" kind = gfxact min = 0 max = 0 def = 0 desc = "Removes the street light closest to the camera."
-    dadmod_ui_item id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
-    dadmod_ui_item id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
-    dadmod_ui_item id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
-    dadmod_ui_item id = gfx_todfog key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
-    dadmod_ui_item id = gfx_fogamt key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
-    dadmod_ui_item id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
-    dadmod_ui_item id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
-    dadmod_ui_item id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number."
-    dadmod_ui_item id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder."
-    dadmod_ui_item id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture."
-    dadmod_ui_item id = gfx_vsync key = "gfx_vsync" label = "V-sync" kind = dispvsync min = 0 max = 0 def = 0 desc = "Locks frames to your monitor to stop tearing. Pick it, then press Apply." pdesc = "Locks frames to your monitor. Pick, then press Apply."
-    dadmod_ui_item id = gfx_framegen key = "gfx_framegen" label = "Frame generation" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_framegen desc = "Adds smooth in-between frames for a 120 to 240 Hz monitor (the game itself still runs at 60). Auto matches your monitor, or pick a rate. Never goes faster than your monitor. Adds a tiny bit of input lag. Changes show right away." pdesc = "In-between frames. Auto matches your monitor, or pick 120 to 240 Hz."
-    dadmod_ui_item id = gfx_mirror key = "gfx_mirror" label = "Mirror mode" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_mirror desc = "Flips the 3D view left to right, like skating a mirrored copy of the level, and swaps left and right steering to match. Menus, the HUD and text stay normal." pdesc = "Flips the 3D view left to right and swaps steering to match."
-    dadmod_ui_item id = gfx_levelsfx key = "gfx_levelsfx" label = "Level sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of water, crowds, machines, cars and other sounds that come from things in a map. 0 turns them off. Skaters' own sounds stay as they are. Changes apply right away."
-    dadmod_ui_item id = gfx_tricksfx key = "gfx_tricksfx" label = "Special trick sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sound clips some special tricks play, like the guitar grind. 0 turns them off. Changes apply right away, even to a clip that is playing."
-    dadmod_ui_item id = gfx_telesfx key = "gfx_telesfx" label = "Teleporter sounds" kind = num min = 0 max = 100 def = 100 step = 5 desc = "Volume of the sounds teleporters and teleporting elevators play in some levels. 0 turns them off. Changes apply to the next teleport."
-    dadmod_ui_item id = gfx_bginput key = "gfx_bginput" label = "Background input" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_bginput desc = "On: your controller keeps playing the game while another window (browser, Discord) is in front. Off: input only works while the game window is in front. Changes apply right away."
-    dadmod_ui_item id = gfx_deadzone key = "gfx_deadzone" label = "Stick dead zone" kind = num min = 0 max = 10 def = 0 desc = "Ignores small stick movements so a worn stick stops drifting your skater. 0 is off; raise it until drifting stops. Changes apply right away."
-    dadmod_ui_item id = gfx_abswap key = "gfx_abswap" label = "Swap A/B and X/Y" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_abswap desc = "For Nintendo-style controllers: swaps A with B and X with Y so the buttons match the labels on your pad. Changes apply right away."
-    dadmod_ui_item id = gfx_launchbinds key = "gfx_launchbinds" label = "Use launcher button layout" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_launchbinds desc = "On uses the button bindings you set in the THUG Pro launcher. Off uses the standard dadmod Xbox-style layout. Changes apply right away."
-    dadmod_ui_item id = gfx_bind_kb key = "none" label = "Keyboard bindings" kind = uiaction min = 0 max = 0 def = 0 action = dadmod_binds_kb_open desc = "Pick the key for each action while skating. Changes apply right away."
-    dadmod_ui_item id = gfx_bind_pad key = "none" label = "Controller bindings" kind = uiaction min = 0 max = 0 def = 0 action = dadmod_binds_pad_open desc = "Pick the controller button for each action. Changes apply right away."
-    dadmod_ui_item id = gfx_padpopup key = "gfx_padpopup" label = "Controller popups" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_padpopup desc = "Shows a short message when a controller is plugged in or unplugged."
-    dadmod_ui_item id = gfx_reset key = "gfx_aniso" label = "Reset graphics" kind = gfxreset min = 0 max = 0 def = 0 desc = "Puts every graphics setting back to its default (16x texture filtering, F11 screenshots on, effects off). Weather settings are not changed" pdesc = "Puts every graphics setting back to its default. Weather is not changed."
-endscript
 

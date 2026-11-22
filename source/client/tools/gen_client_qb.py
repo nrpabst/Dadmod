@@ -135,6 +135,9 @@ PATCHES = {
         '            dadmod_thpg_not_installed\n        endif\n',
         '        dadmod_thpg_not_installed\n')],
     'dadmod_added_levels': [(' Load_dadmod_THPGBaltimore ', ' ')],
+    # ...and its creator with it (0.10.1: the creator list was one row off, so Larxian's Philadelphia said Neversoft):
+    # our THPG levels are all Neversoft and come right before Larxian's first city, so one Neversoft goes there
+    'dadmod_added_level_creators': [(' "Neversoft" "Larxian" ', ' "Larxian" ')],
 }
 PED = re.compile(r'^ped_[mf]_|^ped_body$', re.I)
 # Dev-only log calls a server mod adds into client scripts (mods/bhra_probe): the line goes, the script stays

@@ -51,7 +51,6 @@ if ($cur) {
         $u = $null
         Write-Host 'Could not check for updates right now (no internet, or GitHub is busy). Using this package.'
     }
-    if ($u -and -not ($u.v -gt $cur)) { Write-Host "This is the newest dadmod ($ver)." }
     if ($u -and $u.v -gt $cur) {
         Write-Host ''
         Write-Host "dadmod $($u.tag) is out (this package is $ver)." -ForegroundColor Green

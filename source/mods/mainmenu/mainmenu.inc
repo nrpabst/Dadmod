@@ -2113,7 +2113,8 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
     g_pointerOnUi = hit >= 0 || overBack || overNext || IntParam(params, "nodrag", 0) != 0;
     if (settling && !overBack && !overNext) { click = 0; wheel = 0; }      // nothing to click yet: drop clicks and scrolls
     {   // hide / show the Windows arrow over the game while our pointer is up (hidecur from QB = a mouse screen)
-        LONG want = (active && IntParam(params, "hidecur", 0)) ? 1 : 0;
+        int hc = IntParam(params, "hidecur", 0);   // 2 = in game on foot (walk / noclip mouse camera): wheel cursor even while keys are pressed (Noah 2026-11-22)
+        LONG want = (hc == 2 ? front : (active && hc)) ? 1 : 0;
         if (InterlockedExchange(&g_hideCursor, want) != want) SetWheelCursorActive(h, want != 0);
     }
     CURSORINFO ci = { sizeof(ci) };

@@ -1334,6 +1334,8 @@ script dadmod_noclip_state
     dadmod_nc_dir = <norm>
     dadmod_nc_ysign = -1.0
     dadmod_nc_xsign = 1.0
+    dadmod_nc_xcnt = 0
+    dadmod_nc_ycnt = 0
     dadmod_nc_vel = (0.0,0.0,0.0)
     dadmod_nc_camf = <dadmod_nc_dir>
     dadmod_nc_diag = 0
@@ -1423,20 +1425,72 @@ script dadmod_noclip_state
                     leftx = ( <leftx> / 128.0 )
                     lefty = ( <lefty> / 128.0 )
                 endif
+                dadmod_nc_yw = 0.0
                 if (<dadmod_nc_up> = 1)
-                    if (<lefty> < -0.5)
-                        dadmod_nc_ysign = -1.0
-                    endif
-                    if (<lefty> > 0.5)
-                        dadmod_nc_ysign = 1.0
+                    if (<dadmod_nc_dn> = 0)
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
                 endif
-                if (<dadmod_nc_rt> = 1)
-                    if (<leftx> > 0.5)
-                        dadmod_nc_xsign = 1.0
+                if (<dadmod_nc_dn> = 1)
+                    if (<dadmod_nc_up> = 0)
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
-                    if (<leftx> < -0.5)
-                        dadmod_nc_xsign = -1.0
+                endif
+                if (<dadmod_nc_yw> = 0.0)
+                    dadmod_nc_ycnt = 0
+                else
+                    if (<dadmod_nc_yw> = <dadmod_nc_ysign>)
+                        dadmod_nc_ycnt = 0
+                    else
+                        dadmod_nc_ycnt = ( <dadmod_nc_ycnt> + 1 )
+                        if (<dadmod_nc_ycnt> > 9)
+                            dadmod_nc_ysign = <dadmod_nc_yw>
+                            dadmod_nc_ycnt = 0
+                        endif
+                    endif
+                endif
+                dadmod_nc_xw = 0.0
+                if (<dadmod_nc_rt> = 1)
+                    if (<dadmod_nc_lt> = 0)
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_lt> = 1)
+                    if (<dadmod_nc_rt> = 0)
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_xw> = 0.0)
+                    dadmod_nc_xcnt = 0
+                else
+                    if (<dadmod_nc_xw> = <dadmod_nc_xsign>)
+                        dadmod_nc_xcnt = 0
+                    else
+                        dadmod_nc_xcnt = ( <dadmod_nc_xcnt> + 1 )
+                        if (<dadmod_nc_xcnt> > 9)
+                            dadmod_nc_xsign = <dadmod_nc_xw>
+                            dadmod_nc_xcnt = 0
+                        endif
                     endif
                 endif
                 dadmod_nc_sx = ( <leftx> * <dadmod_nc_xsign> )
@@ -1479,10 +1533,21 @@ script dadmod_noclip_state
                 endif
             endif
             dadmod_nc_cf = <dadmod_nc_dir>
+            dadmod_nc_camid = none
             GetCameraId
             if GotParam CameraId
-                if ObjectExists id = <CameraId>
-                    <CameraId> : Obj_GetPosition
+                dadmod_nc_camid = <CameraId>
+            endif
+            if root_window : GetSingleTag dadmod_walkcam_live
+                if (<dadmod_walkcam_live> = 1)
+                    if ObjectExists id = dadmod_orbit_cam
+                        dadmod_nc_camid = dadmod_orbit_cam
+                    endif
+                endif
+            endif
+            if not (<dadmod_nc_camid> = none)
+                if ObjectExists id = <dadmod_nc_camid>
+                    <dadmod_nc_camid> : Obj_GetPosition
                     dadmod_nc_cx = ( ( <dadmod_nc_pos> . (1.0,0.0,0.0) ) - ( <Pos> . (1.0,0.0,0.0) ) )
                     dadmod_nc_cz = ( ( <dadmod_nc_pos> . (0.0,0.0,1.0) ) - ( <Pos> . (0.0,0.0,1.0) ) )
                     if ( ( <dadmod_nc_cx> * <dadmod_nc_cx> + <dadmod_nc_cz> * <dadmod_nc_cz> ) > 1.0 )
@@ -3635,11 +3700,6 @@ script dadmod_mouse_rpause
         if IsTrue view_mode
             rp_ok = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                rp_ok = 0
-            endif
-        endif
     endif
     THUGRECOMP_MouseRightPause ok = <rp_ok>
 endscript
@@ -3694,6 +3754,18 @@ script dadmod_mouse_tick
         endif
     endif
     mm_nocam = <mm_accept>
+    mm_hc = <mm_screen>
+    if (<mm_screen> = 0)
+        if (<mm_menu> = 0)
+            if ScreenElementExists id = root_window
+                if root_window : GetSingleTag dadmod_walkcam_ok
+                    if (<dadmod_walkcam_ok> = 1)
+                        mm_hc = 2
+                    endif
+                endif
+            endif
+        endif
+    endif
     if (<mm_dialog> = 1)
         mm_nocam = 1
     endif
@@ -3703,7 +3775,7 @@ script dadmod_mouse_tick
     if (<mm_menu> = 1)
         THUGRECOMP_MouseMenu id = <mm_mid> root = root_window nocam = <mm_nocam> hidecur = <mm_screen> nodrag = <mm_lvl>
     else
-        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_screen>
+        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_hc>
     endif
     if (<mm_screen> = 0)
         ms_active = 0
@@ -4000,6 +4072,14 @@ script dadmod_mouse_click
         if (<ms_arrow> = 1)
             FireEvent type = pad_right target = <id>
             return
+        endif
+    endif
+    if not LevelIs Load_MainMenu
+        if ScreenElementExists id = root_window
+            if root_window : GetSingleTag pause_controller
+                FireEvent type = pad_choose target = <id> data = { device_num = <pause_controller> }
+                return
+            endif
         endif
     endif
     FireEvent type = pad_choose target = <id>
@@ -5039,16 +5119,28 @@ script dadmod_walkcam_tick
         if ScreenElementExists id = keyboard_anchor
             wc_on = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                wc_on = 0
-            endif
-        endif
         if GetCurrentSkaterCamAnimName
             if GotParam CurrentSkaterCamAnimName
                 wc_on = 0
             endif
         endif
+    endif
+    wc_nc = 0
+    if ScreenElementExists id = root_window
+        if root_window : GetSingleTag dadmod_noclip
+            if (<dadmod_noclip> > 0)
+                wc_nc = 1
+            endif
+        endif
+        wc_nc_was = <wc_nc>
+        if root_window : GetSingleTag dadmod_walkcam_nc
+            wc_nc_was = <dadmod_walkcam_nc>
+        endif
+        if not (<wc_nc_was> = <wc_nc>)
+            wc_on = 0
+        endif
+        root_window : SetTags dadmod_walkcam_nc = <wc_nc>
+        root_window : SetTags dadmod_walkcam_ok = <wc_on>
     endif
     if (<wc_quit> = 1)
         THUGRECOMP_WalkCam quit = 1
@@ -5058,10 +5150,23 @@ script dadmod_walkcam_tick
         Skater : Obj_GetOrientation
         wc_hx = <x>
         wc_hz = <z>
+        if (<wc_nc> = 1)
+            wc_hx = 0.0
+            wc_hz = 1.0
+        endif
         skatercam0 : Obj_GetPosition
         wc_cp = <Pos>
         skatercam0 : Obj_GetOrientation
         THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+    endif
+    wc_live = 0
+    if GotParam wc_state
+        if (<wc_state> = 1)
+            wc_live = 1
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_walkcam_live = <wc_live>
     endif
     if GotParam wc_state
         if (<wc_state> = 1)

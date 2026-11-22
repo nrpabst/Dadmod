@@ -1499,7 +1499,7 @@ script dadmod_walkcam_tick
         skatercam0 : Obj_GetPosition
         wc_cp = <Pos>
         skatercam0 : Obj_GetOrientation
-        THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+        THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> nc = <wc_nc> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
     endif
     wc_live = 0
     if GotParam wc_state

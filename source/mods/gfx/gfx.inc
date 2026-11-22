@@ -1433,7 +1433,21 @@ static unsigned long long ShaderSourceHash() {
     for (size_t i = 0; i < sizeof kShaders - 1; ++i) { h ^= (unsigned char)kShaders[i]; h *= 1099511628211ULL; }
     return h;
 }
+// The compiler and the cache files are shared with frame generation's startup compile thread (framegen.inc).
+static CRITICAL_SECTION* CompileLock() {
+    static CRITICAL_SECTION cs;
+    static bool init = (InitializeCriticalSection(&cs), true);
+    (void)init;
+    return &cs;
+}
+static bool CachedShaderCodeLocked(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err);
 static bool CachedShaderCode(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err) {
+    EnterCriticalSection(CompileLock());
+    bool ok = CachedShaderCodeLocked(compile, fn, prof, out, err);
+    LeaveCriticalSection(CompileLock());
+    return ok;
+}
+static bool CachedShaderCodeLocked(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err) {
     char name[160];
     wsprintfA(name, "shadercache\\%s_%s_%08X%08X.bin", fn, prof, (DWORD)(ShaderSourceHash() >> 32), (DWORD)ShaderSourceHash());
     std::string path = ExeDirFile(name);
@@ -2156,6 +2170,8 @@ static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
 }
 
 static void FgCaptureScene(IDirect3DDevice9* dev);  // framegen.inc
+static bool g_fgRunning = false;      // frame generation is running (framegen.inc): dadmod's motion blur stays off
+static bool g_fgBbGenerated = false;  // the back buffer holds a generated in-between frame: screenshots wait for a real one
 static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     if (!atPresent) {  // only when the screen itself is being drawn to (not an offscreen texture)
         IDirect3DSurface9* t = nullptr;
@@ -2219,7 +2235,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         }
         dev->SetTexture(4, depthFx && V("gfx_ssao") ? g_texG : nullptr);
         float mb = g_c[8][1];
-        if (!g_prevValid) { g_c[8][1] = 0; dev->SetPixelShaderConstantF(8, g_c[8], 1); }
+        if (!g_prevValid || g_fgRunning) { g_c[8][1] = 0; dev->SetPixelShaderConstantF(8, g_c[8], 1); }  // frame generation already blends frames
         Pass(dev, g_psScene, sB, g_w, g_h, g_w, g_h, g_texA, depthFx ? g_intz : nullptr, g_texPrev, g_texE);
         g_c[8][1] = mb; dev->SetPixelShaderConstantF(8, g_c[8], 1);
         cur = g_texB;
@@ -2422,7 +2438,7 @@ static void RunScreen(IDirect3DDevice9* dev) {
     IUnknown* rel[] = {oldRT, oldDS, sA};
     for (auto r : rel) if (r) r->Release();
     g_inPost = false;
-    if (g_shotPending) SaveShot(dev, bb);
+    if (g_shotPending && !g_fgBbGenerated) SaveShot(dev, bb);
     bb->Release();
 }
 
@@ -2576,6 +2592,7 @@ static void EndFrame(IDirect3DDevice9* dev) {
     UpdateWorld();
     ApplyWeatherFog(dev);
     CardCheck(dev);
+    FgStartup(dev);  // frame generation's shaders: compiled in the background from the first frame, loaded at startup
     if (g_origRS) { PixelFogStates(dev); TodFogStates(dev); }
     g_fwDone = false;
     g_intzUsed = false;
@@ -2599,7 +2616,7 @@ static void NoteDeviceLost(HRESULT hr) {
 }
 static HRESULT STDMETHODCALLTYPE HookPresent(IDirect3DDevice9* dev, const RECT* a, const RECT* b, HWND w, const RGNDATA* r) {
     bool ours = !g_inPost;
-    if (ours) { FgClear(); EndFrame(dev); }
+    if (ours) { FgClear(); EndFrame(dev); FgBeforePresent(dev); }  // frame generation: wait for this frame's refresh
     HRESULT hr = g_origPresent(dev, a, b, w, r);
     NoteDeviceLost(hr);
     if (ours) FgQueue(dev, nullptr, a, b, w, r, 0, hr);  // frame generation: the rest of this frame's frames
@@ -2609,7 +2626,7 @@ static HRESULT STDMETHODCALLTYPE HookPresent(IDirect3DDevice9* dev, const RECT* 
 static HRESULT STDMETHODCALLTYPE HookSCPresent(IDirect3DSwapChain9* sc, const RECT* a, const RECT* b, HWND w, const RGNDATA* r, DWORD f) {
     IDirect3DDevice9* dev = nullptr;
     bool ours = !g_inPost && SUCCEEDED(sc->GetDevice(&dev)) && dev;
-    if (ours) { FgClear(); EndFrame(dev); }
+    if (ours) { FgClear(); EndFrame(dev); FgBeforePresent(dev); }
     HRESULT hr = g_origSCPresent(sc, a, b, w, r, f);
     NoteDeviceLost(hr);
     if (ours) { FgQueue(dev, sc, a, b, w, r, f, hr); dev->Release(); }

@@ -602,6 +602,7 @@ static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
+static bool g_skySeen = false;  // the replacement sky drew on this level (2026-11-22, MapLookNow)
 static bool g_galaxyOff = false;  // set when this card has no shader for the galaxy: the game's own sky is kept (2026-11-21)
 static bool GalaxyOn() { return V("gfx_galaxy") != 0 && !g_galaxyOff; }
 static bool g_skyGraded = false;  // the game's own sky was graded this frame
@@ -1262,10 +1263,10 @@ float4 ps_sky(float2 uv : TEXCOORD0) : COLOR {
 }
 // ---- night tint (scene pass, before lamps/weather): darkens buildings the game's TOD manager leaves at day brightness.
 // Drawn at the far plane with ZFUNC GREATER so only geometry (not the sky) is tinted; very bright pixels stay lit.
-float3 nighttint(float tod) { return tod > 3.5 && tod < 4.5 ? float3(0.22, 0.26, 0.40) : (tod > 5.5 ? float3(0.40, 0.40, 0.52) : (tod > 4.5 ? float3(0.92, 0.86, 0.90) : float3(1, 1, 1))); }  // night, dawn, evening lights (2026-11-22: was 0.62/0.55/0.60, Noah: as bright as Evening)
+float3 nighttint(float tod) { return tod > 3.5 && tod < 4.5 ? float3(0.22, 0.26, 0.40) : (tod > 5.5 ? float3(0.40, 0.40, 0.52) : (tod > 4.5 ? float3(0.92, 0.86, 0.90) : float3(1, 1, 1))); }  // night, dawn, evening lights (reference only since 2026-11-22: ps_nighttint takes the tint from kLooks via c18)
 float4 ps_nighttint(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
-    float3 t = lerp(nighttint(sk.x), nighttint(sk.z), sk.w);
+    float3 t = wx2.rgb;  // 2026-11-22: the tint comes from the CPU (MapLook: time of day, or a dark sky's lighting)
     float br = max(c.r, max(c.g, c.b)), sat = br - min(c.r, min(c.g, c.b));  // keep the level's lights lit: bright or strongly colored pixels
     t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)) * wx.x);  // wx.x here = keep lit (0 on THPS1-4 maps: no real lights)
     return float4(c * t, 1);
@@ -2001,6 +2002,7 @@ static void SetLevel(const char* name) {
     for (auto& ch : lv) ch = (char)tolower((unsigned char)ch);
     if (lv == g_level) return;
     g_level = lv;
+    g_skySeen = false;  // a new level: no sky drawn on it yet (indoor levels never draw one)
     g_lamps.clear();
     std::string data, mine;
     ReadWholeFile(ExeDirFile("levellights.txt"), data);
@@ -2105,6 +2107,67 @@ static void LampQueriesFree() {
     g_lqState = 0;
 }
 static bool BulbsOn() { return g_bulbAmt > 0.01f && g_bulbN > 0 && V("gfx_lampbulbs") && g_psBHalo && g_psBPool; }
+// ---- map lighting (2026-11-22, Noah: "dark skies light the map"): one look for the scene tint (NightTint), the dark
+// lift, lamps/bulbs/windows, light level and fog/mist color. A picked time of day wins as before. On Level / server the
+// DARKER of the server's time and the replacement sky's lighting is used: space skies light the map like Night,
+// synthwave and hellfire like Evening lights, storm and underwater like a dim Evening; the bright skies, Sky Off, the
+// main menu, levels where no sky drew (indoor) and cards without the sky shader change nothing. When the time of day
+// wins under storm, underwater or hellfire, the tint keeps that sky's color at the time's strength. Local only: the
+// game's own time of day (gfx_todnow / Kali) and other players are untouched. The skies themselves are as 0.10.1.
+struct MapLook { float tint[3]; float lift; int lampTod; float lite; float fog[3]; float night, dawn; };
+static MapLook g_mapLook = {{1, 1, 1}, 0, 0, 1, {0.62f, 0.66f, 0.72f}, 0, 0};
+// 0-6 = the time of day looks (as before); 7 storm, 8 underwater, 9 hellfire, 10 synthwave: a dark sky on a lit level
+static const MapLook kLooks[11] = {
+    {{1, 1, 1}, 0, 0, 1, {0.62f, 0.66f, 0.72f}, 0, 0},
+    {{1, 1, 1}, 0, 1, 0.85f, {0.78f, 0.72f, 0.68f}, 0, 0},
+    {{1, 1, 1}, 0, 2, 1, {0.68f, 0.72f, 0.78f}, 0, 0},
+    {{1, 1, 1}, 0, 3, 0.7f, {0.62f, 0.58f, 0.56f}, 0, 0},
+    {{0.22f, 0.26f, 0.40f}, 0.4f, 4, 0.3f, {0.10f, 0.12f, 0.18f}, 1, 0},
+    {{0.92f, 0.86f, 0.90f}, 0.15f, 5, 0.45f, {0.30f, 0.24f, 0.30f}, 1, 0},
+    {{0.40f, 0.40f, 0.52f}, 0.3f, 6, 0.4f, {0.17f, 0.16f, 0.20f}, 0, 1},  // dawn: cold blue-pink (0.42, 0.40, 0.50) x light 0.4
+    {{0.68f, 0.68f, 0.70f}, 0, 0, 0.7f, {0.55f, 0.57f, 0.60f}, 0, 0},     // storm: dim grey daylight, lamps off
+    {{0.52f, 0.68f, 0.78f}, 0, 0, 0.7f, {0.30f, 0.50f, 0.58f}, 0, 0},     // underwater: dim blue, lamps off
+    {{0.80f, 0.56f, 0.48f}, 0.15f, 5, 0.45f, {0.40f, 0.22f, 0.16f}, 1, 0}, // hellfire: evening lights, red
+    {{0.74f, 0.66f, 0.72f}, 0.15f, 5, 0.45f, {0.30f, 0.24f, 0.30f}, 1, 0}, // synthwave: evening lights on a lit level
+};
+static int LookRank(int i) {  // darkness: day / level's own, morning, evening (storm, underwater), evening lights, dawn, night
+    static const int r[11] = {0, 1, 0, 2, 5, 3, 4, 2, 2, 3, 3};
+    return i >= 0 && i < 11 ? r[i] : 0;
+}
+static int SkyLook() {  // the look a replacement sky gives the map, -1 = none
+    switch (V("gfx_galaxy")) {
+        case 1: case 2: case 3: case 4: case 5: case 13: return 4;
+        case 6: return 10;
+        case 7: return 7;
+        case 10: return 9;
+        case 11: return 8;
+    }
+    return -1;
+}
+static const MapLook& MapLookNow(float dt) {
+    int tod = TodSetting();
+    if (tod < 0 || tod > 6) tod = 0;
+    MapLook want = kLooks[tod];
+    int sky = V("gfx_tod") == 0 && !g_mainMenu && GalaxyOn() && g_skySeen ? SkyLook() : -1;
+    if (sky >= 0) {
+        if (LookRank(sky) > LookRank(tod)) want = kLooks[sky];
+        else if (sky >= 7 && sky <= 9) {  // the time wins: keep the sky's color at its strength
+            const float* h = kLooks[sky].tint;
+            float hl = h[0] * 0.299f + h[1] * 0.587f + h[2] * 0.114f;
+            float tl = want.tint[0] * 0.299f + want.tint[1] * 0.587f + want.tint[2] * 0.114f;
+            for (int k = 0; k < 3; ++k) { float v = tl * h[k] / hl; want.tint[k] = v > 1 ? 1 : v; }
+        }
+    }
+    static bool first = true;
+    MapLook& m = g_mapLook;
+    m.lift = want.lift; m.lampTod = want.lampTod;  // the lift and the lamps fade on their own
+    float f = first ? 1.0f : (dt / 3.0f > 1 ? 1 : dt / 3.0f);  // about 3 s from one look to the next
+    first = false;
+    auto ease = [f](float& v, float to) { float d = to - v; v = fabsf(d) <= f ? to : v + (d > 0 ? f : -f); };
+    for (int k = 0; k < 3; ++k) { ease(m.tint[k], want.tint[k]); ease(m.fog[k], want.fog[k]); }
+    ease(m.lite, want.lite); ease(m.night, want.night); ease(m.dawn, want.dawn);
+    return m;
+}
 static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
     float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
@@ -2189,9 +2252,10 @@ static void UpdateWorld() {
     if (!seeded) { seeded = true; srand(GetTickCount()); }
     double now = NowS();
     float dt = last ? (float)(now - last > 0.5 ? 0.5 : now - last) : 0;
+    const MapLook& look = MapLookNow(dt);
     {   // Night (Noah 2026-10-12: "night mode is waaaay too dark"): ease the dark lift in/out over ~3 s
-        int lt = TodSetting();  // 2026-11-22: also on the server's night (shibe's dark Chicago: tint without the lift)
-        float want = lt == 4 ? 0.4f : lt == 6 ? 0.3f : lt == 5 ? 0.15f : 0.0f;  // dawn lifts a little less; evening lights a little (2026-11-22)
+        // 2026-11-22: also on the server's night (shibe's dark Chicago: tint without the lift), and under a dark sky (MapLookNow)
+        float want = look.lift;  // night 0.4, dawn 0.3, evening lights 0.15
         float step = dt / 3.0f * 0.4f;
         g_nightLift = g_nightLift < want ? (g_nightLift + step > want ? want : g_nightLift + step)
                                          : (g_nightLift - step < want ? want : g_nightLift - step);
@@ -2208,14 +2272,11 @@ static void UpdateWorld() {
     float blend = 0;
     int st = SkySetting();
     g_sky[0] = (float)st; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)st; g_sky[3] = blend;
-    UpdateLamps(a, b, blend, dt);  // lamps follow the server too
-    UpdateBulbs(a, b, blend, dt);
-    static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
-    static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
-                                     {0.62f, 0.58f, 0.56f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
-                                     {0.17f, 0.16f, 0.20f}};  // dawn: cold blue-pink (0.42, 0.40, 0.50) x light 0.4
-    float lite = kLite[a] + (kLite[b] - kLite[a]) * blend;
-    for (int k = 0; k < 3; ++k) g_wx[2][k] = kFog[a][k] + (kFog[b][k] - kFog[a][k]) * blend;
+    (void)a; (void)b; (void)blend;
+    UpdateLamps(look.lampTod, look.lampTod, 0, dt);  // lamps follow the server and dark skies too (they fade on their own)
+    UpdateBulbs(look.lampTod, look.lampTod, 0, dt);
+    float lite = look.lite;  // light level and fog color: faded in MapLookNow
+    for (int k = 0; k < 3; ++k) g_wx[2][k] = look.fog[k];
     g_wx[2][3] = 1;
 
     // weather: a fixed kind, or Random (a new pick every 3-6 minutes from clear, rain, storm and snow; 2026-11-21
@@ -2392,11 +2453,7 @@ static void MistConsts(float out[2][4]) {
     float cap = fa <= 6 ? 0.92f : 0.92f + (fa - 6) * 0.01625f;
     out[0][0] = kD[lv] * amt; out[0][1] = kHs[lv]; out[0][2] = ground; out[0][3] = cap;
     // color: the time of day fog color; at Night / Evening lights a dark blue-gray scaled by the light level
-    float k[4] = {g_sky[0], g_sky[1], g_sky[2], g_sky[3]};
-    if (V("gfx_tod") == 0) { k[0] = k[2] = (float)g_serverTod; k[3] = 0; }
-    auto nw = [](float t) { return t > 3.5f && t < 5.5f ? 1.0f : 0.0f; };  // night / evening lights
-    auto dw = [](float t) { return t > 5.5f ? 1.0f : 0.0f; };              // dawn
-    float night = nw(k[0]) + (nw(k[2]) - nw(k[0])) * k[3], dawn = dw(k[0]) + (dw(k[2]) - dw(k[0])) * k[3];
+    float night = g_mapLook.night, dawn = g_mapLook.dawn;  // night / evening lights, dawn (MapLookNow, faded)
     static const float kNight[3] = {0.30f, 0.34f, 0.44f}, kDawn[3] = {0.42f, 0.40f, 0.50f};
     float lite = g_wx[1][0] > 0 ? g_wx[1][0] : 1.0f;
     for (int i = 0; i < 3; ++i) out[1][i] = g_wx[2][i] + (kNight[i] * lite - g_wx[2][i]) * night + (kDawn[i] * lite - g_wx[2][i]) * dawn;
@@ -2405,13 +2462,9 @@ static void MistConsts(float out[2][4]) {
 
 static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
     if (g_mainMenu || g_inPost) return;
+    const float* tn = g_mapLook.tint;  // the map tint now (time of day or a dark sky, faded; MapLookNow)
+    if (tn[0] > 0.999f && tn[1] > 0.999f && tn[2] > 0.999f) return;
     float k[4] = {g_sky[0], g_sky[1], g_sky[2], g_sky[3]};
-    if (V("gfx_tod") == 0) {
-        if (g_serverTod <= 0) return;
-        k[0] = k[2] = (float)g_serverTod; k[3] = 0;
-    }
-    auto dark = [](float t) { return t > 3.5f; };
-    if (!dark(k[0]) && !(k[3] > 0.001f && dark(k[2]))) return;
     if (!MakeShaders(dev) || !g_psNightTint) return;
     D3DSURFACE_DESC d;
     bb->GetDesc(&d);
@@ -2434,6 +2487,8 @@ static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
     dev->SetPixelShaderConstantF(16, k, 1);
     float keep[4] = {(float)g_keepLit, 0, 0, 0};
     dev->SetPixelShaderConstantF(17, keep, 1);  // ps_nighttint reads c17 (wx) .x as keep lit; the weather pass sets its own c17
+    float tint[4] = {tn[0], tn[1], tn[2], 1};
+    dev->SetPixelShaderConstantF(18, tint, 1);  // and c18 (wx2) .rgb as the tint (2026-11-22)
     dev->SetRenderTarget(0, bb);
     dev->SetDepthStencilSurface(ds);
     D3DVIEWPORT9 vp = {0, 0, d.Width, d.Height, 0, 1};
@@ -2720,6 +2775,7 @@ static void DrawGalaxy(IDirect3DDevice9* dev) {
     Quad(dev, d.Width, d.Height, 1.0f);
     g_sb->Apply();
     g_inPost = false;
+    g_skySeen = true;  // the replacement sky really drew on this level (MapLookNow: only then may it darken the map)
 }
 
 static bool SkyWanted() { return SkySetting() || V("gfx_skypop"); }

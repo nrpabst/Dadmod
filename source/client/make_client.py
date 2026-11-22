@@ -29,7 +29,9 @@ CLIENT = os.path.join(WORK, 'client')
 # where they say @DADMOD_VERSION@; the installer reads dadmod\version.txt; the zip is named after it.
 VERSION = open(os.path.join(CLIENT, 'VERSION')).read().strip()
 # the extra built-in levels' files come from this game folder (read only) and must not exist in these plain installs
-VAULT_SRC = os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Dev')
+# DADMOD_VAULT_SRC: a frozen copy of those files (2026-11-22: another thread rebuilt the P8 levels in Dev mid-build, so the
+# recipes and the shipped level files came from different versions)
+VAULT_SRC = os.environ.get('DADMOD_VAULT_SRC') or os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Dev')
 # the game builds the recipes are made against (read only): plain THUG Pro, the newer and the older Kali Mod, and a
 # fresh THUG Pro + the public Kali download with no thugpro_qe.prx (Noah 2026-11-18: players who only dragged in
 # Kali's data folder have no thugpro_qe.prx; made by client/tools/make_recipe_game_kali.py)
@@ -289,6 +291,17 @@ def package(out, release=None):
     def no_shop(srcs):
         return [s for s in srcs if os.path.basename(s).lower() != 'skateshop_scripts.prx']
 
+    # dadmod_qb.prx and dadmod_levelfix.qb: stock files only, no extra-level files either (2026-11-22: the installer
+    # checks the dadmod_qb.prx recipe before it copies the extra levels in, so a recipe reading P8Downtown_scripts.prx
+    # stopped the install with "missing from your game")
+    stock_box = []
+
+    def get_corpora_stock():
+        if not stock_box:
+            stock_box.extend(dadpatch.Corpus(g, no_shop(dadpatch.all_script_sources(g))) for g in games)
+            print('recipe sources (stock files only, no Skateshop_scripts.prx): ' + '; '.join('%s %d files' % (os.path.basename(c.game), len(c.sources)) for c in stock_box))
+        return stock_box
+
     def get_corpora_noshop():
         if not noshop_box:
             noshop_box.extend(dadpatch.Corpus(g, no_shop(dadpatch.all_script_sources(g) + extra)) for g in games)
@@ -311,14 +324,16 @@ def package(out, release=None):
     for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_levelfix.qb')):
         want.remove(rel)
         name = os.path.splitext(os.path.basename(rel))[0] + '.dpr'
-        key = 'recipe-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
+        key = 'recipe-stock|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
         recipes.append(name)
         if reuse(key, os.path.join(rdir, name)):
             reused += 1
             continue
-        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora_noshop())
+        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora_stock())
         if b'skateshop_scripts.prx' in b.lower():
             sys.exit('PACKAGE FAILED: recipe %s still reads Skateshop_scripts.prx' % name)
+        if any(x.encode('ascii').lower() in b.lower() for x in extra):
+            sys.exit('PACKAGE FAILED: recipe %s reads an extra level file the installer adds later' % name)
         open(os.path.join(rdir, name), 'wb').write(b)
         for g in games:
             if dadpatch.apply_recipe(b, g) != target:
@@ -338,13 +353,17 @@ def package(out, release=None):
         seen.add(qb)
         name = os.path.splitext(qb)[0] + '.dpr'
         tfile = os.path.join(mlsrc, qb)
-        key = 'scene|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(tfile, 'rb').read()).hexdigest())
+        # no Skateshop_scripts.prx either (Noah 2026-11-22: a player with a CAS mod lost 18 menu scenes because these
+        # recipes copied a few bytes from it; "make it not depend on casmod")
+        key = 'scene-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(tfile, 'rb').read()).hexdigest())
         if reuse(key, os.path.join(mdir, name)):
             reused += 1
             made.append(name)
             continue
-        cs = get_corpora()
+        cs = get_corpora_noshop()
         b, variants, target = dadpatch.make(tfile, os.path.join('dadmod', 'menulevels', qb), None, corpora=cs)
+        if b'skateshop_scripts.prx' in b.lower():
+            sys.exit('PACKAGE FAILED: recipe %s still reads Skateshop_scripts.prx' % name)
         if not any(dadpatch.apply_recipe(b, c.game) == target for c in cs):
             bad.append('%s: NO GAME REBUILDS IT' % qb)
             continue

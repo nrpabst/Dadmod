@@ -533,7 +533,7 @@ function Explain-Problem($text) {
 
 # a report the player can send when the game files don't match a known version (Noah 2026-11-18). Written next to
 # Setup.bat (or to the Desktop when that folder is read-only); never into the game folder
-function Write-Problem($g, $recipes) {
+function Write-Problem($g, $recipes, $head = 'Why it stopped:') {
     $lines = New-Object System.Collections.ArrayList
     [void]$lines.Add("dadmod install problem report, " + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
     $vf = Join-Path $Files 'dadmod\version.txt'
@@ -555,7 +555,7 @@ function Write-Problem($g, $recipes) {
         } catch { [void]$lines.Add("couldn't check $r : $($_.Exception.Message)") }
     }
     Say ''
-    Say 'Why it stopped:'
+    Say $head
     if ($why.Count -eq 0) { [void]$why.Add("dadmod couldn't work out which file is different (see the report below).") }
     foreach ($w in $why) { Write-Host "  - $w" -ForegroundColor Yellow }
     $name = 'dadmod-install-problem.txt'
@@ -690,8 +690,15 @@ function Install($g, [bool]$repair = $false) {
             $built++
         }
         if ($failed.Count) {
-            Write-Problem $g @($failedRecipes)
-            Say "Couldn't build $($failed.Count) files from your game files (your THUG Pro version isn't one dadmod knows):"
+            # only menu scenes missing (Noah 2026-11-22): dadmod works, those menu backgrounds show the skate shop instead
+            $onlyScenes = -not ($failed | Where-Object { $_ -notmatch '^dadmod\\menulevels\\' })
+            if ($onlyScenes) {
+                Write-Problem $g @($failedRecipes) 'Why:'
+                Say "dadmod is installed and works. $($failed.Count) of the main menu background scenes couldn't be set up from your game files (another mod changed files they use); the menu shows the skate shop in their place:"
+            } else {
+                Write-Problem $g @($failedRecipes)
+                Say "Couldn't build $($failed.Count) files from your game files (your THUG Pro version isn't one dadmod knows):"
+            }
             foreach ($t in $failed) { Say "  $t" }
             if ($failed | Where-Object { $_ -match 'dadmod_qb\.prx$' }) { Fail 'dadmod needs its script file. Please report your THUG Pro version.' }
         }

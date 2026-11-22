@@ -4801,7 +4801,7 @@ script dadmod_kb_click_anim
     endif
 endscript
 
-script dadmod_fit_extra
+script dadmod_fit_extra time = 0
     if not ScreenElementExists id = <id>
         return
     endif
@@ -4812,12 +4812,37 @@ script dadmod_fit_extra
     if <id> : GetSingleTag dadmod_xbase
         mm_base = <dadmod_xbase>
     endif
-    if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_base> min = 0.6
-        if (<mm_base> = 0.0)
-            <id> : SetTags dadmod_xbase = <ms_base>
-        endif
-        DoScreenElementMorph id = { <id> child = extra_text } scale = <ms_fit> time = 0
+    mm_nofit = 0
+    if <id> : GetSingleTag dadmod_nofit
+        mm_nofit = <dadmod_nofit>
     endif
+    mm_grow = 1.0
+    if <id> : GetSingleTag dadmod_grown
+        if (<dadmod_grown> = 1)
+            mm_grow = 1.15
+        endif
+    endif
+    mm_fit = -1.0
+    if (<mm_nofit> = 1)
+        if (<mm_base> > 0.0)
+            mm_fit = ( <mm_base> * <mm_grow> )
+        endif
+    endif
+    if (<mm_fit> < 0.0)
+        mm_gbase = ( <mm_base> * <mm_grow> )
+        mm_gmin = ( 0.6 / <mm_grow> )
+        if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_gbase> min = <mm_gmin>
+            if (<mm_base> = 0.0)
+                <id> : SetTags dadmod_xbase = <ms_base>
+                mm_fit = ( <ms_fit> * <mm_grow> )
+            else
+                mm_fit = <ms_fit>
+            endif
+        else
+            return
+        endif
+    endif
+    DoScreenElementMorph id = { <id> child = extra_text } scale = <mm_fit> time = <time>
 endscript
 
 script dadmod_fit_all

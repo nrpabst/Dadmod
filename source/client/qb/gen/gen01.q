@@ -9414,7 +9414,7 @@ script thugpro_menu_item_focus
         endif
     endif
     dadmod_hl_focus id = <id>
-    dadmod_fit_extra id = <id>
+    dadmod_fit_extra id = <id> time = 0.08
 endscript
 
 script thugpro_menu_item_unfocus
@@ -9466,6 +9466,7 @@ script thugpro_menu_item_unfocus
     KillSpawnedScript Name = do_random_effect_paused
     KillSpawnedScript Name = do_random_effect_paused_2
     dadmod_hl_unfocus id = <id>
+    dadmod_fit_extra id = <id> time = 0.08
 endscript
 
 script thugpro_load_theme

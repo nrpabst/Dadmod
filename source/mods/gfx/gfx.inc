@@ -3065,13 +3065,14 @@ static void InstallCreateHook() {
     }
 }
 
-// d3dHooks = false: no Direct3D hooks at all (client safe start, loader.cpp); oneProbe: see PatchThread.
+// d3dHooks = false: client safe start (loader.cpp): no CreateDevice import hook and no probe thread; KeepDeviceHooks
+// (controller read) still adopts the game device later, so graphics hooks come in anyway. oneProbe: see PatchThread.
 // The server build calls Install() and keeps both probes as before.
 static void Install(bool d3dHooks = true, bool oneProbe = false) {
     Load();
     InstallMirrorInput();
     InstallLevelSoundHooks();
-    if (!d3dHooks) { mmenu::Log("gfx: safe start, Direct3D hooks off (graphics settings do nothing)"); return; }
+    if (!d3dHooks) { mmenu::Log("gfx: safe start, early Direct3D hook skipped (the device is picked up later, graphics still work)"); return; }
     g_oneProbe = oneProbe;
     InstallCreateHook();
     CloseHandle(CreateThread(nullptr, 0, PatchThread, nullptr, 0, nullptr));

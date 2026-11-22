@@ -2114,6 +2114,7 @@ static bool BulbsOn() { return g_bulbAmt > 0.01f && g_bulbN > 0 && V("gfx_lampbu
 // main menu, levels where no sky drew (indoor) and cards without the sky shader change nothing. When the time of day
 // wins under storm, underwater or hellfire, the tint keeps that sky's color at the time's strength. Local only: the
 // game's own time of day (gfx_todnow / Kali) and other players are untouched. The skies themselves are as 0.10.1.
+static bool g_lookSnap = false;  // the player just changed Sky or Time of day: lift, lamps and tint fade in ~0.3 s, not ~3 s
 struct MapLook { float tint[3]; float lift; int lampTod; float lite; float fog[3]; float night, dawn; };
 static MapLook g_mapLook = {{1, 1, 1}, 0, 0, 1, {0.62f, 0.66f, 0.72f}, 0, 0};
 // 0-6 = the time of day looks (as before); 7 storm, 8 underwater, 9 hellfire, 10 synthwave: a dark sky on a lit level
@@ -2159,9 +2160,17 @@ static const MapLook& MapLookNow(float dt) {
         }
     }
     static bool first = true;
+    static int lastSky = -2, lastTod = -2;
+    int skyNow = V("gfx_galaxy"), todNow = V("gfx_tod");
+    // Noah 2026-11-22: the player's own Sky or Time of day change relights the map at once; only a server/level time
+    // change (g_serverTod mid-game) still eases in
+    static double fastUntil = 0;  // Noah: "or maybe make the fade super fast"
+    if (!first && (skyNow != lastSky || todNow != lastTod)) fastUntil = NowS() + 0.6;
+    g_lookSnap = NowS() < fastUntil;
+    lastSky = skyNow; lastTod = todNow;
     MapLook& m = g_mapLook;
-    m.lift = want.lift; m.lampTod = want.lampTod;  // the lift and the lamps fade on their own
-    float f = first ? 1.0f : (dt / 3.0f > 1 ? 1 : dt / 3.0f);  // about 3 s from one look to the next
+    m.lift = want.lift; m.lampTod = want.lampTod;  // the lift and the lamps fade on their own (faster with g_lookSnap)
+    float f = first ? 1.0f : (dt / (g_lookSnap ? 0.3f : 3.0f) > 1 ? 1 : dt / (g_lookSnap ? 0.3f : 3.0f));  // about 3 s from one look to the next (0.3 s for the player's own change)
     first = false;
     auto ease = [f](float& v, float to) { float d = to - v; v = fabsf(d) <= f ? to : v + (d > 0 ? f : -f); };
     for (int k = 0; k < 3; ++k) { ease(m.tint[k], want.tint[k]); ease(m.fog[k], want.fog[k]); }
@@ -2173,6 +2182,7 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
     g_bulbNight = want > 0.5f;
     float step = dt / 3.0f + 0.0001f;
+    if (g_lookSnap) step = dt / 0.3f + 0.0001f;
     g_bulbAmt = g_bulbAmt < want ? (g_bulbAmt + step > want ? want : g_bulbAmt + step) : (g_bulbAmt - step < want ? want : g_bulbAmt - step);
     g_bulbN = 0;
     if (g_bulbAmt <= 0.01f || g_bulbs.empty()) return;
@@ -2214,7 +2224,7 @@ static void UpdateLamps(int todA, int todB, float blend, float dt) {
     float want = (w(todA) + (w(todB) - w(todA)) * blend) * V("gfx_lamps") / 6.0f;
     static float shown = -1.0f;
     if (shown < 0) shown = want;  // first frame: no fade
-    float step = dt / 4.0f + 0.0001f;  // 2026-11-22: was scaled by gfx_lamps, so with 0 it took minutes to fade out
+    float step = dt / (g_lookSnap ? 0.3f : 4.0f) + 0.0001f;  // 2026-11-22: was scaled by gfx_lamps, so with 0 it took minutes to fade out; 0.3 s for the player's own change
     shown = shown < want ? (shown + step > want ? want : shown + step) : (shown - step < want ? want : shown - step);
     g_lampAmt = shown;
     g_lampN = 0;
@@ -2257,6 +2267,7 @@ static void UpdateWorld() {
         // 2026-11-22: also on the server's night (shibe's dark Chicago: tint without the lift), and under a dark sky (MapLookNow)
         float want = look.lift;  // night 0.4, dawn 0.3, evening lights 0.15
         float step = dt / 3.0f * 0.4f;
+        if (g_lookSnap) step = dt / 0.3f * 0.4f;
         g_nightLift = g_nightLift < want ? (g_nightLift + step > want ? want : g_nightLift + step)
                                          : (g_nightLift - step < want ? want : g_nightLift - step);
     }

@@ -399,8 +399,116 @@ static int g_keepLit = 1;  // night tint spares bright / colored pixels (THUG2-e
 static void FireworksShow(double seconds, const char* why);
 static void SetLevel(const char* name);
 static void LampMark(bool add);
+// ---- THUG Pro launcher settings in Dadmod > Graphics (Noah 2026-11-22: "the launcher settings should just be
+// incorporated into the dadmod graphics menu"). Pseudo-keys: nothing goes into gfx.ini; each value lives where the
+// THUG Pro launcher keeps it (HKCU\Software\THUG Pro\Settings, mmenu::DispGet/DispSet), so the launcher and dadmod
+// always show the same thing and a new install starts on the launcher's own defaults. Live where the engine reads the
+// value while playing (exe bytes the exe and thugpro.dll fill in once at start); the rest is read by thugpro.dll at
+// start and its menu row says "Takes effect after a restart."
+//   gfx_skshadow     SkaterShadowQuality 0 Low (circle) .. 3 Very High. Live: exe byte 0x7D6435 (1 = the local skater gets
+//                    the full-body shadow when it spawns, FUN_00565bf0) and the texture size pushed at 0x4A19E5/0x4A19EA
+//                    (256, 512 for High, 1024 for Very High, as thugpro.dll patches it at start); QB dadmod_shadow_refresh
+//                    then rebuilds the skater's shadow
+//   gfx_shadowdetail read only: 1 when the local skater should get the full-body shadow (exe byte 0x7D6435)
+//   gfx_clip         options bit 0x100, exe byte 0x7D643A        gfx_clipfog  options bit 0x1, exe byte 0x7D6436
+//   gfx_clipdist     distance 1..100, exe 0x7D6440 = distance, 0x7D6444 = distance * 5 + 95 (as the exe works it out at 0x5F3559)
+//   gfx_particles    NoParticles (row shows On = 0), restart     gfx_skaterlights  SkaterLightType 1 = on, restart
+//   gfx_levellights  DisableLevelLights (row shows On = 0). Live: thugpro.dll NOPs the 5-byte call at 0x490756 in
+//                    AddLevelLight at start; we put the call back (from the exe file) or NOP it; shows from the next level load
+//   gfx_tpscreenfx   ScreenEffectsEnabled 1 = on, restart (thugpro.dll makes its shader effects at device creation)
+namespace tp {
+static DWORD Opt() { return mmenu::DispGet("options", 0); }
+static void SetOpt(DWORD bit, bool on) { DWORD o = Opt(); mmenu::DispSet("options", on ? (o | bit) : (o & ~bit)); }
+static int Clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+static void WriteCode(BYTE* at, const BYTE* bytes, int n) {
+    DWORD old;
+    if (!VirtualProtect(at, n, PAGE_EXECUTE_READWRITE, &old)) return;
+    memcpy(at, bytes, n);
+    VirtualProtect(at, n, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, n);
+}
+static int Shadow() { return Clamp((int)mmenu::DispGet("SkaterShadowQuality", 0), 0, 3); }
+static void ShadowApply(int q) {
+    *(volatile BYTE*)0x7D6435 = q > 0 ? 1 : 0;
+    BYTE* p = (BYTE*)0x4A19E5;   // push 0x100 ; push 0x100 (width, height of the full-body shadow texture)
+    DWORD size = q >= 3 ? 0x400 : q == 2 ? 0x200 : 0x100;
+    DWORD w = *(DWORD*)(p + 1), h = *(DWORD*)(p + 6);
+    bool known = (w == 0x100 || w == 0x200 || w == 0x400) && (h == 0x100 || h == 0x200 || h == 0x400);
+    if (p[0] == 0x68 && p[5] == 0x68 && known && (w != size || h != size)) {
+        BYTE b[10] = { 0x68, 0, 0, 0, 0, 0x68, 0, 0, 0, 0 };
+        memcpy(b + 1, &size, 4); memcpy(b + 6, &size, 4);
+        WriteCode(p, b, 10);
+    }
+    mmenu::Log("gfx: skater shadow %d (%s, %ux%u)", q, q ? "full body" : "circle", size, size);
+}
+static int Dist() { DWORD v = mmenu::DispGet("distance", 100); return v < 1 ? 1 : v > 100 ? 100 : (int)v; }
+// the call AddLevelLight makes at 0x490756, as it is in THUGPro.exe on disk (thugpro.dll may have NOPed it in memory)
+static bool LevelLightCall(BYTE out[5]) {
+    BYTE* mem = (BYTE*)0x490756;
+    if (mem[0] == 0xE8) { memcpy(out, mem, 5); return true; }
+    BYTE* base = (BYTE*)0x400000;
+    IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(base + ((IMAGE_DOS_HEADER*)base)->e_lfanew);
+    IMAGE_SECTION_HEADER* s = IMAGE_FIRST_SECTION(nt);
+    DWORD rva = 0x90756, off = 0;
+    for (int i = 0; i < nt->FileHeader.NumberOfSections; ++i)
+        if (rva >= s[i].VirtualAddress && rva < s[i].VirtualAddress + s[i].SizeOfRawData) off = s[i].PointerToRawData + rva - s[i].VirtualAddress;
+    char path[MAX_PATH];
+    if (!off || !GetModuleFileNameA(NULL, path, MAX_PATH)) return false;
+    HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    DWORD got = 0;
+    bool ok = SetFilePointer(f, off, NULL, FILE_BEGIN) == off && ReadFile(f, out, 5, &got, NULL) && got == 5 && out[0] == 0xE8;
+    CloseHandle(f);
+    return ok;
+}
+static void LevelLightsApply(bool on) {
+    BYTE* mem = (BYTE*)0x490756;
+    static const BYTE nops[5] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
+    BYTE call[5];
+    if (on && !memcmp(mem, nops, 5) && LevelLightCall(call)) WriteCode(mem, call, 5);
+    else if (!on && mem[0] == 0xE8) WriteCode(mem, nops, 5);
+    mmenu::Log("gfx: level lights %s (from the next level load)", mem[0] == 0xE8 ? "on" : "off");
+}
+static bool Set(const char* key, int v) {
+    if (!_stricmp(key, "gfx_skshadow")) {
+        v = Clamp(v, 0, 3);
+        mmenu::DispSet("SkaterShadowQuality", v);
+        if (!v) SetOpt(0x2, false);   // the launcher's old "quality shadows" bit would turn the full-body shadow back on
+        ShadowApply(v);
+        return true;
+    }
+    if (!_stricmp(key, "gfx_clip")) { SetOpt(0x100, v != 0); *(volatile BYTE*)0x7D643A = v ? 1 : 0; mmenu::Log("gfx: distance clipping %s", v ? "on" : "off"); return true; }
+    if (!_stricmp(key, "gfx_clipfog")) { SetOpt(0x1, v != 0); *(volatile BYTE*)0x7D6436 = v ? 1 : 0; mmenu::Log("gfx: distance fog %s", v ? "on" : "off"); return true; }
+    if (!_stricmp(key, "gfx_clipdist")) {
+        v = Clamp(v, 1, 100);
+        mmenu::DispSet("distance", v);
+        *(volatile int*)0x7D6440 = v;
+        *(volatile int*)0x7D6444 = (int)((float)v * 5.0f + 95.0f);
+        mmenu::Log("gfx: clip distance %d", v);
+        return true;
+    }
+    if (!_stricmp(key, "gfx_particles")) { mmenu::DispSet("NoParticles", v ? 0 : 1); return true; }
+    if (!_stricmp(key, "gfx_levellights")) { mmenu::DispSet("DisableLevelLights", v ? 0 : 1); LevelLightsApply(v != 0); return true; }
+    if (!_stricmp(key, "gfx_skaterlights")) { mmenu::DispSet("SkaterLightType", v ? 1 : 0); return true; }
+    if (!_stricmp(key, "gfx_tpscreenfx")) { mmenu::DispSet("ScreenEffectsEnabled", v ? 1 : 0); return true; }
+    return false;
+}
+static bool Get(const char* key, int* v) {
+    if (!_stricmp(key, "gfx_skshadow")) { *v = Shadow(); return true; }
+    if (!_stricmp(key, "gfx_shadowdetail")) { *v = *(volatile BYTE*)0x7D6435 ? 1 : 0; return true; }
+    if (!_stricmp(key, "gfx_clip")) { *v = (Opt() & 0x100) ? 1 : 0; return true; }
+    if (!_stricmp(key, "gfx_clipfog")) { *v = (Opt() & 0x1) ? 1 : 0; return true; }
+    if (!_stricmp(key, "gfx_clipdist")) { *v = Dist(); return true; }
+    if (!_stricmp(key, "gfx_particles")) { *v = mmenu::DispGet("NoParticles", 0) ? 0 : 1; return true; }
+    if (!_stricmp(key, "gfx_levellights")) { *v = mmenu::DispGet("DisableLevelLights", 0) ? 0 : 1; return true; }
+    if (!_stricmp(key, "gfx_skaterlights")) { *v = mmenu::DispGet("SkaterLightType", 0) == 1 ? 1 : 0; return true; }
+    if (!_stricmp(key, "gfx_tpscreenfx")) { *v = mmenu::DispGet("ScreenEffectsEnabled", 0) == 1 ? 1 : 0; return true; }
+    return false;
+}
+}  // namespace tp
 // THUGRECOMP_SettingSave/Load redirect for gfx_ keys (declared in modes.inc)
 bool SetKey(const char* key, int value) {
+    if (tp::Set(key, value)) return true;
 #ifdef DADMOD_PADINJECT
     if (!_stricmp(key, "gfx_padinject_go")) { if (padhub::g_injGo) SetEvent(padhub::g_injGo); return true; }  // test builds only
 #endif
@@ -436,6 +544,7 @@ bool SetKey(const char* key, int value) {
     return true;
 }
 bool GetKey(const char* key, int* value) {
+    if (tp::Get(key, value)) return true;
     if (!_stricmp(key, "gfx_todnow")) { *value = TodNow(); return true; }
     int i = Index(key);
     if (i < 0) return false;

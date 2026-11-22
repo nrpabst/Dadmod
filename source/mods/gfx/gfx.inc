@@ -51,7 +51,7 @@ static const Setting kSettings[] = {
     {"gfx_tint", 0, -10, 10, "tint: -10 green .. 10 magenta, 0 normal"},
     {"gfx_galaxy", 0, 0, 14, "sky (replaces the level sky): 0 off, 1 milky way, 2 nebula, 3 deep space, 4 matrix, 5 aurora, 6 synthwave, "
                                 "7 storm, 8 golden hour, 9 vaporwave, 10 hellfire, 11 underwater, 12 rainbow, 13 black hole, 14 cotton candy"},
-    {"gfx_tod", 0, 0, 6, "time of day: 0 level default, 1 morning, 2 day, 3 sunset, 4 night, 5 evening with the lights on, 6 dawn (sun coming up, lights still on)"},
+    {"gfx_tod", 0, 0, 6, "time of day: 0 level default, 1 morning, 2 day, 3 evening, 4 night, 5 evening with the lights on, 6 dawn (sun coming up, lights still on)"},
     {"gfx_daylen", 2, 0, 4, "unused since 2026-11-21 (the Dynamic time of day was removed); kept so old files load"},
     {"gfx_weather", 0, 0, 4, "weather: 0 off, 1 rain, 2 heavy rain with lightning, 3 snow, 4 random (clear, rain, storm or snow, changes every few minutes)"},
     {"gfx_wxclear", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
@@ -1061,7 +1061,12 @@ float3 sky_golden(float3 d, float t, float az, float el) {
     float sun = saturate(dot(d, sd));
     col += pow(sun, 6.0) * float3(1.0, 0.55, 0.20) * 0.6 + smoothstep(0.9993, 0.9996, sun) * float3(1.0, 0.92, 0.7) * 2.0;
     float2 q = dome(d, 0.18) * 0.45 + float2(t * 0.02, t * 0.008);
-    float c = smoothstep(0.48, 0.78, fbm3u(float3(q, 0.3)) + noise3(float3(q * 4.0, t * 0.03)) * 0.12);
+    // the 3 cloud octaves and the fine noise share one noise3 in a loop (2026-11-22: four inlined copies were 589 slots,
+    // over D3D9's 512; the octave inputs are worked out up front the same way fbm3u does)
+    float3 o0 = float3(q, 0.3), o1 = o0 * 2.07 + 1.3, o2 = o1 * 2.07 + 1.3, o3 = float3(q * 4.0, t * 0.03);
+    float cs = 0;
+    [loop] for (int k = 0; k < 4; k++) cs += noise3(k == 0 ? o0 : (k == 1 ? o1 : (k == 2 ? o2 : o3))) * (k == 0 ? 0.5 / 0.875 : (k == 1 ? 0.25 / 0.875 : (k == 2 ? 0.125 / 0.875 : 0.12)));
+    float c = smoothstep(0.48, 0.78, cs);
     float3 cl = lerp(float3(0.95, 0.55, 0.40), float3(1.0, 0.85, 0.60), pow(sun, 3.0));
     return lerp(col, cl, c * 0.85 * saturate(el * 6.0));
 }
@@ -1226,9 +1231,9 @@ float3 skygrade(float3 c, float3 d, float tod, float3 gx) {
     } else if (tod > 1.5 && tod < 2.5) { // day: deep blue at the top, bright near the horizon
         float3 g = lerp(float3(0.78, 0.88, 1.0), float3(0.18, 0.42, 0.95), saturate(el * 1.5));
         c = lerp(c, g * (0.6 + lum * 0.8), mixv * 0.55) * (1 + pop * 0.08);
-    } else if (tod > 2.5 && tod < 3.5) { // sunset: orange horizon into purple
-        float3 g = lerp(float3(1.0, 0.42, 0.12), float3(0.30, 0.12, 0.42), saturate(el * 1.7));
-        c = lerp(c, g * (0.45 + lum * 1.2), mixv) + pow(sun, 10) * float3(1.0, 0.55, 0.2) * 0.35 + pow(sun, 300) * float3(1.0, 0.85, 0.6) * 0.5;
+    } else if (tod > 2.5 && tod < 3.5) { // evening (was sunset; 2026-11-22 softer, like stock Evening): warm band low, slate blue above
+        float3 g = lerp(float3(0.95, 0.60, 0.38), float3(0.22, 0.32, 0.46), saturate(el * 2.2));
+        c = lerp(c, g * (0.5 + lum), mixv * 0.75) + pow(sun, 10) * float3(1.0, 0.6, 0.3) * 0.2 + pow(sun, 300) * float3(1.0, 0.85, 0.6) * 0.4;
     } else if (tod > 3.5 && tod < 4.5) { // night: deep blue-black with stars and a faint milky way
         c = c * float3(0.30, 0.38, 0.62) * (0.6 - pop * 0.2);
         c += gx * (0.55 + pop * 0.5) * saturate(el * 5 + 0.4);
@@ -1257,7 +1262,7 @@ float4 ps_sky(float2 uv : TEXCOORD0) : COLOR {
 }
 // ---- night tint (scene pass, before lamps/weather): darkens buildings the game's TOD manager leaves at day brightness.
 // Drawn at the far plane with ZFUNC GREATER so only geometry (not the sky) is tinted; very bright pixels stay lit.
-float3 nighttint(float tod) { return tod > 3.5 && tod < 4.5 ? float3(0.22, 0.26, 0.40) : (tod > 5.5 ? float3(0.40, 0.40, 0.52) : (tod > 4.5 ? float3(0.62, 0.55, 0.60) : float3(1, 1, 1))); }  // night, dawn, evening lights
+float3 nighttint(float tod) { return tod > 3.5 && tod < 4.5 ? float3(0.22, 0.26, 0.40) : (tod > 5.5 ? float3(0.40, 0.40, 0.52) : (tod > 4.5 ? float3(0.92, 0.86, 0.90) : float3(1, 1, 1))); }  // night, dawn, evening lights (2026-11-22: was 0.62/0.55/0.60, Noah: as bright as Evening)
 float4 ps_nighttint(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float3 t = lerp(nighttint(sk.x), nighttint(sk.z), sk.w);
@@ -2186,7 +2191,7 @@ static void UpdateWorld() {
     float dt = last ? (float)(now - last > 0.5 ? 0.5 : now - last) : 0;
     {   // Night (Noah 2026-10-12: "night mode is waaaay too dark"): ease the dark lift in/out over ~3 s
         int lt = TodSetting();  // 2026-11-22: also on the server's night (shibe's dark Chicago: tint without the lift)
-        float want = lt == 4 ? 0.4f : lt == 6 ? 0.3f : 0.0f;  // dawn lifts a little less
+        float want = lt == 4 ? 0.4f : lt == 6 ? 0.3f : lt == 5 ? 0.15f : 0.0f;  // dawn lifts a little less; evening lights a little (2026-11-22)
         float step = dt / 3.0f * 0.4f;
         g_nightLift = g_nightLift < want ? (g_nightLift + step > want ? want : g_nightLift + step)
                                          : (g_nightLift - step < want ? want : g_nightLift - step);
@@ -2207,7 +2212,7 @@ static void UpdateWorld() {
     UpdateBulbs(a, b, blend, dt);
     static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
     static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
-                                     {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
+                                     {0.62f, 0.58f, 0.56f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
                                      {0.17f, 0.16f, 0.20f}};  // dawn: cold blue-pink (0.42, 0.40, 0.50) x light 0.4
     float lite = kLite[a] + (kLite[b] - kLite[a]) * blend;
     for (int k = 0; k < 3; ++k) g_wx[2][k] = kFog[a][k] + (kFog[b][k] - kFog[a][k]) * blend;

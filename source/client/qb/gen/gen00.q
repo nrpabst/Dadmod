@@ -1334,6 +1334,8 @@ script dadmod_noclip_state
     dadmod_nc_dir = <norm>
     dadmod_nc_ysign = -1.0
     dadmod_nc_xsign = 1.0
+    dadmod_nc_xcnt = 0
+    dadmod_nc_ycnt = 0
     dadmod_nc_vel = (0.0,0.0,0.0)
     dadmod_nc_camf = <dadmod_nc_dir>
     dadmod_nc_diag = 0
@@ -1423,20 +1425,72 @@ script dadmod_noclip_state
                     leftx = ( <leftx> / 128.0 )
                     lefty = ( <lefty> / 128.0 )
                 endif
+                dadmod_nc_yw = 0.0
                 if (<dadmod_nc_up> = 1)
-                    if (<lefty> < -0.5)
-                        dadmod_nc_ysign = -1.0
-                    endif
-                    if (<lefty> > 0.5)
-                        dadmod_nc_ysign = 1.0
+                    if (<dadmod_nc_dn> = 0)
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
                 endif
-                if (<dadmod_nc_rt> = 1)
-                    if (<leftx> > 0.5)
-                        dadmod_nc_xsign = 1.0
+                if (<dadmod_nc_dn> = 1)
+                    if (<dadmod_nc_up> = 0)
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
-                    if (<leftx> < -0.5)
-                        dadmod_nc_xsign = -1.0
+                endif
+                if (<dadmod_nc_yw> = 0.0)
+                    dadmod_nc_ycnt = 0
+                else
+                    if (<dadmod_nc_yw> = <dadmod_nc_ysign>)
+                        dadmod_nc_ycnt = 0
+                    else
+                        dadmod_nc_ycnt = ( <dadmod_nc_ycnt> + 1 )
+                        if (<dadmod_nc_ycnt> > 9)
+                            dadmod_nc_ysign = <dadmod_nc_yw>
+                            dadmod_nc_ycnt = 0
+                        endif
+                    endif
+                endif
+                dadmod_nc_xw = 0.0
+                if (<dadmod_nc_rt> = 1)
+                    if (<dadmod_nc_lt> = 0)
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_lt> = 1)
+                    if (<dadmod_nc_rt> = 0)
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_xw> = 0.0)
+                    dadmod_nc_xcnt = 0
+                else
+                    if (<dadmod_nc_xw> = <dadmod_nc_xsign>)
+                        dadmod_nc_xcnt = 0
+                    else
+                        dadmod_nc_xcnt = ( <dadmod_nc_xcnt> + 1 )
+                        if (<dadmod_nc_xcnt> > 9)
+                            dadmod_nc_xsign = <dadmod_nc_xw>
+                            dadmod_nc_xcnt = 0
+                        endif
                     endif
                 endif
                 dadmod_nc_sx = ( <leftx> * <dadmod_nc_xsign> )

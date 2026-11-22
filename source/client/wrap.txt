@@ -55,3 +55,5 @@ launch_quick_menu_keyboard
 entered_chat_message
 cancel_enter_chat_menu
 cancel_chat_menu
+# carexit.q (qb/dadmod/carexit.q): the game's own car exit puts back the shadow the launcher setting picks (stock always gave the full-body one)
+ToggleUserControlledVehicleMode

@@ -1547,6 +1547,7 @@ static bool __cdecl CF_WalkCam(void* params, void* script) {
         }
         if (s_drag && btn && GetCursorPos(&cpos) && (cpos.x != s_last.x || cpos.y != s_last.y)) start = true;
         if (!btn) s_drag = false;
+        if (padhub::g_padActive) start = false;   // a pad in use keeps the normal camera (Noah 2026-11-22)
         if (!start) return true;
         // take over from exactly where the normal camera is
         Vec off = Sub(cp, target);
@@ -1565,6 +1566,10 @@ static bool __cdecl CF_WalkCam(void* params, void* script) {
         if (!s_out) Log("walkcam: back to the skater camera%s", on ? " (middle click)" : "");
         s_out = true; s_drag = false;
     }
+    // the controller picked up again (Noah 2026-11-22: after a drag the pad was "bugged until you get back on the board":
+    // our camera follows his heading, so camera-relative stick steering kept turning him and the right stick did
+    // nothing): any pad button or stick past drift eases back to the normal skater camera.
+    if (!s_out && padhub::g_padActive) { Log("walkcam: back to the skater camera (controller)"); s_out = true; s_drag = false; }
     if (!s_out && GameInFront(fw)) {
         bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
         s_btnWas = btn;

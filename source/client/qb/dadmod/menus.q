@@ -288,4 +288,5 @@ script create_main_menu
         destroy_thugpro_startup_loadscreen_or_fade_in
     endif
     dadmod_welcome
+    dadmod_safestart_main
 endscript

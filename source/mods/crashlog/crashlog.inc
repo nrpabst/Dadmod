@@ -215,6 +215,179 @@ static void PatchLevelNameLookup() {
     FlushInstructionCache(GetCurrentProcess(), site, 5);
 }
 
+// Skater camera update (0x4FA860, __fastcall(cam), no stack args, plain ret). cam+0x170 is the skater it follows.
+// A1: as a level starts from Level Select, the target skater can be there without its SkaterCorePhysics component yet;
+//     0x4FBC53 calls GetComponent(0x5BD63B29) and 0x4FBC58 read [NULL+0x152C] (4 crashes in a player's 0.10.0
+//     crash.log, 2 in Dev 2026-11-17/18). A NULL component (or NULL +0x152C) now takes the same path as
+//     [[c+0x152C]+0x18] == 0 (jump to 0x4FBC71).
+// A2: returning from a level to the main menu, the camera ran one more update on a freed skater (GetComponent faulted
+//     reading obj+0x100, return 0x4FA9BD). The entry now checks that a non-NULL target is still the local skater or in
+//     the Skate mod's skater list (GetSkater returns NULL past the end); when it isn't, this frame is skipped.
+static const DWORD kCgSkateMod = 0x7CE478, kCgGetSkater = 0x5665C0, kCgLocalSkater = 0x566520;
+static volatile LONG g_camSkipLogged = 0;
+
+static void CamGuardLogOnce() {
+    if (InterlockedExchange(&g_camSkipLogged, 1)) return;
+    char path[MAX_PATH], line[160];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    path[n] = 0;
+    char logp[MAX_PATH];
+    snprintf(logp, sizeof logp, "%sdadmod\\mainmenu.log", path);
+    SYSTEMTIME t; GetLocalTime(&t);
+    snprintf(line, sizeof line, "%02d:%02d:%02d camera guard: skipped a frame, its skater was gone\r\n", t.wHour, t.wMinute,
+             t.wSecond);
+    HANDLE f = CreateFileA(logp, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) { Put(f, line); CloseHandle(f); }
+}
+
+static bool __fastcall CamTargetLive(BYTE* cam) {
+    void* target = *(void**)(cam + 0x170);
+    if (!target) return true;                    // the original returns early on its own
+    void* mod = *(void**)kCgSkateMod;
+    if (!mod) return true;                       // can't tell: leave it to the original
+    if (((void*(__thiscall*)(void*))kCgLocalSkater)(mod) == target) return true;
+    for (unsigned i = 0; i < 64; ++i) {
+        void* s = ((void*(__thiscall*)(void*, unsigned))kCgGetSkater)(mod, i);
+        if (!s) break;
+        if (s == target) return true;
+    }
+    CamGuardLogOnce();
+    return false;
+}
+
+static void PatchSkaterCamera() {
+    BYTE* entry = (BYTE*)0x4FA860;
+    BYTE* site = (BYTE*)0x4FBC58;
+    static const BYTE origEntry[6] = { 0x64, 0xA1, 0x00, 0x00, 0x00, 0x00 };   // mov eax, fs:[0]
+    static const BYTE origSite[11] = { 0x8B, 0x80, 0x2C, 0x15, 0x00, 0x00,     // mov eax, [eax+0x152C]
+                                       0x39, 0x68, 0x18, 0x74, 0x0E };          // cmp [eax+0x18], ebp; je 0x4FBC71
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 96, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    DWORD old;
+    if (memcmp(site, origSite, sizeof origSite) == 0) {
+        BYTE* s = stub;
+        *s++ = 0x85; *s++ = 0xC0;                                    // test eax, eax
+        *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4FBC71 - (DWORD)(s + 4); s += 4;   // jz 0x4FBC71
+        memcpy(s, origSite, 6); s += 6;                              // mov eax, [eax+0x152C]
+        *s++ = 0x85; *s++ = 0xC0;                                    // test eax, eax
+        *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4FBC71 - (DWORD)(s + 4); s += 4;   // jz 0x4FBC71
+        *s++ = 0x39; *s++ = 0x68; *s++ = 0x18;                       // cmp [eax+0x18], ebp
+        *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4FBC71 - (DWORD)(s + 4); s += 4;   // je 0x4FBC71
+        *s = 0xE9; *(DWORD*)(s + 1) = 0x4FBC63 - (DWORD)(s + 5);     // jmp 0x4FBC63
+        if (VirtualProtect(site, sizeof origSite, PAGE_EXECUTE_READWRITE, &old)) {
+            site[0] = 0xE9; *(DWORD*)(site + 1) = (DWORD)stub - (0x4FBC58 + 5);
+            for (int i = 5; i < (int)sizeof origSite; ++i) site[i] = 0x90;
+            VirtualProtect(site, sizeof origSite, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), site, sizeof origSite);
+            DebugLog("crashlog: skater camera null-physics guard applied (0x4FBC58)");
+        }
+    } else {
+        DebugLog("crashlog: skater camera null-physics guard skipped, bytes at 0x4FBC58 differ");
+    }
+    if (memcmp(entry, origEntry, sizeof origEntry) == 0) {
+        BYTE* s = stub + 48;
+        BYTE* e = s;
+        *s++ = 0x51; *s++ = 0x52;                                    // push ecx; push edx
+        *s = 0xE8; *(DWORD*)(s + 1) = (DWORD)&CamTargetLive - (DWORD)(s + 5); s += 5;   // call CamTargetLive (ecx = cam)
+        *s++ = 0x5A; *s++ = 0x59;                                    // pop edx; pop ecx
+        *s++ = 0x84; *s++ = 0xC0;                                    // test al, al
+        *s++ = 0x75; *s++ = 0x01;                                    // jnz +1
+        *s++ = 0xC3;                                                 // ret (skip this frame)
+        memcpy(s, origEntry, 6); s += 6;                             // mov eax, fs:[0]
+        *s = 0xE9; *(DWORD*)(s + 1) = 0x4FA866 - (DWORD)(s + 5);     // jmp 0x4FA866
+        if (VirtualProtect(entry, 6, PAGE_EXECUTE_READWRITE, &old)) {
+            entry[0] = 0xE9; *(DWORD*)(entry + 1) = (DWORD)e - (0x4FA860 + 5);
+            entry[5] = 0x90;
+            VirtualProtect(entry, 6, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), entry, 6);
+            DebugLog("crashlog: skater camera stale-target guard applied (0x4FA860)");
+        }
+    } else {
+        DebugLog("crashlog: skater camera stale-target guard skipped, bytes at 0x4FA860 differ");
+    }
+    FlushInstructionCache(GetCurrentProcess(), stub, 96);
+}
+
+// Global flags out of range (2026-11-22): SetGlobalFlag / UnSetGlobalFlag / GetGlobalFlag (0x5843A0 / 0x5843D0 /
+// 0x584400, __thiscall(career, flag), ret 4) keep 512 flags in 0x40 bytes at career+0x5F0 with no bounds check.
+// THUG Pro's own scripts use bigger flag numbers: the Auto-Goto flag #"0xae8d5911" = 4240 lands on career+0x800 bit 16,
+// which is the heap block header of a career list object; UnSetGlobalFlag on it (level_select_change_level_quit,
+// set_custom_restart, Auto-Goto off) turns its allocator 0x7D1098 into 0x7C1098 and quitting the game then crashed in
+// MemMgr::Free at 0x5BA0CA reading 0x20 (a player 3x on 2026-11-19/20, Dev about 10x 2026-11-16..21). Flags 0-511 keep
+// the original storage; bigger ones get their own bits here instead of writing into the heap; negative ones are ignored.
+static DWORD g_extFlags[512];   // flags 512 .. 16383
+static bool ExtFlag(int flag, DWORD** word, DWORD* bit) {
+    if (flag < 512 || flag >= 512 + 512 * 32) return false;
+    *word = &g_extFlags[(flag - 512) >> 5];
+    *bit = 1u << (flag & 31);
+    return true;
+}
+static void __fastcall SetFlagHook(BYTE* career, void*, int flag) {
+    DWORD* w; DWORD b;
+    if (flag >= 0 && flag < 512) *(DWORD*)(career + 0x5F0 + (flag >> 5) * 4) |= 1u << (flag & 31);
+    else if (ExtFlag(flag, &w, &b)) *w |= b;
+}
+static void __fastcall UnSetFlagHook(BYTE* career, void*, int flag) {
+    DWORD* w; DWORD b;
+    if (flag >= 0 && flag < 512) *(DWORD*)(career + 0x5F0 + (flag >> 5) * 4) &= ~(1u << (flag & 31));
+    else if (ExtFlag(flag, &w, &b)) *w &= ~b;
+}
+static bool __fastcall GetFlagHook(BYTE* career, void*, int flag) {
+    DWORD* w; DWORD b;
+    if (flag >= 0 && flag < 512) return (*(DWORD*)(career + 0x5F0 + (flag >> 5) * 4) & (1u << (flag & 31))) != 0;
+    if (ExtFlag(flag, &w, &b)) return (*w & b) != 0;
+    return false;
+}
+static void PatchGlobalFlags() {
+    static const BYTE setUnset[16] = { 0x8B, 0xC1, 0x8B, 0x4C, 0x24, 0x04, 0x8B, 0xD1, 0xC1, 0xFA, 0x05, 0x8D, 0x84, 0x90, 0xF0, 0x05 };
+    static const BYTE get[8] = { 0x8B, 0x44, 0x24, 0x04, 0x8B, 0xD1, 0x8B, 0xC8 };
+    BYTE* fs = (BYTE*)0x5843A0; BYTE* fu = (BYTE*)0x5843D0; BYTE* fg = (BYTE*)0x584400;
+    if (memcmp(fs, setUnset, 16) != 0 || memcmp(fu, setUnset, 16) != 0 || memcmp(fg, get, 8) != 0 ||
+        fs[0x1C] != 0x09 || fu[0x1E] != 0xF7) {
+        DebugLog("crashlog: global flag bounds patch skipped, bytes at 0x5843A0/0x5843D0/0x584400 differ");
+        return;
+    }
+    struct { BYTE* at; void* fn; } p[3] = { { fs, (void*)&SetFlagHook }, { fu, (void*)&UnSetFlagHook }, { fg, (void*)&GetFlagHook } };
+    for (auto& e : p) {
+        DWORD old;
+        if (!VirtualProtect(e.at, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+        e.at[0] = 0xE9; *(DWORD*)(e.at + 1) = (DWORD)e.fn - ((DWORD)e.at + 5);
+        VirtualProtect(e.at, 5, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), e.at, 5);
+    }
+    DebugLog("crashlog: global flag bounds patch applied (flags 512+ kept apart from the career data)");
+}
+
+// Particle vertex buffer NULL (2026-11-22): the particle draw 0x4D5290 locks its dynamic vertex buffer once a frame
+// ([edi+8]->Lock at 0x4D54CF..0x4D54E0) but the buffer comes from 0x4D3FF0, which ignores a failed
+// CreateVertexBuffer, so it crashed at 0x4D54DD reading 0 (a player 2026-11-20 on 0.9.16, Dev 2026-11-17). At 0x4D54B8
+// (nothing pushed yet, same stack depth as 0x4D56DB, where both draw paths meet) a NULL buffer now skips this
+// particle system's draw for the frame; the render state restore after 0x4D56DB still runs.
+static void PatchParticleNullVB() {
+    BYTE* at = (BYTE*)0x4D54B8;
+    static const BYTE orig[10] = { 0x8B, 0x0F, 0x8B, 0x47, 0x0C, 0x68, 0x00, 0x20, 0x00, 0x00 };
+    if (memcmp(at, orig, sizeof orig) != 0 || memcmp((BYTE*)0x4D56DB, "\x80\x3E\x00\x5F", 4) != 0) {
+        DebugLog("crashlog: particle null vertex buffer guard skipped, bytes at 0x4D54B8 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x83; *s++ = 0x7F; *s++ = 0x08; *s++ = 0x00;                       // cmp dword ptr [edi+8], 0
+    *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4D56DB - (DWORD)(s + 4); s += 4;  // je 0x4D56DB
+    memcpy(s, orig, 5); s += 5;                                                // mov ecx,[edi]; mov eax,[edi+0xC]
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x4D54BD - (DWORD)(s + 5);                   // jmp 0x4D54BD
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x4D54B8 + 5);
+    VirtualProtect(at, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, 5);
+    DebugLog("crashlog: particle null vertex buffer guard applied (0x4D54B8)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -222,6 +395,9 @@ static void Install() {
     PatchFireEventNullTarget();
     PatchNetSendNullClient();
     PatchLevelNameLookup();
+    PatchSkaterCamera();
+    PatchGlobalFlags();
+    PatchParticleNullVB();
 }
 
 }  // namespace crashlog

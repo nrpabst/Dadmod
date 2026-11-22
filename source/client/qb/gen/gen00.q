@@ -1334,6 +1334,8 @@ script dadmod_noclip_state
     dadmod_nc_dir = <norm>
     dadmod_nc_ysign = -1.0
     dadmod_nc_xsign = 1.0
+    dadmod_nc_xcnt = 0
+    dadmod_nc_ycnt = 0
     dadmod_nc_vel = (0.0,0.0,0.0)
     dadmod_nc_camf = <dadmod_nc_dir>
     dadmod_nc_diag = 0
@@ -1423,20 +1425,72 @@ script dadmod_noclip_state
                     leftx = ( <leftx> / 128.0 )
                     lefty = ( <lefty> / 128.0 )
                 endif
+                dadmod_nc_yw = 0.0
                 if (<dadmod_nc_up> = 1)
-                    if (<lefty> < -0.5)
-                        dadmod_nc_ysign = -1.0
-                    endif
-                    if (<lefty> > 0.5)
-                        dadmod_nc_ysign = 1.0
+                    if (<dadmod_nc_dn> = 0)
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
                 endif
-                if (<dadmod_nc_rt> = 1)
-                    if (<leftx> > 0.5)
-                        dadmod_nc_xsign = 1.0
+                if (<dadmod_nc_dn> = 1)
+                    if (<dadmod_nc_up> = 0)
+                        if (<lefty> > 0.5)
+                            dadmod_nc_yw = -1.0
+                        endif
+                        if (<lefty> < -0.5)
+                            dadmod_nc_yw = 1.0
+                        endif
                     endif
-                    if (<leftx> < -0.5)
-                        dadmod_nc_xsign = -1.0
+                endif
+                if (<dadmod_nc_yw> = 0.0)
+                    dadmod_nc_ycnt = 0
+                else
+                    if (<dadmod_nc_yw> = <dadmod_nc_ysign>)
+                        dadmod_nc_ycnt = 0
+                    else
+                        dadmod_nc_ycnt = ( <dadmod_nc_ycnt> + 1 )
+                        if (<dadmod_nc_ycnt> > 9)
+                            dadmod_nc_ysign = <dadmod_nc_yw>
+                            dadmod_nc_ycnt = 0
+                        endif
+                    endif
+                endif
+                dadmod_nc_xw = 0.0
+                if (<dadmod_nc_rt> = 1)
+                    if (<dadmod_nc_lt> = 0)
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_lt> = 1)
+                    if (<dadmod_nc_rt> = 0)
+                        if (<leftx> < -0.5)
+                            dadmod_nc_xw = 1.0
+                        endif
+                        if (<leftx> > 0.5)
+                            dadmod_nc_xw = -1.0
+                        endif
+                    endif
+                endif
+                if (<dadmod_nc_xw> = 0.0)
+                    dadmod_nc_xcnt = 0
+                else
+                    if (<dadmod_nc_xw> = <dadmod_nc_xsign>)
+                        dadmod_nc_xcnt = 0
+                    else
+                        dadmod_nc_xcnt = ( <dadmod_nc_xcnt> + 1 )
+                        if (<dadmod_nc_xcnt> > 9)
+                            dadmod_nc_xsign = <dadmod_nc_xw>
+                            dadmod_nc_xcnt = 0
+                        endif
                     endif
                 endif
                 dadmod_nc_sx = ( <leftx> * <dadmod_nc_xsign> )
@@ -1479,10 +1533,21 @@ script dadmod_noclip_state
                 endif
             endif
             dadmod_nc_cf = <dadmod_nc_dir>
+            dadmod_nc_camid = none
             GetCameraId
             if GotParam CameraId
-                if ObjectExists id = <CameraId>
-                    <CameraId> : Obj_GetPosition
+                dadmod_nc_camid = <CameraId>
+            endif
+            if root_window : GetSingleTag dadmod_walkcam_live
+                if (<dadmod_walkcam_live> = 1)
+                    if ObjectExists id = dadmod_orbit_cam
+                        dadmod_nc_camid = dadmod_orbit_cam
+                    endif
+                endif
+            endif
+            if not (<dadmod_nc_camid> = none)
+                if ObjectExists id = <dadmod_nc_camid>
+                    <dadmod_nc_camid> : Obj_GetPosition
                     dadmod_nc_cx = ( ( <dadmod_nc_pos> . (1.0,0.0,0.0) ) - ( <Pos> . (1.0,0.0,0.0) ) )
                     dadmod_nc_cz = ( ( <dadmod_nc_pos> . (0.0,0.0,1.0) ) - ( <Pos> . (0.0,0.0,1.0) ) )
                     if ( ( <dadmod_nc_cx> * <dadmod_nc_cx> + <dadmod_nc_cz> * <dadmod_nc_cz> ) > 1.0 )
@@ -1741,7 +1806,27 @@ script dadmod_noclip_void_watch
 endscript
 
 script dadmod_homelevel_tick
+    dadmod_hl_go = 0
     if THUGRECOMP_KeyPressed key = "Home"
+        dadmod_hl_go = 1
+    endif
+    dadmod_hl_sticks = 0
+    if THUGRECOMP_PadHeld button = "leftstick"
+        if THUGRECOMP_PadHeld button = "rightstick"
+            dadmod_hl_sticks = 1
+        endif
+    endif
+    if (<dadmod_hl_sticks> = 1)
+        if root_window : GetSingleTag dadmod_hl_sticks_was
+            if (<dadmod_hl_sticks_was> = 0)
+                dadmod_hl_go = 1
+            endif
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
+    endif
+    if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open
             SpawnScript dadmod_homelevel_open NotSessionSpecific = 1
@@ -3081,68 +3166,6 @@ script thugpro_bankdrops_chat
     return handled = 1
 endscript
 
-script dadmod_chatkeep_save
-    if ObjectExists id = keyboard_anchor
-        if keyboard_anchor : GetSingleTag no_buttons
-            if ObjectExists id = keyboard_current_string
-                GetTextElementString id = keyboard_current_string
-                if GotParam String
-                    KillSpawnedScript Name = dadmod_chatkeep_restore
-                    SpawnScript dadmod_chatkeep_restore params = { text = <String> }
-                endif
-            endif
-        endif
-    endif
-endscript
-
-script dadmod_chatkeep_restore
-    tries = 0
-    begin
-        wait 5 gameframes
-        if ObjectExists id = keyboard_anchor
-            return
-        endif
-        blocked = 0
-        if ObjectExists id = ped_speech_dialog
-            blocked = 1
-        endif
-        if ObjectExists id = goal_start_dialog
-            blocked = 1
-        endif
-        if ObjectExists id = goal_description_anchor
-            blocked = 1
-        endif
-        if ObjectExists id = dialog_box_anchor
-            blocked = 1
-        endif
-        if ( <blocked> = 0 )
-            break
-        endif
-        tries = ( <tries> + 1 )
-        if ( <tries> > 36 )
-            return
-        endif
-    repeat
-    DestroyIfObjectExist id = current_menu_anchor
-    DestroyIfObjectExist id = bg_container
-    create_onscreen_keyboard {
-    allow_cancel no_buttons text_block
-    Pos = (3.2e+02,2.6e+02)
-    keyboard_cancel_script = cancel_enter_chat_menu
-    keyboard_done_script = entered_chat_message
-    display_text = "Enter message"
-    keyboard_title = "Enter message"
-    min_length = 1
-    max_length = 75
-    display_text_scale = 0.5
-    text = <text>
-    }
-    if ObjectExists id = keyboard_display_string
-        FormatText TextName = shown "%s_" s = <text>
-        SetScreenElementProps id = keyboard_display_string text = <shown>
-    endif
-endscript
-
 dadmod_titlefx_block = "Menu UI Title effect (Noah, 2026-11-03). Lives in ButtonScripts.q because procrastination.qb is at its 512 KB limit"
 
 script dadmod_ui_title_rgb lmode = 0
@@ -3635,11 +3658,6 @@ script dadmod_mouse_rpause
         if IsTrue view_mode
             rp_ok = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                rp_ok = 0
-            endif
-        endif
     endif
     THUGRECOMP_MouseRightPause ok = <rp_ok>
 endscript
@@ -3694,6 +3712,18 @@ script dadmod_mouse_tick
         endif
     endif
     mm_nocam = <mm_accept>
+    mm_hc = <mm_screen>
+    if (<mm_screen> = 0)
+        if (<mm_menu> = 0)
+            if ScreenElementExists id = root_window
+                if root_window : GetSingleTag dadmod_walkcam_ok
+                    if (<dadmod_walkcam_ok> = 1)
+                        mm_hc = 2
+                    endif
+                endif
+            endif
+        endif
+    endif
     if (<mm_dialog> = 1)
         mm_nocam = 1
     endif
@@ -3703,7 +3733,7 @@ script dadmod_mouse_tick
     if (<mm_menu> = 1)
         THUGRECOMP_MouseMenu id = <mm_mid> root = root_window nocam = <mm_nocam> hidecur = <mm_screen> nodrag = <mm_lvl>
     else
-        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_screen>
+        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_hc>
     endif
     if (<mm_screen> = 0)
         ms_active = 0
@@ -4000,6 +4030,14 @@ script dadmod_mouse_click
         if (<ms_arrow> = 1)
             FireEvent type = pad_right target = <id>
             return
+        endif
+    endif
+    if not LevelIs Load_MainMenu
+        if ScreenElementExists id = root_window
+            if root_window : GetSingleTag pause_controller
+                FireEvent type = pad_choose target = <id> data = { device_num = <pause_controller> }
+                return
+            endif
         endif
     endif
     FireEvent type = pad_choose target = <id>
@@ -4801,7 +4839,7 @@ script dadmod_kb_click_anim
     endif
 endscript
 
-script dadmod_fit_extra
+script dadmod_fit_extra time = 0
     if not ScreenElementExists id = <id>
         return
     endif
@@ -4812,12 +4850,37 @@ script dadmod_fit_extra
     if <id> : GetSingleTag dadmod_xbase
         mm_base = <dadmod_xbase>
     endif
-    if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_base> min = 0.6
-        if (<mm_base> = 0.0)
-            <id> : SetTags dadmod_xbase = <ms_base>
-        endif
-        DoScreenElementMorph id = { <id> child = extra_text } scale = <ms_fit> time = 0
+    mm_nofit = 0
+    if <id> : GetSingleTag dadmod_nofit
+        mm_nofit = <dadmod_nofit>
     endif
+    mm_grow = 1.0
+    if <id> : GetSingleTag dadmod_grown
+        if (<dadmod_grown> = 1)
+            mm_grow = 1.15
+        endif
+    endif
+    mm_fit = -1.0
+    if (<mm_nofit> = 1)
+        if (<mm_base> > 0.0)
+            mm_fit = ( <mm_base> * <mm_grow> )
+        endif
+    endif
+    if (<mm_fit> < 0.0)
+        mm_gbase = ( <mm_base> * <mm_grow> )
+        mm_gmin = ( 0.6 / <mm_grow> )
+        if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_gbase> min = <mm_gmin>
+            if (<mm_base> = 0.0)
+                <id> : SetTags dadmod_xbase = <ms_base>
+                mm_fit = ( <ms_fit> * <mm_grow> )
+            else
+                mm_fit = <ms_fit>
+            endif
+        else
+            return
+        endif
+    endif
+    DoScreenElementMorph id = { <id> child = extra_text } scale = <mm_fit> time = <time>
 endscript
 
 script dadmod_fit_all
@@ -5014,16 +5077,28 @@ script dadmod_walkcam_tick
         if ScreenElementExists id = keyboard_anchor
             wc_on = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                wc_on = 0
-            endif
-        endif
         if GetCurrentSkaterCamAnimName
             if GotParam CurrentSkaterCamAnimName
                 wc_on = 0
             endif
         endif
+    endif
+    wc_nc = 0
+    if ScreenElementExists id = root_window
+        if root_window : GetSingleTag dadmod_noclip
+            if (<dadmod_noclip> > 0)
+                wc_nc = 1
+            endif
+        endif
+        wc_nc_was = <wc_nc>
+        if root_window : GetSingleTag dadmod_walkcam_nc
+            wc_nc_was = <dadmod_walkcam_nc>
+        endif
+        if not (<wc_nc_was> = <wc_nc>)
+            wc_on = 0
+        endif
+        root_window : SetTags dadmod_walkcam_nc = <wc_nc>
+        root_window : SetTags dadmod_walkcam_ok = <wc_on>
     endif
     if (<wc_quit> = 1)
         THUGRECOMP_WalkCam quit = 1
@@ -5033,10 +5108,23 @@ script dadmod_walkcam_tick
         Skater : Obj_GetOrientation
         wc_hx = <x>
         wc_hz = <z>
+        if (<wc_nc> = 1)
+            wc_hx = 0.0
+            wc_hz = 1.0
+        endif
         skatercam0 : Obj_GetPosition
         wc_cp = <Pos>
         skatercam0 : Obj_GetOrientation
         THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+    endif
+    wc_live = 0
+    if GotParam wc_state
+        if (<wc_state> = 1)
+            wc_live = 1
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_walkcam_live = <wc_live>
     endif
     if GotParam wc_state
         if (<wc_state> = 1)
@@ -5355,6 +5443,9 @@ endscript
 script dadmod_bail_vanish
     dadmod_abc_play part = abc_vanish
     dadmod_abcsnd_get
+    if ( <abcsnd_on> = 0 )
+        return abc_abort = 0
+    endif
     if ( <abcsnd_on> = 1 )
         DestroyFlexibleParticleSystem Name = dadmod_abc_fx_out
         CreateFlexibleParticleSystem Name = dadmod_abc_fx_out params_script = dadmod_abc_particle_params
@@ -5384,6 +5475,12 @@ script dadmod_bail_vanish
 endscript
 
 script dadmod_bail_reform
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 0 )
+        unhide
+        Obj_ShadowOn ShadowType = Detailed
+        return
+    endif
     hide
     Obj_ShadowOff
     wait 3 frames
@@ -6131,8 +6228,8 @@ script dadmod_bhra_easy_time RevertTime = 5
     endif
 endscript
 
-script dadmod_bhra_poll frames = 12
-    SetTags bhra_x = 0
+script dadmod_bhra_poll frames = 12 x0 = 0
+    SetTags bhra_x = <x0>
     begin
         if Held x
             SetTags bhra_x = 3
@@ -6166,8 +6263,13 @@ script dadmod_bhra_land2_arm RevertTime = 5
         SetTags bhra_pivot = 0
     endif
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
+    hx = 0
+    if Held x
+        hx = 3
+    endif
+    SetTags bhra_x = <hx>
     pf = ( <RevertTime> + 4 )
-    Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> }
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = <pf> x0 = <hx> }
     dadmod_bhra_dbg what = "land2 vert window armed"
     return bhra_arm = 1
 endscript
@@ -6188,7 +6290,12 @@ script dadmod_bhra_dd_arm
     endif
     SetTags bhra_pivot = 0
     Obj_KillSpawnedScript Name = dadmod_bhra_poll
-    Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 }
+    hx = 0
+    if Held x
+        hx = 3
+    endif
+    SetTags bhra_x = <hx>
+    Obj_SpawnScript dadmod_bhra_poll params = { frames = 90 x0 = <hx> }
     dadmod_bhra_dbg what = "skate-in window armed"
     return bhra_arm = 1
 endscript
@@ -6259,7 +6366,7 @@ script dadmod_bhra_ollie_mark
     GetSingleTag bhra_wait
     if GotParam bhra_wait
         if ( <bhra_wait> > 0 )
-            SetTags bhra_wait = 0 bhra_hopped = <bhra_wait>
+            SetTags bhra_wait = 0 bhra_hopped = <bhra_wait> bhra_hop_now = 1
             pv = 0
             if ( <bhra_wait> = 1 )
                 GetSingleTag bhra_pivot
@@ -6296,7 +6403,7 @@ endscript
 script dadmod_bhra_watch src = 1
     wait 1 gameframe
     GetSingleTag bhra_hopped
-    SetTags bhra_wait = 0
+    SetTags bhra_wait = 0 bhra_hop_now = 0
     hop = 0
     if GotParam bhra_hopped
         hop = <bhra_hopped>
@@ -6340,7 +6447,7 @@ script dadmod_bhra_flush
     GetSingleTag bhra_pending
     if GotParam bhra_pending
         if ( <bhra_pending> = 1 )
-            SetTags bhra_pending = 0
+            SetTags bhra_pending = 0 bhra_hop_now = 0
             dadmod_bhra_dbg what = "pending combo banked"
             LandSkaterTricks
         endif
@@ -6353,7 +6460,16 @@ script dadmod_bhra_revert_check
         if ( <bhra_pending> = 1 )
             SetTags bhra_pending = 0
             Obj_KillSpawnedScript Name = dadmod_bhra_watch
+            bhra_up = 0
+            GetSingleTag bhra_hop_now
+            if GotParam bhra_hop_now
+                bhra_up = <bhra_hop_now>
+            endif
+            SetTags bhra_hop_now = 0
             if InAir
+                bhra_up = 1
+            endif
+            if ( <bhra_up> = 1 )
                 if IsTrue dadmod_bhra_keep
                     dadmod_bhra_dbg what = "air revert after a hop: combo kept"
                     GetSingleTag bhra_pivot
@@ -7737,10 +7853,10 @@ endscript
 
 script dadmod_pause_skywx_menu
     dadmod_pause_sub_create name = dadmod_skywx title = "sky & weather" back_id = dadmod_pause_skywx
+    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
     dadmod_ui_item id = gfx_todfog_pause key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
     dadmod_ui_item id = gfx_fogamt_pause key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
-    dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
     dadmod_ui_item id = gfx_weather_pause key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
     dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
@@ -7826,6 +7942,9 @@ script dadmod_pause_graphics
     show_gradient
     boxed
     }
+    if ScriptExists dadmod_safestart_gfx_rows
+        dadmod_safestart_gfx_rows
+    endif
     dadmod_layout_item name = "gfx_postfx" label = "" grey = 0 dadmod_pause = 1
     GetArraySize dadmod_pause_gfx_groups
     i = 0
@@ -7877,7 +7996,7 @@ script dadmod_pause_gfx_group
     thugpro_menu_finalize
 endscript
 
-dadmod_pause_weather_items = [ "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_tod" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
+dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
 
 script dadmod_pause_weather
     dadmod_pause_skywx_menu
@@ -8224,221 +8343,6 @@ more_level_qbs = [
 "levels\\BA\\BA_cutscene_fast_particle_data.qb"
 "levels\\BA\\BA_level_fast_particle_data.qb"
 "levels\\ba\\ba_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_be = {
-structure_name = level_Mainmenu_be
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 14.58
-COIM_size = 1331200
-tod_manager_active = 1
-pre = "BE_scripts.pre"
-scnpre = "BEscn.pre"
-level = "BE"
-sky = "BE_Sky"
-colpre = "BEcol.pre"
-pedpre = "BEped.pre"
-level_sfx_qb = "levels\\BE\\BE_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 3
-num_f_heads = 3
-num_f_torsos = 3
-num_f_legs = 3
-overview_cam_angle = 0
-overview_cam_zoom = (3e+03,8e+03,-5e+03)
-thugpro_prx = "mainmenu_be_scripts.pre"
-qb = "levels\\mainmenu_be\\BE.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\BE\\BE_scripts.qb"
-"levels\\BE\\BE_cutscene_particle_data.qb"
-"levels\\BE\\BE_level_particle_data.qb"
-"levels\\BE\\BE_cutscene_fast_particle_data.qb"
-"levels\\BE\\BE_level_fast_particle_data.qb"
-"levels\\be\\be_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_au = {
-structure_name = level_Mainmenu_au
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 12.28
-tod_manager_active = 1
-pre = "AU_scripts.pre"
-scnpre = "AUscn.pre"
-level = "AU"
-sky = "AU_Sky"
-colpre = "AUcol.pre"
-pedpre = "AUped.pre"
-level_sfx_qb = "levels\\AU\\AU_sfx.qb"
-sun_theta = [ 5e+01 65.0 9e+01 9e+01 ]
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-num_f_heads = 4
-num_f_torsos = 4
-num_f_legs = 4
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_04 }
-{ Name = shrimpvendor Type = guest }
-{ Name = minikartdriver Type = flavor }
-]
-overview_cam_zoom = (3.5e+03,6.5e+03,0.0)
-thugpro_prx = "mainmenu_au_scripts.pre"
-qb = "levels\\mainmenu_au\\au.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\AU\\AU_scripts.qb"
-"levels\\AU\\AU_cutscene_particle_data.qb"
-"levels\\AU\\AU_level_particle_data.qb"
-"levels\\AU\\AU_cutscene_fast_particle_data.qb"
-"levels\\AU\\AU_level_fast_particle_data.qb"
-"levels\\au\\au_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_no = {
-structure_name = level_Mainmenu_no
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 13.93
-COIM_size = 1331200
-tod_manager_active = 1
-pre = "NO_scripts.pre"
-scnpre = "NOscn.pre"
-level = "NO"
-sky = "NO_Sky"
-colpre = "NOcol.pre"
-pedpre = "NOped.pre"
-level_sfx_qb = "levels\\NO\\NO_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 1.3
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 3
-num_m_torsos = 3
-num_m_legs = 3
-num_f_heads = 4
-num_f_torsos = 4
-num_f_legs = 3
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_05 }
-{ Type = guest Name = jester }
-{ Type = flavor Name = voodoo }
-]
-overview_cam_angle = 90
-overview_cam_zoom = (-1.5e+03,6e+03,-1e+03)
-thugpro_prx = "mainmenu_no_scripts.pre"
-qb = "levels\\mainmenu_no\\NO.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\NO\\NO_scripts.qb"
-"levels\\NO\\NO_cutscene_particle_data.qb"
-"levels\\NO\\NO_level_particle_data.qb"
-"levels\\NO\\NO_cutscene_fast_particle_data.qb"
-"levels\\NO\\NO_level_fast_particle_data.qb"
 "levels\\skateshop\\skateshop.qb"
 "levels\\skateshop\\skateshop_cas.qb"
 "levels\\skateshop\\colormenu.qb"

@@ -256,30 +256,144 @@ static void LoadDadmodScripts(void) {
 // ---- safe start (2026-11-19): a player's game closed on every start, after its window came up and before any script
 // loaded, right as the Direct3D hooks attached. dadmod\boot_check.txt is written when the DLL loads and removed once our
 // scripts have loaded. If it is still there at the next start, that start never got that far: dadmod\safe_start.txt is
-// written and from then on the Direct3D hooks stay off (gfx::Install(false)) until the player deletes that file.
+// written and the early Direct3D steps are skipped (gfx::Install(false)) until a normal start works again (see below).
 static char g_bootCheck[MAX_PATH], g_safeFile[MAX_PATH];
 static bool FileThere(const char* p) { return GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES; }
 static void WriteText(const char* p, const char* text) {
     HANDLE f = CreateFileA(p, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, 0, NULL);
     if (f != INVALID_HANDLE_VALUE) { DWORD n; WriteFile(f, text, (DWORD)strlen(text), &n, NULL); CloseHandle(f); }
 }
+// What safe start skips (checked 2026-11-22): only the early Direct3D steps (the CreateDevice import hook and the
+// probe thread). The controller-read hook still picks the game's device up a few frames later and puts the graphics
+// hooks in, so graphics keep working in safe start.
+//
+// Auto re-check (2026-11-22): safe_start.txt keeps key lines next to its text: version= (the dadmod version that turned
+// it on), good_starts= (safe starts that reached the scripts), tries= / tries_version= (failed normal-start retries on
+// this version), retry_next=1 (the player chose "Try a normal start"). boot_check.txt says what the last start was:
+// normal, safe or retry. A retry is a normal start made while safe start is on; it happens when tries < 2 for this
+// version and (the file came from another version, or good_starts >= 10), or once when the player asks. A retry that
+// reaches the scripts ends safe start (the file moves to dadmod\backups); one that doesn't counts a try.
+struct SafeState { char version[32]; int good, tries; char triesVer[32]; int retryNext; };
+static SafeState g_ss;
+static char g_dadVer[32] = "unknown";
+static int g_startMode = 0;          // 0 normal, 1 safe, 2 retry
+static volatile LONG g_ssJustOn = 0, g_ssBack = 0;
+
+static void ReadSmall(const char* p, char* buf, int size) {
+    buf[0] = 0;
+    HANDLE f = CreateFileA(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return;
+    DWORD n = 0; ReadFile(f, buf, size - 1, &n, NULL); CloseHandle(f);
+    buf[n] = 0;
+}
+static void CopyWord(char* out, int size, const char* s) {   // up to the end of the line, spaces dropped
+    int i = 0;
+    for (; *s && *s != '\r' && *s != '\n' && i < size - 1; ++s) if (*s != ' ' && *s != '\t') out[i++] = *s;
+    out[i] = 0;
+}
+static const char* KeyLine(const char* text, const char* key) {   // value after "key=" at a line start, or NULL
+    size_t kl = strlen(key);
+    for (const char* p = text; p && *p; ) {
+        if (strncmp(p, key, kl) == 0 && p[kl] == '=') return p + kl + 1;
+        p = strchr(p, '\n'); if (p) ++p;
+    }
+    return NULL;
+}
+static void LoadSafeState(void) {
+    char buf[2048]; ReadSmall(g_safeFile, buf, sizeof buf);
+    memset(&g_ss, 0, sizeof g_ss);
+    const char* v;
+    if ((v = KeyLine(buf, "version"))) CopyWord(g_ss.version, sizeof g_ss.version, v);   // none: an older file
+    if ((v = KeyLine(buf, "good_starts"))) g_ss.good = atoi(v);
+    if ((v = KeyLine(buf, "tries"))) g_ss.tries = atoi(v);
+    if ((v = KeyLine(buf, "tries_version"))) CopyWord(g_ss.triesVer, sizeof g_ss.triesVer, v);
+    if ((v = KeyLine(buf, "retry_next"))) g_ss.retryNext = atoi(v);
+}
+static void SaveSafeState(void) {
+    char text[1400];
+    _snprintf(text, sizeof text - 1,
+        "THUG Pro closed during startup last time, before dadmod's scripts loaded.\r\n"
+        "So dadmod now skips one risky startup step (its early Direct3D hook). Everything still works, graphics too.\r\n"
+        "dadmod tries a normal start again after an update, or when you pick Dadmod > Graphics > Try a normal start.\r\n"
+        "The lines below are for dadmod; please leave them as they are.\r\n"
+        "version=%s\r\ngood_starts=%d\r\ntries=%d\r\ntries_version=%s\r\nretry_next=%d\r\n",
+        g_ss.version[0] ? g_ss.version : "old", g_ss.good, g_ss.tries, g_ss.triesVer, g_ss.retryNext);
+    text[sizeof text - 1] = 0;
+    WriteText(g_safeFile, text);
+}
 static bool SafeStartCheck(void) {
     char dir[MAX_PATH]; strcpy(dir, g_logPath);
     char* sl = strrchr(dir, '\\'); if (sl) sl[1] = 0;
     _snprintf(g_bootCheck, MAX_PATH - 1, "%sboot_check.txt", dir);
     _snprintf(g_safeFile, MAX_PATH - 1, "%ssafe_start.txt", dir);
+    char vpath[MAX_PATH], vbuf[64];
+    _snprintf(vpath, MAX_PATH - 1, "%sversion.txt", dir); vpath[MAX_PATH - 1] = 0;
+    ReadSmall(vpath, vbuf, sizeof vbuf);
+    if (vbuf[0]) CopyWord(g_dadVer, sizeof g_dadVer, vbuf);
     bool safe = FileThere(g_safeFile);
-    if (!safe && FileThere(g_bootCheck)) {
-        WriteText(g_safeFile,
-            "THUG Pro closed during startup last time, before dadmod's scripts loaded.\r\n"
-            "So dadmod now starts without its graphics hooks (graphics settings, effects and mirror mode do nothing).\r\n"
-            "Everything else in dadmod works as usual.\r\n"
-            "To try the graphics hooks again, delete this file and start the game.\r\n");
-        safe = true;
-        Log("safe start: the last start closed before dadmod's scripts loaded, so the graphics hooks are off from now on (delete dadmod\\safe_start.txt to try them again)");
-    } else if (safe) Log("safe start: graphics hooks off (dadmod\\safe_start.txt)");
-    WriteText(g_bootCheck, safe ? "safe\r\n" : "normal\r\n");
-    return safe;
+    if (safe) LoadSafeState();
+    bool justFailed = false;
+    if (FileThere(g_bootCheck)) {
+        char last[32]; ReadSmall(g_bootCheck, last, sizeof last);
+        if (strncmp(last, "retry", 5) == 0) {
+            if (!safe) { memset(&g_ss, 0, sizeof g_ss); strcpy(g_ss.version, g_dadVer); }
+            if (strcmp(g_ss.triesVer, g_dadVer) != 0) { g_ss.tries = 0; strcpy(g_ss.triesVer, g_dadVer); }
+            g_ss.tries++;
+            g_ss.good = 0;
+            safe = justFailed = true;
+            Log("safe start: the last start was a try at a normal start and it closed during startup (try %d on %s), so safe start stays on", g_ss.tries, g_dadVer);
+        } else if (strncmp(last, "normal", 6) == 0 || !safe) {
+            memset(&g_ss, 0, sizeof g_ss);
+            strcpy(g_ss.version, g_dadVer); strcpy(g_ss.triesVer, g_dadVer);
+            safe = true;
+            InterlockedExchange(&g_ssJustOn, 1);
+            Log("safe start: the last start closed before dadmod's scripts loaded, so safe start is on now (dadmod skips its early Direct3D hook; graphics still work)");
+        } else {
+            Log("safe start: the last safe start closed before dadmod's scripts loaded too, not counted, safe start stays on");
+        }
+    } else if (safe) {
+        g_ss.good++;
+        Log("safe start: the last safe start went fine (%d good starts on file)", g_ss.good);
+    }
+    g_startMode = 0;
+    if (safe) {
+        if (strcmp(g_ss.triesVer, g_dadVer) != 0) { g_ss.tries = 0; strcpy(g_ss.triesVer, g_dadVer); }
+        bool otherVer = strcmp(g_ss.version, g_dadVer) != 0;
+        if (g_ss.retryNext) {
+            g_ss.retryNext = 0;
+            g_startMode = 2;
+            Log("safe start: the player asked to try a normal start, trying it now");
+        } else if (!justFailed && g_ss.tries < 2 && (otherVer || g_ss.good >= 10)) {
+            g_startMode = 2;
+            if (otherVer) Log("safe start: safe start came from dadmod %s and this is %s, trying a normal start", g_ss.version[0] ? g_ss.version : "(an older version)", g_dadVer);
+            else Log("safe start: %d good safe starts, trying a normal start", g_ss.good);
+        } else {
+            g_startMode = 1;
+            if (g_ss.tries >= 2) Log("safe start: on (2 tries at a normal start failed on %s, the next try comes with an update)", g_dadVer);
+            else Log("safe start: on (dadmod\\safe_start.txt), early Direct3D hook skipped");
+        }
+        SaveSafeState();
+    }
+    WriteText(g_bootCheck, g_startMode == 2 ? "retry\r\n" : g_startMode == 1 ? "safe\r\n" : "normal\r\n");
+    return g_startMode == 1;
+}
+// a retry reached the scripts: safe start ends; the file goes to dadmod\backups (never deleted)
+static void SafeStartReached(void) {
+    if (g_startMode != 2) return;
+    char dir[MAX_PATH]; strcpy(dir, g_safeFile);
+    char* sl = strrchr(dir, '\\'); if (sl) sl[1] = 0;
+    char bdir[MAX_PATH], dst[MAX_PATH];
+    _snprintf(bdir, MAX_PATH - 1, "%sbackups", dir); bdir[MAX_PATH - 1] = 0;
+    CreateDirectoryA(bdir, NULL);
+    SYSTEMTIME t; GetLocalTime(&t);
+    _snprintf(dst, MAX_PATH - 1, "%s\\safe_start.txt.ended_%04d%02d%02d_%02d%02d%02d", bdir, t.wYear, t.wMonth, t.wDay,
+              t.wHour, t.wMinute, t.wSecond);
+    dst[MAX_PATH - 1] = 0;
+    if (MoveFileExA(g_safeFile, dst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED))
+        Log("safe start: the normal start reached dadmod's scripts, safe start is off again (old file in dadmod\\backups)");
+    else Log("safe start: the normal start reached dadmod's scripts, but safe_start.txt could not be moved (error %lu)", GetLastError());
+    g_startMode = 0;
+    InterlockedExchange(&g_ssBack, 1);
 }
 
 static void BeforeGameScripts(void);
@@ -293,6 +407,7 @@ static void __cdecl LoadStartupHook(void) {
     ((Fn0)kLoadStartup)();
     Diag("game scripts done, loading dadmod_qb.prx");
     LoadDadmodScripts();
+    SafeStartReached();
 #ifdef DADMOD_DIAG
     Diag("dadmod scripts done: %ld files loaded", g_diagLoaded);
     if (!DeleteFileA(g_bootCheck)) Diag("boot_check.txt delete FAILED (error %lu)", GetLastError());
@@ -320,6 +435,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "../../mods/skatercopy/skatercopy.inc"  // Copy Scales From / Copy Tricks From another saved skater (reads Save\*.SKA)
 #include "../../mods/fullscreen/fullscreen.inc"    // Graphics > Display live (THUGRECOMP_DisplayLive) + Alt+Enter fullscreen toggle (Noah 2026-11-21: in the player build)
+#include "../../mods/lamplights/lamplights.inc"    // street lamps + lit windows at night (Chicago): engine LevelLights, bulbs/pools/windows drawn by gfx.inc
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
 
 // ---- script functions
@@ -330,6 +446,28 @@ static bool __cdecl CF_ClientLog(void* params, void* script) {
     (void)script;
     const char* t = NULL;
     if (GetStringParam(params, "text", &t)) Log("script: %s", t);
+    return true;
+}
+
+// THUGRECOMP_SafeStartInfo -> safe (1: this start is a safe start), just_on (1 once: safe start turned on this start,
+// show the popup), back (1 once: a normal start worked again this start, show the message)
+static bool __cdecl CF_SafeStartInfo(void* params, void* script) {
+    (void)params;
+    RetInt(script, "safe", g_startMode == 1 ? 1 : 0);
+    RetInt(script, "just_on", InterlockedExchange(&g_ssJustOn, 0) ? 1 : 0);
+    RetInt(script, "back", InterlockedExchange(&g_ssBack, 0) ? 1 : 0);
+    return true;
+}
+
+// THUGRECOMP_SafeStartRetry -> ok=1: the next start tries a normal start (as the automatic retry does)
+static bool __cdecl CF_SafeStartRetry(void* params, void* script) {
+    (void)params;
+    if (!FileThere(g_safeFile)) { RetInt(script, "ok", 0); return true; }
+    LoadSafeState();
+    g_ss.retryNext = 1;
+    SaveSafeState();
+    Log("safe start: the player picked Try a normal start, the next start tries it");
+    RetInt(script, "ok", 1);
     return true;
 }
 
@@ -376,12 +514,18 @@ static bool __cdecl CF_ModelExists(void* params, void* script) {
 static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_ModelExists", CF_ModelExists },
     { "THUGRECOMP_ClientLog", CF_ClientLog },
+    { "THUGRECOMP_SafeStartInfo", CF_SafeStartInfo },
+    { "THUGRECOMP_SafeStartRetry", CF_SafeStartRetry },
     { "THUGRECOMP_SettingSave", CF_SettingSave },
     { "THUGRECOMP_SettingLoad", CF_SettingLoad },
     { "THUGRECOMP_CarsDrive", cars2::CF_CarsDrive },
     { "THUGRECOMP_CarsKeys", cars2::CF_CarsKeys },
     { "THUGRECOMP_GfxReset", gfx::CF_GfxReset },
     { "THUGRECOMP_ReShadeInfo", gfx::CF_ReShadeInfo },
+    { "THUGRECOMP_AddLevelLight", lamplights::CF_AddLevelLight },
+    { "THUGRECOMP_LampBulbsClear", lamplights::CF_LampBulbsClear },
+    { "THUGRECOMP_LampBulb", lamplights::CF_LampBulb },
+    { "THUGRECOMP_LampNight", lamplights::CF_LampNight },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },

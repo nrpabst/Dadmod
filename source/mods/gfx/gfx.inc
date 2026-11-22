@@ -16,6 +16,7 @@
 //         -> screen effects (Present; these cover the HUD too: CRT, grain, chromatic aberration, vignette).
 #include <d3d9.h>
 #include <tlhelp32.h>
+#include <algorithm>
 namespace gfx {
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -65,6 +66,19 @@ static const Setting kSettings[] = {
     {"gfx_fwevery", 2, 0, 3, "unused since 2026-11-21 (Fireworks picks the interval itself); kept so old files load"},
     {"gfx_skywxver", 1, 0, 1, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
     {"gfx_lamps", 0, 0, 10, "street lights at night (no menu row since 2026-11-21, off by default): lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
+    {"gfx_windows", 1, 0, 2, "lit windows at night (mods/lamplights): 1 on, 0 off, 2 = check: marked panes green"},
+    {"gfx_windowstr", 10, 0, 20, "lit windows brightness x0.1"},
+    {"gfx_windowshare", 3, 0, 10, "lit windows: share of windows lit x10%"},
+    {"gfx_windowspill", 0, 0, 20, "lit windows: soft warm light spilling around them x0.1"},
+    {"gfx_moonlight", 0, 0, 20, "moonlight: cool light on surfaces facing the moon at night x0.1 (default 0: Noah did not accept it, 2026-11-22)"},
+    {"gfx_moonaz", 135, 0, 359, "moonlight: direction the moon light comes from (degrees around)"},
+    {"gfx_lampbulbs", 1, 0, 1, "lamp bulbs and pools (mods/lamplights): 1 on, 0 off (for testing)"},
+    {"gfx_bulbsize", 8, 1, 30, "lamp bulb glow size x0.1 (10 = normal)"},
+    {"gfx_bulbstr", 7, 0, 30, "lamp bulb glow brightness x0.1 (10 = normal, 0 = no bulbs, pools stay)"},
+    {"gfx_lampreach", 1000, 200, 3000, "lamp engine lights (amber wash on the level around each lamp): reach; applied within a second"},
+    {"gfx_lamppool", 10, 2, 40, "lamp light pools (mods/lamplights): radius x0.1 (16 = 1.6x the lamp list radius)"},
+    {"gfx_lampstr", 10, 0, 60, "lamp light pools: strength x0.1 (lights the ground by its own brightness)"},
+    {"gfx_lamplift", 3, 0, 60, "lamp light pools: amber lift x0.01 added even on dark ground"},
     {"gfx_skypop", 0, 0, 10, "sky boost (richer sky colors to match the time of day, stars at night): 0 off .. 10 strong"},
     {"gfx_fps", 0, 0, 2, "FPS counter in the top left corner: 0 off, 1 on, 2 tiny (just the number, right in the corner)"},
     {"gfx_shotkey", 1, 0, 1, "F11 saves a screenshot to dadmod\\screenshots: 0 off, 1 on"},
@@ -260,6 +274,28 @@ static void SyncInput() {  // Dadmod > Controls -> padhub
     padhub::SetLaunchBinds(V("gfx_launchbinds") != 0);
 }
 
+// lamp settings: written together at the end of gfx.ini under their own header (Noah 2026-11-22)
+struct LampKeyInfo { const char* key; const char* text; };
+static const LampKeyInfo kLampKeys[] = {
+    {"gfx_lampbulbs", "lamp bulbs and light pools at night: 1 on, 0 off"},
+    {"gfx_bulbsize", "size of the glow around each bulb: 1 .. 30, 8 = normal"},
+    {"gfx_bulbstr", "brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)"},
+    {"gfx_lamppool", "size of the light pool on the ground under each lamp: 2 .. 40, 10 = normal"},
+    {"gfx_lampstr", "how much the light pool brightens the ground: 0 .. 60, 10 = normal"},
+    {"gfx_lamplift", "amber added to the pool even where the ground is very dark: 0 .. 60, 3 = normal (high looks foggy)"},
+    {"gfx_lampreach", "how far each lamp's amber light reaches onto walls and buildings: 200 .. 3000, 1000 = normal"},
+    {"gfx_windows", "lit windows at night (warm light in building windows): 1 on, 0 off, 2 = check mode (marked panes green, unmarked blue)"},
+    {"gfx_windowstr", "brightness of the lit windows: 0 .. 20, 10 = normal"},
+    {"gfx_windowshare", "how many windows are lit: 0 .. 10, 3 = 30%"},
+    {"gfx_windowspill", "soft warm light spilling around lit windows (not finished, off): 0 .. 20, 0 = off"},
+    {"gfx_moonlight", "moonlight: cool light on walls and ground facing the moon at night: 0 .. 20, 0 = off (default)"},
+    {"gfx_moonaz", "direction the moonlight comes from: 0 .. 359 degrees (turn it until the lit sides match the moon)"},
+    {"gfx_lamps", "the OLD street light glow from before (its positions are off): 0 off .. 10 bright"},
+};
+static bool IsLampKey(const char* k) {
+    for (const auto& l : kLampKeys) if (!_stricmp(k, l.key)) return true;
+    return false;
+}
 static FILETIME IniTime() {
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (GetFileAttributesExA(ExeDirFile("gfx.ini").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
@@ -337,8 +373,14 @@ static void Save() {
     std::string out = "; Dadmod graphics settings (Dadmod > Graphics in game, or THUGPro Manager). Changes apply live\r\n"
                       "; except MSAA and v-sync, which need a restart. Delete this file for the defaults.\r\n";
     for (int i = 0; i < kCount; ++i)
-        out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
+        if (!IsLampKey(kSettings[i].key))
+            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
     out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + g_shotDir + "\r\n";
+    out += "\r\n; ---- Street lamps ----\r\n";
+    for (const auto& l : kLampKeys) {
+        int i = Index(l.key);
+        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(g_val[i]) + "\r\n";
+    }
     WriteWholeFile(ExeDirFile("gfx.ini"), out);
     g_iniTime = IniTime();
 }
@@ -353,6 +395,7 @@ static bool g_menuUp = true;  // a menu is open (QB dadmod_mirror_watch sends gf
 // Noah 2026-10-26: the main menu is never mirrored (view or steering). QB dadmod_mirror_watch sends gfx_mainmenu;
 // until it does (boot), assume the main menu.
 static bool g_mainMenu = true;
+static int g_keepLit = 1;  // night tint spares bright / colored pixels (THUG2-era maps' own lights); QB sends 0 for THPS1-4 maps (lamplights.q)
 static void FireworksShow(double seconds, const char* why);
 static void SetLevel(const char* name);
 static void LampMark(bool add);
@@ -365,6 +408,7 @@ bool SetKey(const char* key, int value) {
     if (!_strnicmp(key, "gfx_level_", 10)) { SetLevel(key + 10); return true; }
     if (!_stricmp(key, "gfx_lampadd")) { LampMark(true); return true; }
     if (!_stricmp(key, "gfx_lampdel")) { LampMark(false); return true; }
+    if (!_stricmp(key, "gfx_keeplit")) { g_keepLit = value ? 1 : 0; return true; }
     if (!_stricmp(key, "gfx_servertod")) { g_serverTod = value < 0 || value > 5 ? 0 : value; return true; }
     if (!_stricmp(key, "gfx_balancing")) { g_balancing = value != 0; return true; }
     if (!_stricmp(key, "gfx_balancelock")) { balancelock::Set(value != 0); return true; }
@@ -510,12 +554,15 @@ static float g_nightLift = 0;  // Night time of day: how much ps_look lifts the 
 static bool WeatherOn();
 static bool FireworksLive();
 static bool LampsOn();
+static bool BulbsOn();
+static bool MoonOn();
+static bool WinLayerReady();
 static bool MistOn() { return V("gfx_todfog") > 0 && !g_mainMenu; }  // Fog row: ground mist (2026-11-21)
-static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn(); }
+static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || MoonOn(); }
 static bool SceneWanted() {
     return V("gfx_fxaa") || V("gfx_sharpen") || V("gfx_bloom") || V("gfx_bright") || V("gfx_contrast") || V("gfx_sat") ||
            V("gfx_vibrance") || V("gfx_gamma") || V("gfx_preset") || V("gfx_temp") || V("gfx_tint") || DepthWanted() ||
-           V("gfx_mblur") || V("gfx_pixelate") || WeatherOn() || FireworksLive() || LampsOn() || g_nightLift > 0.01f;
+           V("gfx_mblur") || V("gfx_pixelate") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || WinLayerReady() || g_nightLift > 0.01f;
 }
 static bool ScreenWanted() { return V("gfx_vignette") || V("gfx_grain") || V("gfx_chroma") || V("gfx_crt"); }
 
@@ -1215,7 +1262,7 @@ float4 ps_nighttint(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float3 t = lerp(nighttint(sk.x), nighttint(sk.z), sk.w);
     float br = max(c.r, max(c.g, c.b)), sat = br - min(c.r, min(c.g, c.b));  // keep the level's lights lit: bright or strongly colored pixels
-    t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)));
+    t = lerp(t, 1, saturate(smoothstep(0.45, 0.85, br) + smoothstep(0.25, 0.6, sat) * smoothstep(0.3, 0.6, br)) * wx.x);  // wx.x here = keep lit (0 on THPS1-4 maps: no real lights)
     return float4(c * t, 1);
 }
 // ---- weather (scene pass, before the HUD): s0 color, s1 depth when p9.z > 0
@@ -1364,6 +1411,129 @@ float4 ps_lamps(float2 uv : TEXCOORD0) : COLOR {
     c += (c * light * 2.4 + light * 0.05 + halo * 0.7) * lampc.x;
     return float4(c, 1);
 }
+// ---- lamp bulbs (mods/lamplights, 2026-11-22): soft glow at each lamp head + a warm round pool under it, after the night tint
+// lp[i*2] = bulb position (world), lp[i*2+1] = color rgb, pool radius. lampc: amount, count, pool strength
+float4 ps_bulbs(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    bool sky = d0 >= 0.99999;
+    float z = sky ? 50000.0 : dist(d0);
+    float3 P = camp.xyz + dv * z;
+    float3 dn = normalize(dv);
+    float far = length(dv) * z;
+    float3 light = 0, halo = 0;
+    [loop] for (int i = 0; i < 24; i++) {
+        if (i >= lampc.y) break;
+        float4 a = lp[i * 2], col = lp[i * 2 + 1];
+        float3 dl = P - (a.xyz - float3(0, a.w, 0));
+        float x = saturate(1 - dot(dl, dl) / (col.w * col.w));
+        light += x * x * (sky ? 0 : 1);
+        float tl = dot(a.xyz - camp.xyz, dn);
+        if (tl > 0 && tl < far + 30) {
+            float3 q = camp.xyz + dn * tl - a.xyz;
+            float r2 = dot(q, q);
+            float nr = saturate(tl / 600.0), fs = 1 + tl * 0.0015;
+            float cs = 100.0 * lerp(0.35, 1.0, nr) * fs * fs * camp.w * camp.w, hs = (1250.0 * nr * nr + 40.0) * fs * camp.w * camp.w;
+            halo += col.rgb * exp(-r2 / cs) * 0.9 + col.rgb * float3(1.0, 0.85, 0.62) * exp(-r2 / hs) * 0.2 * nr;
+        }
+    }
+    float3 warm = float3(1.0, 0.55, 0.16);
+    float lum = dot(c, float3(0.3, 0.5, 0.2));
+    float pl = saturate(light.x) * lampc.x;
+    c = lerp(c, c * float3(1.2, 0.95, 0.7), pl);
+    c += warm * pl * (lum * lampc.z + lampc.w) + halo * lampc.x;
+    return float4(c, 1);
+}
+// moonlight (after the night tint): lampc.x amount, lp[0].xyz direction to the moon; normals from the depth
+float4 ps_moon(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float3 P = camp.xyz + dv * dist(d0);
+    float3 n = normalize(cross(ddy(P), ddx(P)));
+    if (dot(n, camp.xyz - P) < 0) n = -n;
+    float ndl = saturate(dot(n, lp[0].xyz));
+    if (d0 >= 0.99999) ndl = 0;
+    c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
+    return float4(c, 1);
+}
+// one lamp entry per pass (lp[0] position, lp[1] color + pool radius): ps_bhalo = bulb glow only, ps_bpool = light pool only
+float4 ps_bhalo(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float far = length(dv) * dist(d0);
+    float3 dn = normalize(dv);
+    float tl = dot(lp[0].xyz - camp.xyz, dn);
+    if (tl <= 0 || tl >= far + 30) return float4(c, 1);
+    float3 q = camp.xyz + dn * tl - lp[0].xyz;
+    float r2 = dot(q, q);
+    float nr = saturate(tl / 600.0), fs = 1 + tl * 0.0015;
+    float cs = 100.0 * lerp(0.35, 1.0, nr) * fs * fs * camp.w * camp.w, hs = (1250.0 * nr * nr + 40.0) * fs * camp.w * camp.w;
+    float3 halo = lp[1].rgb * exp(-r2 / cs) * 0.9 + lp[1].rgb * float3(1.0, 0.85, 0.62) * exp(-r2 / hs) * 0.2 * nr;
+    return float4(c + halo * lampc.x, 1);
+}
+float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    if (d0 >= 0.99999) return float4(c, 1);
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float3 dl = camp.xyz + dv * dist(d0) - (lp[0].xyz - float3(0, lp[0].w, 0));
+    float x = saturate(1 - dot(dl, dl) / (lp[1].w * lp[1].w + 0.001));
+    float pl = x * x * lampc.x;
+    float lum = dot(c, float3(0.3, 0.5, 0.2));
+    c = lerp(c, c * float3(1.2, 0.95, 0.7), pl);
+    c += float3(1.0, 0.55, 0.16) * pl * (lum * lampc.z + lampc.w);
+    return float4(c, 1);
+}
+// ---- lit windows (mods/lamplights, 2026-11-22). ps_window: drawn (ps_2_0, with the game's own fixed-function vertices)
+// over the game's window-texture draws into a separate target; glass = dark / bluish texels, every window cell on or off
+float4 ps_window(float2 uv : TEXCOORD0, float3 cp : TEXCOORD1) : COLOR {
+    float3 t = tex2D(s0, uv).rgb;
+    float lum = dot(t, float3(0.3, 0.5, 0.2));
+    float id = tex2D(s1, uv).r;  // px.z = 1: hand-marked pane mask (0 = wall, else which pane); else cells as a fallback
+    float2 cell = px.z > 0.5 ? floor(uv) + float2(id * 255.0, 0) : floor(uv * 12.0);
+    float h = frac(sin(dot(cell, float2(12.9898, 78.233))) * 43758.5453);
+    float k = frac(h * 7.13);
+    float lit = step(1.0 - px.y, h);
+    float3 col = k < 0.7 ? float3(1.0, 0.745, 0.47) : (k < 0.94 ? float3(0.6, 0.36, 0.17) : float3(0.3, 0.36, 0.5));
+    float fill = px.z > 0.5 ? step(0.002, id) * 0.9 : 1 - saturate((lum - 0.16) * 5.0);  // marked panes: an even warm fill (no glass detail)
+    float3 o = col * fill * lit * (0.6 + 0.4 * frac(h * 3.7)) * px.x * 0.6;
+    if (px.w > 0.5) o = px.z > 0.5 ? float3(0, step(0.002, id) * 0.8, 0) : float3(0, 0, fill * 0.8);  // gfx_windows 2: marked panes green, fallback blue
+    return float4(o, abs(cp.z));  // alpha = view depth (camera-space z, stage 1 texcoord)
+}
+// ps_winvis: quarter-res copy of only the windows that are really visible (depth checked), the source of the spill:
+// r = glow, g = glow x window depth (log2(z) / 16), so after the blur g / r is the glow-weighted depth of the windows
+float2 winvis1(float2 uv) {
+    float4 w = tex2D(s2, uv);
+    float z = dist(tex2D(s1, uv).r);
+    float i = abs(w.a - z) > 3.0 + z * 0.006 ? 0 : dot(w.rgb, float3(0.4, 0.4, 0.2));
+    return float2(i, i * log2(max(z, 1.0)) / 16.0);
+}
+float4 ps_winvis(float2 uv : TEXCOORD0) : COLOR {
+    float2 a = 0.25 * (winvis1(uv + px.xy * float2(-1, -1)) + winvis1(uv + px.xy * float2(1, -1)) +
+                       winvis1(uv + px.xy * float2(-1, 1)) + winvis1(uv + px.xy * float2(1, 1)));
+    return float4(a, 0, 1);
+}
+// ps_wincomp (scene pass, after the night tint): adds the lit windows (s1)
+float4 ps_wincomp(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float4 w = tex2D(s2, uv);
+    if (lampc.y > 0.5) {  // the layer knows each window pixel's depth: only where that window is still the nearest thing
+        float z = dist(tex2D(s1, uv).r);
+        if (abs(w.a - z) > 3.0 + z * 0.006) w.rgb = 0;
+    }
+    float2 sp = tex2D(s3, uv).rg;  // blurred quarter-res copy of the visible windows: soft warm light around them
+    float zl = log2(max(dist(tex2D(s1, uv).r), 1.0)), wl = sp.g / max(sp.r, 0.0001) * 16.0;
+    float near = saturate(1 - (abs(zl - wl) - 0.15) / 0.15);  // only surfaces at about the windows' own depth (not buildings in front)
+    float3 spill = sp.r * near * float3(1.0, 0.72, 0.42);
+    return float4(c + (w.rgb + spill * lampc.z) * lampc.x, 1);
+}
 // ---- ground mist (scene pass, after the night tint): s0 color, s1 depth. camp = camera position (c29)
 // density(h) = D * exp(-(h - ground) / Hs), integrated along the view ray; drifting 2-octave patches
 float4 gm : register(c80);   // D, Hs, ground height, cap
@@ -1397,7 +1567,7 @@ static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDo
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
                              *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
-                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr,  // optional too
+                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr, *g_psWindow = nullptr, *g_psWinComp = nullptr, *g_psBHalo = nullptr, *g_psBPool = nullptr, *g_psMoon = nullptr, *g_psWinVis = nullptr,  // optional too
                              *g_psMirror = nullptr,  // optional: without it mirror mode does nothing
                              *g_psGroundMist = nullptr,  // optional: the Fog row (ground mist)
                              *g_psNightTint = nullptr;  // optional: without it night/evening buildings keep the game's lighting
@@ -1412,11 +1582,17 @@ static UINT g_w = 0, g_h = 0;
 static bool g_shaderFail = false;
 static HMODULE g_dx = nullptr;
 
+static IDirect3DTexture9* g_winTex = nullptr;  // lit windows layer (back buffer size)
+static IDirect3DSurface9* g_winSurf = nullptr;
+static UINT g_winW = 0, g_winH = 0;
+static bool g_winDepth = false;  // the layer is half-float: its alpha holds each window pixel's depth
+static DWORD g_winFrame = 0xFFFFFFFF;
+static int g_winDraws = 0, g_winDrawsLast = 0;  // window redraws this frame / last frame (logged with the lamp passes)  // g_presents of the frame the layer was cleared in
 static void FreeTargets() {
     IUnknown** list[] = {(IUnknown**)&g_texA, (IUnknown**)&g_texB, (IUnknown**)&g_texC, (IUnknown**)&g_texD, (IUnknown**)&g_texE,
                          (IUnknown**)&g_texF, (IUnknown**)&g_texPrev, (IUnknown**)&g_texG, (IUnknown**)&g_texH, (IUnknown**)&g_sb,
                          (IUnknown**)&g_intzSurf, (IUnknown**)&g_intz,
-                         (IUnknown**)&g_autoDS};
+                         (IUnknown**)&g_autoDS, (IUnknown**)&g_winSurf, (IUnknown**)&g_winTex};
     for (auto p : list) if (*p) { (*p)->Release(); *p = nullptr; }
     g_w = g_h = 0;
     g_prevValid = false;
@@ -1433,7 +1609,21 @@ static unsigned long long ShaderSourceHash() {
     for (size_t i = 0; i < sizeof kShaders - 1; ++i) { h ^= (unsigned char)kShaders[i]; h *= 1099511628211ULL; }
     return h;
 }
+// The compiler and the cache files are shared with frame generation's startup compile thread (framegen.inc).
+static CRITICAL_SECTION* CompileLock() {
+    static CRITICAL_SECTION cs;
+    static bool init = (InitializeCriticalSection(&cs), true);
+    (void)init;
+    return &cs;
+}
+static bool CachedShaderCodeLocked(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err);
 static bool CachedShaderCode(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err) {
+    EnterCriticalSection(CompileLock());
+    bool ok = CachedShaderCodeLocked(compile, fn, prof, out, err);
+    LeaveCriticalSection(CompileLock());
+    return ok;
+}
+static bool CachedShaderCodeLocked(CompileShader_t compile, const char* fn, const char* prof, std::string& out, std::string& err) {
     char name[160];
     wsprintfA(name, "shadercache\\%s_%s_%08X%08X.bin", fn, prof, (DWORD)(ShaderSourceHash() >> 32), (DWORD)ShaderSourceHash());
     std::string path = ExeDirFile(name);
@@ -1590,10 +1780,11 @@ static bool MakeShaders(IDirect3DDevice9* dev) {
     struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
         {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
         {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
-        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_mirror", &g_psMirror, "mirror picture"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_wincomp", &g_psWinComp, "lit windows"}, {"ps_bhalo", &g_psBHalo, "lamp bulb glow"}, {"ps_bpool", &g_psBPool, "lamp light pools"}, {"ps_moon", &g_psMoon, "moonlight"}, {"ps_winvis", &g_psWinVis, "window light spill"}, {"ps_mirror", &g_psMirror, "mirror picture"},
         {"ps_nighttint", &g_psNightTint, "night tint"}, {"ps_groundmist", &g_psGroundMist, "ground mist"}};
     for (auto& o : optional)
         if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
+    if (!MakeOneShader(dev, compile, "ps_window", "ps_2_0", false, (void**)&g_psWindow)) mmenu::Log("gfx: lit windows unavailable on this card");
     for (int i = 0; i < 10; ++i) {
         char fn[16];
         wsprintfA(fn, "ps_sky%d", i + 5);
@@ -1853,6 +2044,95 @@ static void LampMark(bool add) {
     SetLevel(lv.c_str());
 }
 static bool LampsOn() { return g_lampAmt > 0.01f && g_lampN > 0; }
+// lamp bulbs (mods/lamplights): head positions sent by QB per level (THUGRECOMP_LampBulb), game coordinates = D3D world
+static std::vector<Lamp> g_bulbs;
+static std::vector<float> g_bulbDrop;  // pool center = bulb - drop (height)
+static bool g_bulbNight = false;     // evening lights / night / dawn: QB turns the level lamps' engine lights on
+static float g_bulbAmt = 0;
+static const int kBulbMax = 192;   // drawn in passes of 24 (ps_bulbs loop)
+static float g_bulbC[2 + 2 * kBulbMax][4];
+static int g_bulbN = 0;
+static void WinCacheClear();
+static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); WinCacheClear(); }
+static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b) {
+    if (g_bulbs.size() >= 1024) return;
+    g_bulbDrop.push_back(drop);
+    Lamp l; l.x = x; l.y = y; l.z = z; l.r = pool; l.cr = r; l.cg = g; l.cb = b;
+    g_bulbs.push_back(l);
+}
+// screen rectangle (pixels) that a sphere covers; false = off screen. Any corner behind the camera = whole screen.
+static bool SphereRect(float x, float y, float z, float r, int w, int h, RECT& out) {
+    // project the sphere's center; its screen radius is at most r * scale / (depth - r) (tighter than the 8 box corners)
+    float p[3] = {x, y, z}, v[4], c[4];
+    const D3DMATRIX& m = g_view;
+    for (int k = 0; k < 4; ++k) v[k] = p[0] * m.m[0][k] + p[1] * m.m[1][k] + p[2] * m.m[2][k] + m.m[3][k];
+    const D3DMATRIX& q = g_proj;
+    for (int k = 0; k < 4; ++k) c[k] = v[0] * q.m[0][k] + v[1] * q.m[1][k] + v[2] * q.m[2][k] + v[3] * q.m[3][k];
+    if (c[3] + r <= 1.0f) return false;  // wholly behind the camera
+    if (c[3] - r <= 1.0f) { out.left = 0; out.top = 0; out.right = w; out.bottom = h; return true; }  // around the camera
+    float nx = c[0] / c[3], ny = c[1] / c[3];
+    float rx = r * fabsf(q._11) / (c[3] - r), ry = r * fabsf(q._22) / (c[3] - r);
+    float x0 = (nx - rx) * 0.5f + 0.5f, x1 = (nx + rx) * 0.5f + 0.5f, y0 = 0.5f - (ny + ry) * 0.5f, y1 = 0.5f - (ny - ry) * 0.5f;
+    out.left = x0 <= 0 ? 0 : (LONG)(x0 * w); out.right = x1 >= 1 ? w : (LONG)(x1 * w) + 1;
+    out.top = y0 <= 0 ? 0 : (LONG)(y0 * h); out.bottom = y1 >= 1 ? h : (LONG)(y1 * h) + 1;
+    return out.right > out.left && out.bottom > out.top;
+}
+static void UnionRect2(RECT& a, const RECT& b) {
+    if (b.left < a.left) a.left = b.left; if (b.top < a.top) a.top = b.top;
+    if (b.right > a.right) a.right = b.right; if (b.bottom > a.bottom) a.bottom = b.bottom;
+}
+// GPU time of the lamp passes (timestamp queries, every few seconds into mainmenu.log; skipped if the card can't)
+static IDirect3DQuery9 *g_lqDis = nullptr, *g_lqFreq = nullptr, *g_lqA = nullptr, *g_lqB = nullptr, *g_lqM = nullptr, *g_lqW = nullptr;  // start, after moon, after lamps, after windows
+static int g_lqState = 0, g_lqDrawn = 0;
+static double g_lqArea = 0, g_lqAreaNow = 0;  // screens of pixels the lamp passes covered
+static double g_lqNext = 0;
+// 2026-11-22: unreleased queries made the device Reset fail (0x8876086C) and the game crash (frame generation off);
+// they are freed before every Reset and on a new device, and made again when the timing next runs
+static void LampQueriesFree() {
+    IDirect3DQuery9** q[] = {&g_lqDis, &g_lqFreq, &g_lqA, &g_lqB, &g_lqM, &g_lqW};
+    for (auto p : q) if (*p) { (*p)->Release(); *p = nullptr; }
+    g_lqState = 0;
+}
+static bool BulbsOn() { return g_bulbAmt > 0.01f && g_bulbN > 0 && V("gfx_lampbulbs") && g_psBHalo && g_psBPool; }
+static void UpdateBulbs(int todA, int todB, float blend, float dt) {
+    auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
+    float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
+    g_bulbNight = want > 0.5f;
+    float step = dt / 3.0f + 0.0001f;
+    g_bulbAmt = g_bulbAmt < want ? (g_bulbAmt + step > want ? want : g_bulbAmt + step) : (g_bulbAmt - step < want ? want : g_bulbAmt - step);
+    g_bulbN = 0;
+    if (g_bulbAmt <= 0.01f || g_bulbs.empty()) return;
+    const D3DMATRIX& m = g_view;
+    float cx = -(m._41 * m._11 + m._42 * m._12 + m._43 * m._13);
+    float cy = -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23);
+    float cz = -(m._41 * m._31 + m._42 * m._32 + m._43 * m._33);
+    // every bulb within 20000 (nearest first, up to kBulbMax): the glow never cuts off while a lamp is in sight
+    static std::vector<std::pair<float, int>> bnear;
+    bnear.clear();
+    for (size_t i = 0; i < g_bulbs.size(); ++i) {
+        const Lamp& l = g_bulbs[i];
+        float d = (l.x - cx) * (l.x - cx) + (l.y - cy) * (l.y - cy) + (l.z - cz) * (l.z - cz);
+        if (d < 20000.0f * 20000.0f) bnear.push_back(std::make_pair(d, (int)i));
+    }
+    if ((int)bnear.size() > kBulbMax) {
+        std::partial_sort(bnear.begin(), bnear.begin() + kBulbMax, bnear.end());
+        bnear.resize(kBulbMax);
+    }
+    g_bulbN = (int)bnear.size();
+    g_bulbC[0][0] = g_bulbAmt; g_bulbC[0][1] = (float)g_bulbN; g_bulbC[0][2] = V("gfx_lampstr") / 10.0f; g_bulbC[0][3] = V("gfx_lamplift") / 100.0f;
+    g_bulbC[1][0] = cx; g_bulbC[1][1] = cy; g_bulbC[1][2] = cz; g_bulbC[1][3] = V("gfx_bulbsize") / 10.0f;
+    for (int i = 0; i < g_bulbN; ++i) {
+        int bi = bnear[i].second;
+        const Lamp& l = g_bulbs[bi];
+        float* a = g_bulbC[2 + i * 2];
+        float* c = g_bulbC[3 + i * 2];
+        float dist = sqrtf(bnear[i].first);
+        float poolFade = dist < 6000.0f ? 1.0f : dist > 9000.0f ? 0.0f : (9000.0f - dist) / 3000.0f;  // far pools shrink away
+        a[0] = l.x; a[1] = l.y; a[2] = l.z; a[3] = g_bulbDrop[bi];
+        float bs = V("gfx_bulbstr") / 10.0f;  // the halo uses the color, the pool its own amber
+        c[0] = l.cr * bs; c[1] = l.cg * bs; c[2] = l.cb * bs; c[3] = l.r * V("gfx_lamppool") / 10.0f * poolFade;
+    }
+}
 // lamps light up in the evening and at night (a little at sunset); picks the 24 nearest to the camera
 // Noah 2026-10-20: lamps fade on/off instead of popping: the glow eases toward its target over ~4 s.
 static void UpdateLamps(int todA, int todB, float blend, float dt) {
@@ -1860,7 +2140,7 @@ static void UpdateLamps(int todA, int todB, float blend, float dt) {
     float want = (w(todA) + (w(todB) - w(todA)) * blend) * V("gfx_lamps") / 6.0f;
     static float shown = -1.0f;
     if (shown < 0) shown = want;  // first frame: no fade
-    float step = dt * (V("gfx_lamps") / 6.0f) / 4.0f + 0.0001f;
+    float step = dt / 4.0f + 0.0001f;  // 2026-11-22: was scaled by gfx_lamps, so with 0 it took minutes to fade out
     shown = shown < want ? (shown + step > want ? want : shown + step) : (shown - step < want ? want : shown - step);
     g_lampAmt = shown;
     g_lampN = 0;
@@ -1915,6 +2195,8 @@ static void UpdateWorld() {
     g_sky[0] = (float)a; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)b; g_sky[3] = blend;
     if (tod == 0 && g_serverTod > 0) UpdateLamps(g_serverTod, g_serverTod, 0, dt);  // lamps follow the server
     else UpdateLamps(a, b, blend, dt);
+    if (tod == 0 && g_serverTod > 0) UpdateBulbs(g_serverTod, g_serverTod, 0, dt);
+    else UpdateBulbs(a, b, blend, dt);
     static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
     static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
                                      {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
@@ -2137,6 +2419,8 @@ static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
     dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATER);
     dev->SetPixelShaderConstantF(16, k, 1);
+    float keep[4] = {(float)g_keepLit, 0, 0, 0};
+    dev->SetPixelShaderConstantF(17, keep, 1);  // ps_nighttint reads c17 (wx) .x as keep lit; the weather pass sets its own c17
     dev->SetRenderTarget(0, bb);
     dev->SetDepthStencilSurface(ds);
     D3DVIEWPORT9 vp = {0, 0, d.Width, d.Height, 0, 1};
@@ -2156,6 +2440,8 @@ static void NightTint(IDirect3DDevice9* dev, IDirect3DSurface9* bb) {
 }
 
 static void FgCaptureScene(IDirect3DDevice9* dev);  // framegen.inc
+static bool g_fgRunning = false;      // frame generation is running (framegen.inc): dadmod's motion blur stays off
+static bool g_fgBbGenerated = false;  // the back buffer holds a generated in-between frame: screenshots wait for a real one
 static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     if (!atPresent) {  // only when the screen itself is being drawn to (not an offscreen texture)
         IDirect3DSurface9* t = nullptr;
@@ -2219,7 +2505,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         }
         dev->SetTexture(4, depthFx && V("gfx_ssao") ? g_texG : nullptr);
         float mb = g_c[8][1];
-        if (!g_prevValid) { g_c[8][1] = 0; dev->SetPixelShaderConstantF(8, g_c[8], 1); }
+        if (!g_prevValid || g_fgRunning) { g_c[8][1] = 0; dev->SetPixelShaderConstantF(8, g_c[8], 1); }  // frame generation already blends frames
         Pass(dev, g_psScene, sB, g_w, g_h, g_w, g_h, g_texA, depthFx ? g_intz : nullptr, g_texPrev, g_texE);
         g_c[8][1] = mb; dev->SetPixelShaderConstantF(8, g_c[8], 1);
         cur = g_texB;
@@ -2243,6 +2529,102 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psLamps, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
         cur = dst;
+    }
+    bool timing = false;  // GPU time of moonlight / lamps / windows, every 5 s into mainmenu.log
+    {
+        static IDirect3DDevice9* lqDev = nullptr;
+        if (lqDev != dev) { lqDev = dev; LampQueriesFree(); }  // new device: let go of the old one's queries
+        if (g_lqState == 0 && NowS() > g_lqNext && (MoonOn() || BulbsOn() || WinLayerReady())) {
+            if (!g_lqDis && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMPDISJOINT, &g_lqDis))) g_lqState = 9;
+            if (g_lqState == 0 && !g_lqFreq && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMPFREQ, &g_lqFreq))) g_lqState = 9;
+            IDirect3DQuery9** ts[] = {&g_lqA, &g_lqM, &g_lqB, &g_lqW};
+            for (auto q : ts) if (g_lqState == 0 && !*q && FAILED(dev->CreateQuery(D3DQUERYTYPE_TIMESTAMP, q))) g_lqState = 9;
+            if (g_lqState == 0) { timing = true; g_lqDis->Issue(D3DISSUE_BEGIN); g_lqA->Issue(D3DISSUE_END); g_lqDrawn = 0; g_lqArea = 0; }
+        }
+    }
+    if (MoonOn() && g_intzUsed && !g_msaaOn) {  // moonlight, before the lamps
+        float az = V("gfx_moonaz") * 3.14159265f / 180.0f, el = 0.70f;
+        float hdr[4] = {g_bulbAmt * V("gfx_moonlight") / 20.0f, 0, 0, 0};
+        float dir[4] = {cosf(el) * sinf(az), sinf(el), cosf(el) * cosf(az), 0};
+        float cam[4] = {g_bulbC[1][0], g_bulbC[1][1], g_bulbC[1][2], 1};
+        const D3DMATRIX& m = g_view;
+        cam[0] = -(m._41 * m._11 + m._42 * m._12 + m._43 * m._13); cam[1] = -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23);
+        cam[2] = -(m._41 * m._31 + m._42 * m._32 + m._43 * m._33);
+        dev->SetPixelShaderConstantF(28, hdr, 1);
+        dev->SetPixelShaderConstantF(29, cam, 1);
+        dev->SetPixelShaderConstantF(30, dir, 1);
+        IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
+        Pass(dev, g_psMoon, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
+        cur = dst;
+    }
+    if (timing) g_lqM->Issue(D3DISSUE_END);
+    if (BulbsOn() && g_psBulbs && g_intzUsed && !g_msaaOn) {
+        static bool once = false;
+        if (!once) { once = true; mmenu::Log("gfx: lamp bulbs on 3D scene (%d near)", g_bulbN); }
+        // one bulb per pass, only inside the screen rectangle its glow and pool can touch (scissor);
+        // src always holds the whole picture: each pass writes dst inside the rectangle, then that rectangle is copied back
+        IDirect3DTexture9* srcT = cur;
+        IDirect3DTexture9* dstT = cur == g_texA ? g_texB : g_texA;
+        IDirect3DSurface9* srcS = cur == g_texA ? sA : sB;
+        IDirect3DSurface9* dstS = cur == g_texA ? sB : sA;
+        int drawn = 0;
+        double area = 0;
+        float hdr[4] = {g_bulbC[0][0], 1.0f, g_bulbC[0][2], g_bulbC[0][3]};
+        dev->SetPixelShaderConstantF(28, hdr, 1);
+        dev->SetPixelShaderConstantF(29, g_bulbC[1], 1);
+        for (int i = 0; i < g_bulbN; ++i) {
+            const float* a = g_bulbC[2 + i * 2];
+            const float* c = g_bulbC[3 + i * 2];
+            float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
+            float tl = sqrtf(dx * dx + dy * dy + dz * dz), fs = 1 + tl * 0.0015f;
+            float hr = (2.2f * sqrtf((1250.0f + 40.0f) * fs) + 2.2f * sqrtf(100.0f) * fs) * g_bulbC[1][3];  // halo reach in world units
+            RECT r;
+            bool pool = c[3] > 1.0f;  // pool entry (no glow) or bulb entry (glow only)
+            if (!pool && c[0] + c[1] + c[2] <= 0.001f) continue;
+            bool any = !g_haveProj ? (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true)
+                     : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3], g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
+            if (!any) continue;
+            dev->SetPixelShaderConstantF(30, a, 2);
+            dev->SetScissorRect(&r);
+            dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+            Pass(dev, pool ? g_psBPool : g_psBHalo, dstS, g_w, g_h, g_w, g_h, srcT, g_intz);
+            dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+            dev->StretchRect(dstS, &r, srcS, &r, D3DTEXF_NONE);
+            ++drawn;
+            area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
+        }
+        (void)dstT;
+        cur = srcT;
+        if (timing) { g_lqDrawn = drawn; g_lqArea = area; }
+    }
+    if (timing) g_lqB->Issue(D3DISSUE_END);
+    if (WinLayerReady() && g_psWinComp) {  // lit windows (drawn during the scene into g_winTex), after the night tint
+        bool depthOk = g_winDepth && g_intzUsed && !g_msaaOn;
+        float spill = depthOk && g_psWinVis ? V("gfx_windowspill") / 10.0f : 0.0f;  // only windows that are really visible spill
+        if (spill > 0) {  // quarter-res, blurred twice: a soft warm patch around the lit windows
+            Pass(dev, g_psWinVis, sE, g_w, g_h, qw, qh, nullptr, g_intz, g_winTex);
+            for (int k = 0; k < 2; ++k) {
+                dev->SetPixelShaderConstantF(5, dx, 1); Pass(dev, g_psBlur, sF, qw, qh, qw, qh, g_texE);
+                dev->SetPixelShaderConstantF(5, dy, 1); Pass(dev, g_psBlur, sE, qw, qh, qw, qh, g_texF);
+            }
+        }
+        float hdr[4] = {g_bulbAmt, depthOk ? 1.0f : 0.0f, spill * 1.6f, 0};
+        dev->SetPixelShaderConstantF(28, hdr, 1);
+        IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
+        Pass(dev, g_psWinComp, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, depthOk ? g_intz : nullptr, g_winTex, spill > 0 ? g_texE : nullptr);
+        cur = dst;
+    }
+    if (timing) { g_lqW->Issue(D3DISSUE_END); g_lqDis->Issue(D3DISSUE_END); g_lqFreq->Issue(D3DISSUE_END); g_lqState = 1; }
+    if (g_lqState == 1) {
+        BOOL dis = TRUE; UINT64 f = 0, t0 = 0, tm = 0, tb = 0, tw = 0;
+        if (g_lqDis->GetData(&dis, sizeof dis, 0) == S_OK && g_lqFreq->GetData(&f, sizeof f, 0) == S_OK &&
+            g_lqA->GetData(&t0, sizeof t0, 0) == S_OK && g_lqM->GetData(&tm, sizeof tm, 0) == S_OK &&
+            g_lqB->GetData(&tb, sizeof tb, 0) == S_OK && g_lqW->GetData(&tw, sizeof tw, 0) == S_OK) {
+            if (!dis && f)
+                mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
+                           (tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, g_lqDrawn, g_bulbN, g_lqArea, (tw - tb) * 1000.0 / f, g_winDrawsLast);
+            g_lqState = 0; g_lqNext = NowS() + 5.0;
+        }
     }
     if (FireworksLive() && g_psFireworks && g_intzUsed && !g_msaaOn) {
         float c[8][4];
@@ -2422,7 +2804,7 @@ static void RunScreen(IDirect3DDevice9* dev) {
     IUnknown* rel[] = {oldRT, oldDS, sA};
     for (auto r : rel) if (r) r->Release();
     g_inPost = false;
-    if (g_shotPending) SaveShot(dev, bb);
+    if (g_shotPending && !g_fgBbGenerated) SaveShot(dev, bb);
     bb->Release();
 }
 
@@ -2449,10 +2831,14 @@ static void CheckKeysAndIni() {
     HWND fg = GetForegroundWindow();
     if (fg) GetWindowThreadProcessId(fg, &pid);
     bool now = pid == GetCurrentProcessId() && (GetAsyncKeyState(VK_F11) & 0x8000) != 0;
-    if (now && !down && V("gfx_shotkey")) g_shotPending = true;
+    bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (now && !down && shift) FgDebugAsk();  // Shift+F11: frame generation debugger records the next frames (framegen.inc)
+    else if (now && !down && V("gfx_shotkey")) g_shotPending = true;
     if ((g_presents & 31) == 0) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
         std::string req = ExeDirFile("gfx_shot.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); g_shotPending = true; }
+        std::string fq = ExeDirFile("fgdebug.txt");  // ... or a frame generation recording
+        if (GetFileAttributesA(fq.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(fq.c_str()); FgDebugAsk(); }
     }
     down = now;
 }
@@ -2562,6 +2948,7 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 }
 
 static void EndFrame(IDirect3DDevice9* dev) {
+    g_winDrawsLast = g_winDraws; g_winDraws = 0;
     if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
     g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame
@@ -2576,6 +2963,7 @@ static void EndFrame(IDirect3DDevice9* dev) {
     UpdateWorld();
     ApplyWeatherFog(dev);
     CardCheck(dev);
+    FgStartup(dev);  // frame generation's shaders: compiled in the background from the first frame, loaded at startup
     if (g_origRS) { PixelFogStates(dev); TodFogStates(dev); }
     g_fwDone = false;
     g_intzUsed = false;
@@ -2599,7 +2987,7 @@ static void NoteDeviceLost(HRESULT hr) {
 }
 static HRESULT STDMETHODCALLTYPE HookPresent(IDirect3DDevice9* dev, const RECT* a, const RECT* b, HWND w, const RGNDATA* r) {
     bool ours = !g_inPost;
-    if (ours) { FgClear(); EndFrame(dev); }
+    if (ours) { FgClear(); EndFrame(dev); FgBeforePresent(dev); }  // frame generation: wait for this frame's refresh
     HRESULT hr = g_origPresent(dev, a, b, w, r);
     NoteDeviceLost(hr);
     if (ours) FgQueue(dev, nullptr, a, b, w, r, 0, hr);  // frame generation: the rest of this frame's frames
@@ -2609,7 +2997,7 @@ static HRESULT STDMETHODCALLTYPE HookPresent(IDirect3DDevice9* dev, const RECT* 
 static HRESULT STDMETHODCALLTYPE HookSCPresent(IDirect3DSwapChain9* sc, const RECT* a, const RECT* b, HWND w, const RGNDATA* r, DWORD f) {
     IDirect3DDevice9* dev = nullptr;
     bool ours = !g_inPost && SUCCEEDED(sc->GetDevice(&dev)) && dev;
-    if (ours) { FgClear(); EndFrame(dev); }
+    if (ours) { FgClear(); EndFrame(dev); FgBeforePresent(dev); }
     HRESULT hr = g_origSCPresent(sc, a, b, w, r, f);
     NoteDeviceLost(hr);
     if (ours) { FgQueue(dev, sc, a, b, w, r, f, hr); dev->Release(); }
@@ -2658,11 +3046,197 @@ static HRESULT STDMETHODCALLTYPE HookRS(IDirect3DDevice9* dev, D3DRENDERSTATETYP
     return g_origRS(dev, st, v);
 }
 
+// ---- lit windows: the game's own window-texture draws are drawn a second time into g_winTex with ps_window
+struct WinTex { UINT w, h, dxt, hash; };
+static std::vector<WinTex> g_winList;
+static bool g_winListRead = false;
+static std::map<void*, bool> g_winSeen;  // texture -> is a window texture (cleared at every level load)
+static std::map<void*, IDirect3DTexture9*> g_winMask;  // window texture -> its pane mask (dadmod\lampwindows\<hash>.raw, L8)
+static void WinCacheClear() {
+    g_winSeen.clear(); g_winListRead = false;
+    for (auto& m : g_winMask) if (m.second) m.second->Release();
+    g_winMask.clear();
+}
+static void WinLoadMask(IDirect3DTexture9* t, UINT w, UINT h, UINT hash) {
+    char name[64];
+    snprintf(name, sizeof name, "lampwindows\\%08x.raw", hash);
+    std::string data;
+    if (!ReadWholeFile(ExeDirFile(name), data) || data.size() != (size_t)w * h) {
+        mmenu::Log("gfx: lit windows: no pane map for %08x (%ux%u, file %u bytes)", hash, w, h, (unsigned)data.size());
+        return;
+    }
+    IDirect3DDevice9* dev = nullptr;
+    t->GetDevice(&dev);
+    if (!dev) return;
+    IDirect3DTexture9* m = nullptr;
+    if (SUCCEEDED(dev->CreateTexture(w, h, 1, 0, D3DFMT_L8, D3DPOOL_MANAGED, &m, nullptr))) {
+        D3DLOCKED_RECT lr;
+        if (SUCCEEDED(m->LockRect(0, &lr, nullptr, 0))) {
+            for (UINT y = 0; y < h; ++y) memcpy((char*)lr.pBits + y * lr.Pitch, data.data() + y * w, w);
+            m->UnlockRect(0);
+            g_winMask[t] = m;
+            mmenu::Log("gfx: lit windows: pane map %08x loaded (%ux%u)", hash, w, h);
+        } else m->Release();
+    }
+    dev->Release();
+}
+static void WinReadList() {
+    g_winListRead = true;
+    g_winList.clear();
+    std::string data;
+    if (!ReadWholeFile(ExeDirFile("lampwindows.txt"), data)) return;
+    size_t s0 = 0;
+    while (s0 < data.size()) {
+        size_t e = data.find_first_of("\r\n", s0);
+        std::string line = data.substr(s0, e == std::string::npos ? std::string::npos : e - s0);
+        s0 = e == std::string::npos ? data.size() : e + 1;
+        char lvl[64]; WinTex t;
+        if (line.empty() || line[0] == ';') continue;
+        if (sscanf(line.c_str(), "%63s %u %u %u %x", lvl, &t.w, &t.h, &t.dxt, &t.hash) == 5) g_winList.push_back(t);
+    }
+    mmenu::Log("gfx: lit windows: %d window textures listed", (int)g_winList.size());
+}
+static bool IsWindowTex(IDirect3DBaseTexture9* bt) {
+    auto it = g_winSeen.find(bt);
+    if (it != g_winSeen.end()) return it->second;
+    bool yes = false;
+    if (bt->GetType() == D3DRTYPE_TEXTURE) {
+        IDirect3DTexture9* t = (IDirect3DTexture9*)bt;
+        D3DSURFACE_DESC d;
+        UINT dxt = 0;
+        if (SUCCEEDED(t->GetLevelDesc(0, &d))) {
+            dxt = d.Format == D3DFMT_DXT1 ? 1 : d.Format == D3DFMT_DXT2 ? 2 : d.Format == D3DFMT_DXT3 ? 3 : d.Format == D3DFMT_DXT4 ? 4 : d.Format == D3DFMT_DXT5 ? 5 : 0;
+            bool cand = false;
+            for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt) cand = true;
+            D3DLOCKED_RECT lr;
+            if (cand && dxt && SUCCEEDED(t->LockRect(0, &lr, nullptr, D3DLOCK_READONLY))) {
+                UINT rowBytes = (d.Width / 4 ? d.Width / 4 : 1) * (dxt == 1 ? 8 : 16), rows = d.Height / 4 ? d.Height / 4 : 1;
+                UINT h = 0x811C9DC5, n = 0;
+                for (UINT r = 0; r < rows && n < 128; ++r) {
+                    const unsigned char* p = (const unsigned char*)lr.pBits + r * lr.Pitch;
+                    for (UINT i = 0; i < rowBytes && n < 128; ++i, ++n) h = (h ^ p[i]) * 0x01000193;
+                }
+                t->UnlockRect(0);
+                for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt && w.hash == h) yes = true;
+                if (yes) WinLoadMask(t, d.Width, d.Height, h);
+            }
+        }
+    }
+    g_winSeen[bt] = yes;
+    if (yes) {
+        static int n = 0;
+        if (n < 40) { ++n; mmenu::Log("gfx: lit windows: window texture found (%d so far)", n); }
+    }
+    return yes;
+}
+static bool MoonOn() { return V("gfx_moonlight") > 0 && g_bulbAmt > 0.01f && g_psMoon && !g_mainMenu; }
+static bool WinLayerReady() { return g_winTex && g_winFrame == g_presents; }
+static bool WindowsOn() { return V("gfx_windows") && g_bulbAmt > 0.01f && g_psWindow && !g_msaaOn && g_w && !g_mainMenu; }
+static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3DPRIMITIVETYPE pt, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
+    if (g_winW != g_w || g_winH != g_h || !g_winSurf) {
+        if (g_winSurf) { g_winSurf->Release(); g_winSurf = nullptr; }
+        if (g_winTex) { g_winTex->Release(); g_winTex = nullptr; }
+        g_winW = g_w; g_winH = g_h;
+        g_winDepth = SUCCEEDED(dev->CreateTexture(g_w, g_h, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A16B16G16R16F, D3DPOOL_DEFAULT, &g_winTex, nullptr));
+        if (!g_winDepth) mmenu::Log("gfx: lit windows: no half-float layer on this card, windows are not hidden behind closer things");
+        if ((!g_winDepth && FAILED(dev->CreateTexture(g_w, g_h, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_winTex, nullptr))) ||
+            FAILED(g_winTex->GetSurfaceLevel(0, &g_winSurf))) {
+            if (g_winTex) { g_winTex->Release(); g_winTex = nullptr; }
+            g_winSurf = nullptr;
+            return;
+        }
+    }
+    IDirect3DSurface9* rt = nullptr;
+    if (FAILED(dev->GetRenderTarget(0, &rt)) || !rt) return;
+    D3DSURFACE_DESC d;
+    bool full = SUCCEEDED(rt->GetDesc(&d)) && d.Width == g_w && d.Height == g_h;  // only the main 3D view, same size as our layer
+    if (!full) { rt->Release(); return; }
+    D3DVIEWPORT9 vp;
+    dev->GetViewport(&vp);
+    IDirect3DPixelShader9* oldPS = nullptr;
+    dev->GetPixelShader(&oldPS);
+    DWORD ab, sb, db, zw, zf, fog, bo;
+    if (FAILED(dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &ab)) || FAILED(dev->GetRenderState(D3DRS_SRCBLEND, &sb)) ||
+        FAILED(dev->GetRenderState(D3DRS_DESTBLEND, &db)) || FAILED(dev->GetRenderState(D3DRS_ZWRITEENABLE, &zw)) ||
+        FAILED(dev->GetRenderState(D3DRS_ZFUNC, &zf)) || FAILED(dev->GetRenderState(D3DRS_FOGENABLE, &fog)) ||
+        FAILED(dev->GetRenderState(D3DRS_BLENDOP, &bo))) {  // a pure device can't report its states: no lit windows
+        static bool once = false;
+        if (!once) { once = true; mmenu::Log("gfx: lit windows off (render states unreadable)"); }
+        if (oldPS) oldPS->Release();
+        rt->Release();
+        return;
+    }
+    float oldC0[4];
+    dev->GetPixelShaderConstantF(0, oldC0, 1);
+    dev->SetRenderTarget(0, g_winSurf);
+    dev->SetViewport(&vp);
+    if (g_winFrame != g_presents) {
+        D3DVIEWPORT9 all = {0, 0, g_w, g_h, 0, 1};
+        dev->SetViewport(&all);
+        dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+        dev->SetViewport(&vp);
+        g_winFrame = g_presents;
+    }
+    // no blending: the nearest window drawn so far wins each pixel (the game's own draw of it already wrote the depth),
+    // so windows farther back never add their glow onto nearer ones
+    g_origRS(dev, D3DRS_ALPHABLENDENABLE, FALSE); g_origRS(dev, D3DRS_SRCBLEND, D3DBLEND_ONE); g_origRS(dev, D3DRS_DESTBLEND, D3DBLEND_ZERO);
+    g_origRS(dev, D3DRS_BLENDOP, D3DBLENDOP_ADD); g_origRS(dev, D3DRS_ZWRITEENABLE, FALSE); g_origRS(dev, D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    g_origRS(dev, D3DRS_FOGENABLE, FALSE);
+    DWORD sab = 0, sba = 0, dba = 0, tci = 0, ttf = 0;
+    dev->GetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, &sab); dev->GetRenderState(D3DRS_SRCBLENDALPHA, &sba); dev->GetRenderState(D3DRS_DESTBLENDALPHA, &dba);
+    dev->GetTextureStageState(1, D3DTSS_TEXCOORDINDEX, &tci); dev->GetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, &ttf);
+    D3DMATRIX tm1, ident = {};
+    ident._11 = ident._22 = ident._33 = ident._44 = 1;
+    dev->GetTransform(D3DTS_TEXTURE1, &tm1);
+    g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
+    dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION | 1);
+    dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3);
+    g_origST(dev, D3DTS_TEXTURE1, &ident);
+    auto mk = g_winMask.find(tex);
+    IDirect3DTexture9* mask = mk == g_winMask.end() ? nullptr : mk->second;
+    IDirect3DBaseTexture9* oldT1 = nullptr;
+    dev->GetTexture(1, &oldT1);
+    DWORD s1min = 0, s1mag = 0, s1mip = 0, s1u = 0, s1v = 0;
+    dev->GetSamplerState(1, D3DSAMP_MINFILTER, &s1min); dev->GetSamplerState(1, D3DSAMP_MAGFILTER, &s1mag); dev->GetSamplerState(1, D3DSAMP_MIPFILTER, &s1mip);
+    dev->GetSamplerState(1, D3DSAMP_ADDRESSU, &s1u); dev->GetSamplerState(1, D3DSAMP_ADDRESSV, &s1v);
+    dev->SetTexture(1, mask);
+    g_origSSS(dev, 1, D3DSAMP_MINFILTER, D3DTEXF_POINT); g_origSSS(dev, 1, D3DSAMP_MAGFILTER, D3DTEXF_POINT); g_origSSS(dev, 1, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    g_origSSS(dev, 1, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP); g_origSSS(dev, 1, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+    float c0[4] = {V("gfx_windowstr") / 10.0f, V("gfx_windowshare") / 10.0f, mask ? 1.0f : 0.0f, V("gfx_windows") == 2 ? 1.0f : 0.0f};
+    ++g_winDraws;
+    dev->SetPixelShaderConstantF(0, c0, 1);
+    dev->SetPixelShader(g_psWindow);
+    g_origDIP(dev, pt, b, mi, nv, si, pc);
+    dev->SetPixelShader(oldPS);
+    if (oldPS) oldPS->Release();
+    dev->SetPixelShaderConstantF(0, oldC0, 1);
+    g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, sab); g_origRS(dev, D3DRS_SRCBLENDALPHA, sba); g_origRS(dev, D3DRS_DESTBLENDALPHA, dba);
+    dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, tci); dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, ttf);
+    dev->SetTexture(1, oldT1);
+    if (oldT1) oldT1->Release();
+    g_origSSS(dev, 1, D3DSAMP_MINFILTER, s1min); g_origSSS(dev, 1, D3DSAMP_MAGFILTER, s1mag); g_origSSS(dev, 1, D3DSAMP_MIPFILTER, s1mip);
+    g_origSSS(dev, 1, D3DSAMP_ADDRESSU, s1u); g_origSSS(dev, 1, D3DSAMP_ADDRESSV, s1v);
+    g_origST(dev, D3DTS_TEXTURE1, &tm1);
+    g_origRS(dev, D3DRS_ALPHABLENDENABLE, ab); g_origRS(dev, D3DRS_SRCBLEND, sb); g_origRS(dev, D3DRS_DESTBLEND, db);
+    g_origRS(dev, D3DRS_BLENDOP, bo); g_origRS(dev, D3DRS_ZWRITEENABLE, zw); g_origRS(dev, D3DRS_ZFUNC, zf); g_origRS(dev, D3DRS_FOGENABLE, fog);
+    dev->SetRenderTarget(0, rt);
+    dev->SetViewport(&vp);
+    rt->Release();
+}
 static bool ScreenSpaceDraw(IDirect3DDevice9* dev);
 static HRESULT STDMETHODCALLTYPE HookDIP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
     if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;  // the galaxy replaces the game's sky
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
-    return g_origDIP(dev, t, b, mi, nv, si, pc);
+    HRESULT hr = g_origDIP(dev, t, b, mi, nv, si, pc);
+    if (!g_inPost && !g_sceneDone && !g_skyPass && WindowsOn()) {
+        if (!g_winListRead) WinReadList();
+        IDirect3DBaseTexture9* tex = nullptr;
+        if (!g_winList.empty() && SUCCEEDED(dev->GetTexture(0, &tex)) && tex) {
+            if (IsWindowTex(tex)) DrawWindowGlow(dev, tex, t, b, mi, nv, si, pc);
+            tex->Release();
+        }
+    }
+    return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE HookDP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT sv, UINT pc) {
@@ -2748,7 +3322,8 @@ static HRESULT STDMETHODCALLTYPE HookDS(IDirect3DDevice9* dev, IDirect3DSurface9
 
 static HRESULT STDMETHODCALLTYPE HookReset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp) {
     if (g_autoDS && g_intzBound) g_origDS(dev, g_autoDS);  // our depth texture must not be bound across a reset
-    FreeTargets();
+    FreeTargets();  // also the lit windows layer (g_winTex / g_winSurf)
+    LampQueriesFree();  // lamp GPU timing queries
     FgClear(); FgFree();  // frame generation's textures
     if (pp) AdjustPP(g_d3d, g_adapter, g_devType, pp);
     HRESULT hr = g_origReset(dev, pp);
@@ -3065,13 +3640,14 @@ static void InstallCreateHook() {
     }
 }
 
-// d3dHooks = false: no Direct3D hooks at all (client safe start, loader.cpp); oneProbe: see PatchThread.
+// d3dHooks = false: client safe start (loader.cpp): no CreateDevice import hook and no probe thread; KeepDeviceHooks
+// (controller read) still adopts the game device later, so graphics hooks come in anyway. oneProbe: see PatchThread.
 // The server build calls Install() and keeps both probes as before.
 static void Install(bool d3dHooks = true, bool oneProbe = false) {
     Load();
     InstallMirrorInput();
     InstallLevelSoundHooks();
-    if (!d3dHooks) { mmenu::Log("gfx: safe start, Direct3D hooks off (graphics settings do nothing)"); return; }
+    if (!d3dHooks) { mmenu::Log("gfx: safe start, early Direct3D hook skipped (the device is picked up later, graphics still work)"); return; }
     g_oneProbe = oneProbe;
     InstallCreateHook();
     CloseHandle(CreateThread(nullptr, 0, PatchThread, nullptr, 0, nullptr));

@@ -1,4 +1,4 @@
-# Pause > dadmod > Gameplay: "Auto bail cancel" On/Off (setting auto_bail_cancel, default off) and "Bail cancel effects" On/Off (whoosh + sparkles, setting bail_cancel_sound_on, default on) directly under Bail cancel.
+# Pause > dadmod > Gameplay: "Auto bail cancel" On/Off (setting auto_bail_cancel, default off) and "Bail cancel effects" On/Off (whoosh + sparkles + flash, setting bail_cancel_sound_on, default on) directly under Bail cancel.
 # Runs after screenfx/bhra so it sits right under the Bail cancel row. Noah 2026-11-21.
 import sys, os
 p = os.path.join(sys.argv[1], 'qb', 'game', 'Levels.q')

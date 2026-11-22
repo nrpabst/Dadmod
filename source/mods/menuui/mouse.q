@@ -92,11 +92,6 @@ script dadmod_mouse_rpause
         if IsTrue view_mode
             rp_ok = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                rp_ok = 0
-            endif
-        endif
     endif
     THUGRECOMP_MouseRightPause ok = <rp_ok>
 endscript
@@ -150,6 +145,18 @@ script dadmod_mouse_tick
         endif
     endif
     mm_nocam = <mm_accept>
+    mm_hc = <mm_screen>
+    if (<mm_screen> = 0)
+        if (<mm_menu> = 0)
+            if ScreenElementExists id = root_window
+                if root_window : GetSingleTag dadmod_walkcam_ok
+                    if (<dadmod_walkcam_ok> = 1)
+                        mm_hc = 2
+                    endif
+                endif
+            endif
+        endif
+    endif
     if (<mm_dialog> = 1)
         mm_nocam = 1
     endif
@@ -159,7 +166,7 @@ script dadmod_mouse_tick
     if (<mm_menu> = 1)
         THUGRECOMP_MouseMenu id = <mm_mid> root = root_window nocam = <mm_nocam> hidecur = <mm_screen> nodrag = <mm_lvl>
     else
-        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_screen>
+        THUGRECOMP_MouseMenu id = dadmod_mouse_no_menu root = root_window nocam = <mm_nocam> hidecur = <mm_hc>
     endif
     if (<mm_screen> = 0)
         ms_active = 0
@@ -453,6 +460,14 @@ script dadmod_mouse_click
         if (<ms_arrow> = 1)
             FireEvent type = pad_right target = <id>
             return
+        endif
+    endif
+    if not LevelIs Load_MainMenu
+        if ScreenElementExists id = root_window
+            if root_window : GetSingleTag pause_controller
+                FireEvent type = pad_choose target = <id> data = { device_num = <pause_controller> }
+                return
+            endif
         endif
     endif
     FireEvent type = pad_choose target = <id>
@@ -1219,7 +1234,7 @@ script dadmod_kb_click_anim
         DoScreenElementMorph id = <id> time = 0.08 scale = ( <mm_org> * 1.05 )
     endif
 endscript
-script dadmod_fit_extra
+script dadmod_fit_extra time = 0
     if not ScreenElementExists id = <id>
         return
     endif
@@ -1230,12 +1245,37 @@ script dadmod_fit_extra
     if <id> : GetSingleTag dadmod_xbase
         mm_base = <dadmod_xbase>
     endif
-    if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_base> min = 0.6
-        if (<mm_base> = 0.0)
-            <id> : SetTags dadmod_xbase = <ms_base>
-        endif
-        DoScreenElementMorph id = { <id> child = extra_text } scale = <ms_fit> time = 0
+    mm_nofit = 0
+    if <id> : GetSingleTag dadmod_nofit
+        mm_nofit = <dadmod_nofit>
     endif
+    mm_grow = 1.0
+    if <id> : GetSingleTag dadmod_grown
+        if (<dadmod_grown> = 1)
+            mm_grow = 1.15
+        endif
+    endif
+    mm_fit = -1.0
+    if (<mm_nofit> = 1)
+        if (<mm_base> > 0.0)
+            mm_fit = ( <mm_base> * <mm_grow> )
+        endif
+    endif
+    if (<mm_fit> < 0.0)
+        mm_gbase = ( <mm_base> * <mm_grow> )
+        mm_gmin = ( 0.6 / <mm_grow> )
+        if THUGRECOMP_FitText row = <id> text = { <id> child = extra_text } left = { <id> child = left_arrow } right = { <id> child = right_arrow } base = <mm_gbase> min = <mm_gmin>
+            if (<mm_base> = 0.0)
+                <id> : SetTags dadmod_xbase = <ms_base>
+                mm_fit = ( <ms_fit> * <mm_grow> )
+            else
+                mm_fit = <ms_fit>
+            endif
+        else
+            return
+        endif
+    endif
+    DoScreenElementMorph id = { <id> child = extra_text } scale = <mm_fit> time = <time>
 endscript
 script dadmod_fit_all
     wait 2 gameframes
@@ -1421,16 +1461,28 @@ script dadmod_walkcam_tick
         if ScreenElementExists id = keyboard_anchor
             wc_on = 0
         endif
-        if root_window : GetSingleTag dadmod_noclip
-            if (<dadmod_noclip> > 0)
-                wc_on = 0
-            endif
-        endif
         if GetCurrentSkaterCamAnimName
             if GotParam CurrentSkaterCamAnimName
                 wc_on = 0
             endif
         endif
+    endif
+    wc_nc = 0
+    if ScreenElementExists id = root_window
+        if root_window : GetSingleTag dadmod_noclip
+            if (<dadmod_noclip> > 0)
+                wc_nc = 1
+            endif
+        endif
+        wc_nc_was = <wc_nc>
+        if root_window : GetSingleTag dadmod_walkcam_nc
+            wc_nc_was = <dadmod_walkcam_nc>
+        endif
+        if not (<wc_nc_was> = <wc_nc>)
+            wc_on = 0
+        endif
+        root_window : SetTags dadmod_walkcam_nc = <wc_nc>
+        root_window : SetTags dadmod_walkcam_ok = <wc_on>
     endif
     if (<wc_quit> = 1)
         THUGRECOMP_WalkCam quit = 1
@@ -1440,10 +1492,23 @@ script dadmod_walkcam_tick
         Skater : Obj_GetOrientation
         wc_hx = <x>
         wc_hz = <z>
+        if (<wc_nc> = 1)
+            wc_hx = 0.0
+            wc_hz = 1.0
+        endif
         skatercam0 : Obj_GetPosition
         wc_cp = <Pos>
         skatercam0 : Obj_GetOrientation
         THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+    endif
+    wc_live = 0
+    if GotParam wc_state
+        if (<wc_state> = 1)
+            wc_live = 1
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_walkcam_live = <wc_live>
     endif
     if GotParam wc_state
         if (<wc_state> = 1)

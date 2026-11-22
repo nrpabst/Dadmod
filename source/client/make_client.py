@@ -29,7 +29,9 @@ CLIENT = os.path.join(WORK, 'client')
 # where they say @DADMOD_VERSION@; the installer reads dadmod\version.txt; the zip is named after it.
 VERSION = open(os.path.join(CLIENT, 'VERSION')).read().strip()
 # the extra built-in levels' files come from this game folder (read only) and must not exist in these plain installs
-VAULT_SRC = os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Dev')
+# DADMOD_VAULT_SRC: a frozen copy of those files (2026-11-22: another thread rebuilt the P8 levels in Dev mid-build, so the
+# recipes and the shipped level files came from different versions)
+VAULT_SRC = os.environ.get('DADMOD_VAULT_SRC') or os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Dev')
 # the game builds the recipes are made against (read only): plain THUG Pro, the newer and the older Kali Mod, and a
 # fresh THUG Pro + the public Kali download with no thugpro_qe.prx (Noah 2026-11-18: players who only dragged in
 # Kali's data folder have no thugpro_qe.prx; made by client/tools/make_recipe_game_kali.py)
@@ -235,6 +237,18 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
     shutil.copyfile(os.path.join(inst, 'dadmod.ps1'), os.path.join(out, 'dadmod', 'updater', 'dadmod.ps1'))
     want.append(os.path.join('dadmod', 'updater', 'dadmod.ps1'))
+    # lit windows at night (mods/lamplights, 0.10.1): the window list + pane masks gfx.inc reads from <game>\dadmod\
+    # (our own masks: one pane number per texel, made by mods/lamplights/gen_windows.py; no game texture bytes)
+    lsrc = os.path.join(WORK, 'mods', 'lamplights', 'data')
+    if os.path.isdir(os.path.join(out, 'dadmod', 'lampwindows')):
+        shutil.rmtree(os.path.join(out, 'dadmod', 'lampwindows'))
+    os.makedirs(os.path.join(out, 'dadmod', 'lampwindows'))
+    shutil.copyfile(os.path.join(lsrc, 'lampwindows.txt'), os.path.join(out, 'dadmod', 'lampwindows.txt'))
+    want.append(os.path.join('dadmod', 'lampwindows.txt'))
+    for n in sorted(os.listdir(os.path.join(lsrc, 'lampwindows'))):
+        if n.lower().endswith('.raw'):
+            shutil.copyfile(os.path.join(lsrc, 'lampwindows', n), os.path.join(out, 'dadmod', 'lampwindows', n))
+            want.append(os.path.join('dadmod', 'lampwindows', n))
     if os.path.isfile(os.path.join(out, 'data', 'pre', 'dadmod_levelselect.prx')):     # built only when there are pictures
         want.append(os.path.join('data', 'pre', 'dadmod_levelselect.prx'))
     ml = os.path.join('dadmod', 'menulevels')
@@ -289,6 +303,17 @@ def package(out, release=None):
     def no_shop(srcs):
         return [s for s in srcs if os.path.basename(s).lower() != 'skateshop_scripts.prx']
 
+    # dadmod_qb.prx and dadmod_levelfix.qb: stock files only, no extra-level files either (2026-11-22: the installer
+    # checks the dadmod_qb.prx recipe before it copies the extra levels in, so a recipe reading P8Downtown_scripts.prx
+    # stopped the install with "missing from your game")
+    stock_box = []
+
+    def get_corpora_stock():
+        if not stock_box:
+            stock_box.extend(dadpatch.Corpus(g, no_shop(dadpatch.all_script_sources(g))) for g in games)
+            print('recipe sources (stock files only, no Skateshop_scripts.prx): ' + '; '.join('%s %d files' % (os.path.basename(c.game), len(c.sources)) for c in stock_box))
+        return stock_box
+
     def get_corpora_noshop():
         if not noshop_box:
             noshop_box.extend(dadpatch.Corpus(g, no_shop(dadpatch.all_script_sources(g) + extra)) for g in games)
@@ -311,14 +336,16 @@ def package(out, release=None):
     for rel in (os.path.join('data', 'pre', 'dadmod_qb.prx'), os.path.join('data', 'dadmod_levelfix.qb')):
         want.remove(rel)
         name = os.path.splitext(os.path.basename(rel))[0] + '.dpr'
-        key = 'recipe-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
+        key = 'recipe-stock|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(os.path.join(out, rel), 'rb').read()).hexdigest())
         recipes.append(name)
         if reuse(key, os.path.join(rdir, name)):
             reused += 1
             continue
-        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora_noshop())
+        b, variants, target = dadpatch.make(os.path.join(out, rel), rel.replace(os.sep, chr(92)), None, corpora=get_corpora_stock())
         if b'skateshop_scripts.prx' in b.lower():
             sys.exit('PACKAGE FAILED: recipe %s still reads Skateshop_scripts.prx' % name)
+        if any(x.encode('ascii').lower() in b.lower() for x in extra):
+            sys.exit('PACKAGE FAILED: recipe %s reads an extra level file the installer adds later' % name)
         open(os.path.join(rdir, name), 'wb').write(b)
         for g in games:
             if dadpatch.apply_recipe(b, g) != target:
@@ -338,13 +365,17 @@ def package(out, release=None):
         seen.add(qb)
         name = os.path.splitext(qb)[0] + '.dpr'
         tfile = os.path.join(mlsrc, qb)
-        key = 'scene|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(tfile, 'rb').read()).hexdigest())
+        # no Skateshop_scripts.prx either (Noah 2026-11-22: a player with a CAS mod lost 18 menu scenes because these
+        # recipes copied a few bytes from it; "make it not depend on casmod")
+        key = 'scene-noshop|%s|%s|%s' % (name, corpus_key, hashlib.sha1(open(tfile, 'rb').read()).hexdigest())
         if reuse(key, os.path.join(mdir, name)):
             reused += 1
             made.append(name)
             continue
-        cs = get_corpora()
+        cs = get_corpora_noshop()
         b, variants, target = dadpatch.make(tfile, os.path.join('dadmod', 'menulevels', qb), None, corpora=cs)
+        if b'skateshop_scripts.prx' in b.lower():
+            sys.exit('PACKAGE FAILED: recipe %s still reads Skateshop_scripts.prx' % name)
         if not any(dadpatch.apply_recipe(b, c.game) == target for c in cs):
             bad.append('%s: NO GAME REBUILDS IT' % qb)
             continue
@@ -483,6 +514,37 @@ def default_settings(out):
     gfx_fixed = {'gfx_fogamt': 5, 'gfx_skywxver': 1,  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
                  'gfx_tricksfx': 30, 'gfx_levelsfx': 100, 'gfx_telesfx': 100}  # 0.9.19: sound sliders as shipped before (Dev has them muted for testing); Frame generation default Off (gfx_off)
     gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
+    # street lamps + lit windows (mods/lamplights, 0.10.1): Dev's lamp test values never ship; a fresh install gets the
+    # values Noah picked on 2026-11-22 (moonlight was not accepted: off), as one block at the end of the file
+    lamp_keys = ('gfx_lampbulbs', 'gfx_bulbsize', 'gfx_bulbstr', 'gfx_lamppool', 'gfx_lampstr', 'gfx_lamplift', 'gfx_lampreach',
+                 'gfx_windows', 'gfx_windowstr', 'gfx_windowshare', 'gfx_lamps', 'gfx_windowspill', 'gfx_moonlight', 'gfx_moonaz')
+    if any(l.strip() == '; ---- Street lamps ----' for l in gl):
+        gl = gl[:next(i for i, l in enumerate(gl) if l.strip() == '; ---- Street lamps ----')]
+    keep_gl = []
+    for l in gl:
+        if l.split('=')[0].strip() in lamp_keys:
+            if keep_gl and keep_gl[-1].lstrip().startswith(';'):
+                keep_gl.pop()
+            continue
+        keep_gl.append(l)
+    gl = keep_gl
+    while gl and not gl[-1].strip():
+        gl.pop()
+    gl += ['', '; ---- Street lamps ----',
+           '; lamp bulbs and light pools at night: 1 on, 0 off', 'gfx_lampbulbs = 1',
+           '; size of the glow around each bulb: 1 .. 30, 8 = normal', 'gfx_bulbsize = 8',
+           '; brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)', 'gfx_bulbstr = 7',
+           '; size of the light pool on the ground under each lamp: 2 .. 40, 10 = normal', 'gfx_lamppool = 10',
+           '; how much the light pool brightens the ground: 0 .. 60, 10 = normal', 'gfx_lampstr = 10',
+           '; amber added to the pool even where the ground is very dark: 0 .. 60, 3 = normal (high looks foggy)', 'gfx_lamplift = 3',
+           "; how far each lamp's amber light reaches onto walls and buildings: 200 .. 3000, 1000 = normal", 'gfx_lampreach = 1000',
+           '; lit windows at night (warm light in building windows): 1 on, 0 off', 'gfx_windows = 1',
+           '; brightness of the lit windows: 0 .. 20, 10 = normal', 'gfx_windowstr = 10',
+           '; how many windows are lit: 0 .. 10, 3 = 30%', 'gfx_windowshare = 3',
+           '; the OLD street light glow from before (its positions are off): 0 off .. 10 bright', 'gfx_lamps = 0',
+           '; soft warm light spilling around lit windows: 0 .. 20, 0 = off', 'gfx_windowspill = 0',
+           '; moonlight: cool light on walls and ground facing the moon at night: 0 .. 20, 0 = off', 'gfx_moonlight = 0',
+           '; direction the moonlight comes from: 0 .. 359 degrees', 'gfx_moonaz = 135']
     with open(os.path.join(d, 'gfx.ini'), 'w', encoding='latin-1', newline='\r\n') as f:
         f.write('\n'.join(gl) + '\n')
     ml = [l.rstrip('\r\n') for l in open(os.path.join(dev, 'mainmenu.ini'), encoding='latin-1')
@@ -532,6 +594,14 @@ def vault_files():
             sys.exit('PACKAGE FAILED: level file missing: ' + src)
         if hashlib.md5(open(src, 'rb').read()).hexdigest() != md5.lower():
             sys.exit('PACKAGE FAILED: %s changed (md5 is not the one in vault_levels.txt)' % src)
+        if rel.lower().endswith('_scripts.prx'):
+            # a rail / ladder Link to the wrong node hangs that level's load forever (rail builder 0x57E960):
+            # 2026-11-22 the P8 sound work shipped such links into Dev
+            sys.path.insert(0, os.path.join(WORK, 'p8', 'tools'))
+            from validate_p8 import prx_link_errors
+            bad = prx_link_errors(src)
+            if bad:
+                sys.exit('PACKAGE FAILED: %d bad node links in %s, first: %s' % (len(bad), rel, bad[0]))
         for d in PLAIN_GAMES:
             p = os.path.join(d, rel)
             if os.path.exists(p):     # Windows: not case-sensitive

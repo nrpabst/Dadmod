@@ -150,6 +150,9 @@ endscript
 script dadmod_bail_vanish
     dadmod_abc_play part = abc_vanish
     dadmod_abcsnd_get
+    if ( <abcsnd_on> = 0 )
+        return abc_abort = 0
+    endif
     if ( <abcsnd_on> = 1 )
         DestroyFlexibleParticleSystem Name = dadmod_abc_fx_out
         CreateFlexibleParticleSystem Name = dadmod_abc_fx_out params_script = dadmod_abc_particle_params
@@ -178,6 +181,12 @@ script dadmod_bail_vanish
     return abc_abort = 0
 endscript
 script dadmod_bail_reform
+    dadmod_abcsnd_get
+    if ( <abcsnd_on> = 0 )
+        unhide
+        Obj_ShadowOn ShadowType = Detailed
+        return
+    endif
     hide
     Obj_ShadowOff
     wait 3 frames

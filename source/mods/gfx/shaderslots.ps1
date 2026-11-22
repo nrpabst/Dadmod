@@ -37,7 +37,7 @@ public static class DxSlots {
   }
 }
 '@
-$list = @(,@('vs_main','vs_3_0')) +(@('ps_fxaa','ps_bright','ps_down','ps_blur','ps_scene','ps_look','ps_screen','ps_galaxy','ps_ao','ps_aoblur','ps_sky','ps_sky5','ps_sky6','ps_sky7','ps_sky8','ps_sky9','ps_sky10','ps_sky11','ps_sky12','ps_sky13','ps_sky14','ps_weather','ps_fireworks','ps_lamps','ps_mirror') | ForEach-Object { ,@($_, 'ps_3_0') })
+$list = @(,@('vs_main','vs_3_0')) +(@('ps_fxaa','ps_bright','ps_down','ps_blur','ps_scene','ps_look','ps_screen','ps_galaxy','ps_ao','ps_aoblur','ps_sky','ps_sky5','ps_sky6','ps_sky7','ps_sky8','ps_sky9','ps_sky10','ps_sky11','ps_sky12','ps_sky13','ps_sky14','ps_weather','ps_fireworks','ps_lamps','ps_bulbs','ps_nighttint','ps_wincomp','ps_bhalo','ps_bpool','ps_moon','ps_winvis','ps_mirror') | ForEach-Object { ,@($_, 'ps_3_0') }) + @(,@('ps_window','ps_2_0'))
 if ($Names) { $list = @($Names.Split(',') | ForEach-Object { ,@($_.Trim(), 'ps_3_0') }) }
 $bad = 0
 foreach ($s in $list) {

@@ -2113,7 +2113,8 @@ static bool __cdecl CF_MouseMenu(void* params, void* script) {
     g_pointerOnUi = hit >= 0 || overBack || overNext || IntParam(params, "nodrag", 0) != 0;
     if (settling && !overBack && !overNext) { click = 0; wheel = 0; }      // nothing to click yet: drop clicks and scrolls
     {   // hide / show the Windows arrow over the game while our pointer is up (hidecur from QB = a mouse screen)
-        LONG want = (active && IntParam(params, "hidecur", 0)) ? 1 : 0;
+        int hc = IntParam(params, "hidecur", 0);   // 2 = in game on foot (walk / noclip mouse camera): wheel cursor even while keys are pressed (Noah 2026-11-22)
+        LONG want = (hc == 2 ? front : (active && hc)) ? 1 : 0;
         if (InterlockedExchange(&g_hideCursor, want) != want) SetWheelCursorActive(h, want != 0);
     }
     CURSORINFO ci = { sizeof(ci) };
@@ -4247,10 +4248,10 @@ static const char kLayoutDefault[] =
 "    item|gfx_soundlog|||\n"
 "  item|gfx_reset|||\n"
 "menu||Sky & weather||Sky, fog, time of day, weather and fireworks\n"
+"  item|gfx_tod|||\n"
 "  item|gfx_galaxy|||\n"
 "  item|gfx_todfog|||\n"
 "  item|gfx_fogamt|||\n"
-"  item|gfx_tod|||\n"
 "  item|gfx_skypop|||\n"
 "  item|gfx_weather|||\n"
 "  item|gfx_wxamt|||\n"
@@ -4293,6 +4294,28 @@ static void LoadLayout() {
                 data.insert(le + 1, indent + "  item|gfx_postfx|||" + (crlf ? "\r\n" : "\n"));
                 WriteWholeFile(path, data);
                 Log("layout: added the ReShade row (gfx_postfx) to the Graphics menu");
+            }
+        }
+    }
+    // 2026-11-22: Time of day is the first Sky & weather row (Noah). A layout still in the old default order
+    // (Sky, Fog, Fog intensity, Time of day) gets the Time of day line moved to the top. The old file is kept in dadmod\\backups.
+    {
+        size_t g = data.find("|gfx_galaxy|"), t = data.find("|gfx_tod|");
+        if (g != std::string::npos && t != std::string::npos && t > g) {
+            size_t gs = data.rfind('\n', g); gs = gs == std::string::npos ? 0 : gs + 1;
+            size_t ts = data.rfind('\n', t); ts = ts == std::string::npos ? 0 : ts + 1;
+            size_t te = data.find('\n', t); te = te == std::string::npos ? data.size() : te + 1;
+            std::string between = data.substr(gs, ts - gs);
+            if (between.find("|gfx_todfog|") != std::string::npos && between.find("|gfx_fogamt|") != std::string::npos &&
+                std::count(between.begin(), between.end(), '\n') == 3) {
+                std::string tl = data.substr(ts, te - ts);
+                if (tl.empty() || tl.back() != '\n') tl += (data.find("\r\n") != std::string::npos ? "\r\n" : "\n");
+                CreateDirectoryA(ExeDirFile("backups").c_str(), nullptr);
+                WriteWholeFile(ExeDirFile("backups\\dadmod_layout.txt.before_tod_top"), data);
+                data.erase(ts, te - ts);
+                data.insert(gs, tl);
+                WriteWholeFile(path, data);
+                Log("layout: moved Time of day to the top of Sky & weather");
             }
         }
     }

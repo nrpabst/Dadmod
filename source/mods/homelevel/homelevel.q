@@ -1,5 +1,25 @@
 script dadmod_homelevel_tick
+    dadmod_hl_go = 0
     if THUGRECOMP_KeyPressed key = "Home"
+        dadmod_hl_go = 1
+    endif
+    dadmod_hl_sticks = 0
+    if THUGRECOMP_PadHeld button = "leftstick"
+        if THUGRECOMP_PadHeld button = "rightstick"
+            dadmod_hl_sticks = 1
+        endif
+    endif
+    if (<dadmod_hl_sticks> = 1)
+        if root_window : GetSingleTag dadmod_hl_sticks_was
+            if (<dadmod_hl_sticks_was> = 0)
+                dadmod_hl_go = 1
+            endif
+        endif
+    endif
+    if ScreenElementExists id = root_window
+        root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
+    endif
+    if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open
             SpawnScript dadmod_homelevel_open NotSessionSpecific = 1

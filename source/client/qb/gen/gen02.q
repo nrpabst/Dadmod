@@ -349,6 +349,7 @@ script dadmod_ui_change
             dadmod_ui_effect_step value = <value>
         endif
     else
+        cur = <value>
         if GotParam left
             value = ( <value> - <step> )
         else
@@ -368,6 +369,32 @@ script dadmod_ui_change
             if (<value> < <min>)
                 value = <max>
             endif
+        endif
+        if (<key> = "gfx_tod")
+            order = [ 0 6 1 2 3 5 4 ]
+            i = 0
+            begin
+                if (<i> > 6)
+                    i = 0
+                    break
+                endif
+                if ( ( <order> [ <i> ] ) = <cur> )
+                    break
+                endif
+                i = ( <i> + 1 )
+            repeat
+            if GotParam left
+                i = ( <i> - 1 )
+            else
+                i = ( <i> + 1 )
+            endif
+            if (<i> < 0)
+                i = 6
+            endif
+            if (<i> > 6)
+                i = 0
+            endif
+            value = ( <order> [ <i> ] )
         endif
     endif
     THUGRECOMP_SettingSave key = <key> value = <value>

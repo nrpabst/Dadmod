@@ -692,12 +692,12 @@ static void FgDraw(IDirect3DDevice9* dev, IDirect3DSurface9* bb, int prev, int c
 
 // ---- refresh timing ----
 // One refresh = one frame. Refresh k (counted from the performance counter's zero) starts at vb + (k - kb) * per.
-struct FgVb { bool ok; double vb, per; };
+struct FgVb { bool ok; double vb, per; long long k; };  // k: the number of the refresh that starts at vb
 typedef HRESULT(WINAPI* DwmTiming_t)(HWND, void*);
 static int g_fgVbSrc = -1;          // 0 the clock, 1 Windows (window), 2 the card's scan line, 3 v-sync (true fullscreen)
 static bool g_fgRaster = false, g_fgRasterKnown = false;
 static FgVb FgVblankInfo(IDirect3DDevice9* dev) {
-    FgVb r = {false, 0, 0};
+    FgVb r = {false, 0, 0, 0};
     int src = 0;
     double want = g_fgRefresh > 0 ? 1.0 / g_fgRefresh : 0;
     if (g_fgTestMult || want <= 0) src = 0;
@@ -741,6 +741,20 @@ static FgVb FgVblankInfo(IDirect3DDevice9* dev) {
             }
         }
     }
+    // Number the refreshes by counting them from one refresh to the next. (2026-11-22 scan: the number used to be
+    // vb / period rounded down; Windows' period is rounded, so that number slipped by one every so often and a
+    // frame was judged to be on the refresh of the frame before it: 41 frames shared a refresh and 66 refreshes
+    // repeated a frame out of 1064.)
+    static double lastVb = 0;
+    static long long lastK = 0;
+    static int lastSrc = -1;
+    if (r.ok) {
+        if (src != lastSrc || lastVb <= 0) lastK = (long long)floor(r.vb / r.per);
+        else lastK += (long long)floor((r.vb - lastVb) / r.per + 0.5);
+        lastVb = r.vb;
+        lastSrc = src;
+        r.k = lastK;
+    }
     if (src != g_fgVbSrc) {
         static const char* kSrc[] = {"spaced by the clock (no refresh timing here)", "locked to the monitor's refresh (Windows' timing)",
                                      "locked to the monitor's refresh (the card's scan line)", "shown one per refresh by v-sync (true fullscreen)"};
@@ -750,12 +764,12 @@ static FgVb FgVblankInfo(IDirect3DDevice9* dev) {
     return r;
 }
 static long long FgIv(const FgVb& v, double t, double* ph) {
-    double x = (t - v.vb) / v.per + floor(v.vb / v.per);
+    double x = (t - v.vb) / v.per + (double)v.k;
     long long iv = (long long)floor(x);
     if (ph) *ph = x - (double)iv;
     return iv;
 }
-static double FgIvStart(const FgVb& v, long long iv) { return v.vb + ((double)iv - floor(v.vb / v.per)) * v.per; }
+static double FgIvStart(const FgVb& v, long long iv) { return v.vb + (double)(iv - v.k) * v.per; }
 static void FgWaitUntil(double t) { while (FgNow() < t) Sleep(0); }  // the game's own wait does the same (Sleep(0) spin)
 
 // which refresh each frame really went to (just before its Present), for the log
@@ -846,11 +860,15 @@ static void FgSnap(IDirect3DDevice9* dev) {
     FgSaveTex(dev, g_fgL[p][0], g_fgRecDir + "\\snap_luma_before.png");
     FgSaveTex(dev, g_fgL[c][0], g_fgRecDir + "\\snap_luma_after.png");
     FgSaveTex(dev, g_fgVp, g_fgRecDir + "\\snap_vectors.png");
-    IDirect3DSurface9* bb = nullptr;
-    if (SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb) {
-        FgSaveSurf(dev, bb, g_fgRecDir + "\\snap_made_up_frame.png");
-        bb->Release();
+    // the made-up frame drawn again on its own (the back buffer already has the screen effects on it, and right
+    // after a recording the "saved" flash washed it out)
+    IDirect3DSurface9* tmp = nullptr;
+    if (g_fgPlanN > 0 && g_fgPlan[0] < 1.0f &&
+        SUCCEEDED(dev->CreateRenderTarget(g_fgW, g_fgH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &tmp, nullptr)) && tmp) {
+        FgDraw(dev, tmp, p, c, g_fgPlan[0], false);
+        FgSaveSurf(dev, tmp, g_fgRecDir + "\\snap_made_up_frame.png");
     }
+    if (tmp) tmp->Release();
     mmenu::Log("gfx: frame generation debugger: saved one made-up frame's inputs (snap_*.png) to %s", g_fgRecDir.c_str());
 }
 static void FgRecFree() {

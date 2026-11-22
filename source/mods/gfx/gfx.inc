@@ -1803,12 +1803,14 @@ static void Quad(IDirect3DDevice9* dev, UINT w, UINT h, float z = 0) {
     g_origDPUP(dev, D3DPT_TRIANGLESTRIP, 2, v, sizeof v[0]);
 }
 
+static const RECT* g_passScissor = nullptr;  // lamp bulb passes: the bulb's screen rect (2026-11-22: was full screen)
 static void Pass(IDirect3DDevice9* dev, IDirect3DPixelShader9* ps, IDirect3DSurface9* dst, UINT sw, UINT sh, UINT dw, UINT dh,
                  IDirect3DBaseTexture9* t0, IDirect3DBaseTexture9* t1 = nullptr, IDirect3DBaseTexture9* t2 = nullptr, IDirect3DBaseTexture9* t3 = nullptr) {
     if (!ps || !dst) return;  // a shader this card didn't get: skip the pass instead of drawing with none
     dev->SetRenderTarget(0, dst);
     D3DVIEWPORT9 vp = {0, 0, dw, dh, 0, 1};
     dev->SetViewport(&vp);
+    if (g_passScissor) dev->SetScissorRect(g_passScissor);  // SetRenderTarget reset it to the whole target
     dev->SetPixelShader(ps);
     dev->SetTexture(0, t0); dev->SetTexture(1, t1); dev->SetTexture(2, t2); dev->SetTexture(3, t3);
     float px[4] = {1.0f / sw, 1.0f / sh, (float)sw, (float)sh};
@@ -1951,6 +1953,10 @@ static float g_wx[3][4] = {};             // c17-c19 for the weather pass
 // the time of day the level lighting should use now (QB reads it as gfx_todnow)
 static int TodSetting() { int t = V("gfx_tod"); return t ? t : g_serverTod; }
 static int TodNow() { return V("gfx_tod"); }  // 2026-11-21: Dynamic (old 6) removed, 6 = dawn
+// QB's gfx_todnow stays the picked setting only: feeding the server's state back would make dadmod_tod_value
+// force that state and then read its own choice back as the server's.
+// The sky grade: the picked time of day, or the server's when it is night (4 and up)
+static int SkySetting() { int t = V("gfx_tod"); return t ? t : (g_serverTod >= 4 ? g_serverTod : 0); }
 
 static float g_wxCur[4] = {};  // rain, snow, fog, storm as shown (they ease toward the target)
 static int g_dynType = 0;
@@ -2179,7 +2185,8 @@ static void UpdateWorld() {
     double now = NowS();
     float dt = last ? (float)(now - last > 0.5 ? 0.5 : now - last) : 0;
     {   // Night (Noah 2026-10-12: "night mode is waaaay too dark"): ease the dark lift in/out over ~3 s
-        float want = TodNow() == 4 ? 0.4f : TodNow() == 6 ? 0.3f : 0.0f;  // dawn lifts a little less
+        int lt = TodSetting();  // 2026-11-22: also on the server's night (shibe's dark Chicago: tint without the lift)
+        float want = lt == 4 ? 0.4f : lt == 6 ? 0.3f : 0.0f;  // dawn lifts a little less
         float step = dt / 3.0f * 0.4f;
         g_nightLift = g_nightLift < want ? (g_nightLift + step > want ? want : g_nightLift + step)
                                          : (g_nightLift - step < want ? want : g_nightLift - step);
@@ -2189,14 +2196,15 @@ static void UpdateWorld() {
     last = now;
 
     // time of day: a fixed look (the Dynamic cycle was removed 2026-11-21; 6 is now dawn)
-    int tod = V("gfx_tod");
+    // 2026-11-22: on "Level / server" the server's state counts too (lamps, light level, fog color); the sky grade
+    // follows the server only at night (SkySetting), so a server day keeps the game's own sky as before
+    int tod = TodSetting();
     int a = tod, b = tod;
     float blend = 0;
-    g_sky[0] = (float)a; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)b; g_sky[3] = blend;
-    if (tod == 0 && g_serverTod > 0) UpdateLamps(g_serverTod, g_serverTod, 0, dt);  // lamps follow the server
-    else UpdateLamps(a, b, blend, dt);
-    if (tod == 0 && g_serverTod > 0) UpdateBulbs(g_serverTod, g_serverTod, 0, dt);
-    else UpdateBulbs(a, b, blend, dt);
+    int st = SkySetting();
+    g_sky[0] = (float)st; g_sky[1] = V("gfx_skypop") / 10.0f; g_sky[2] = (float)st; g_sky[3] = blend;
+    UpdateLamps(a, b, blend, dt);  // lamps follow the server too
+    UpdateBulbs(a, b, blend, dt);
     static const float kLite[7] = {1, 0.85f, 1, 0.7f, 0.3f, 0.45f, 0.4f};  // [6] dawn
     static const float kFog[7][3] = {{0.62f, 0.66f, 0.72f}, {0.78f, 0.72f, 0.68f}, {0.68f, 0.72f, 0.78f},
                                      {0.75f, 0.55f, 0.45f}, {0.10f, 0.12f, 0.18f}, {0.30f, 0.24f, 0.30f},
@@ -2587,7 +2595,9 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
             dev->SetPixelShaderConstantF(30, a, 2);
             dev->SetScissorRect(&r);
             dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+            g_passScissor = &r;
             Pass(dev, pool ? g_psBPool : g_psBHalo, dstS, g_w, g_h, g_w, g_h, srcT, g_intz);
+            g_passScissor = nullptr;
             dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
             dev->StretchRect(dstS, &r, srcS, &r, D3DTEXF_NONE);
             ++drawn;
@@ -2707,7 +2717,7 @@ static void DrawGalaxy(IDirect3DDevice9* dev) {
     g_inPost = false;
 }
 
-static bool SkyWanted() { return V("gfx_tod") || V("gfx_skypop"); }
+static bool SkyWanted() { return SkySetting() || V("gfx_skypop"); }
 // runs when the sky pass ends: only the sky is on the screen, so it can be graded as a whole
 static void SkyGrade(IDirect3DDevice9* dev) {
     g_skyGraded = true;
@@ -2717,7 +2727,7 @@ static void SkyGrade(IDirect3DDevice9* dev) {
     bb->GetDesc(&d);
     if (!MakeShaders(dev) || !g_psSky || !EnsureTargets(dev, d.Width, d.Height)) { bb->Release(); return; }
     static bool once = false;
-    if (!once) { once = true; mmenu::Log("gfx: sky grading (time of day %d, boost %d)", V("gfx_tod"), V("gfx_skypop")); }
+    if (!once) { once = true; mmenu::Log("gfx: sky grading (time of day %d, server %d, boost %d)", V("gfx_tod"), g_serverTod, V("gfx_skypop")); }
     if (InterlockedExchange(&g_dirtyPost, 0)) BuildConstants();
     UpdateCamera();
     g_inPost = true;
@@ -2893,11 +2903,13 @@ static void FogStates(IDirect3DDevice9* dev, DWORD on, DWORD color, float start,
 // onto its near part. While our own time of day or weather fog is on, the same fog values are used as table fog
 // (eye distance per pixel) instead. The level at its normal time keeps the stock vertex fog (Noah's pick).
 static bool g_pixFogSet = false;
-static bool PixelFogOn() { return g_cardPixFog && !g_mainMenu && (TodSetting() != 0 || g_fogOver); }
+// 2026-11-22: online the TOD manager's state (g_serverTod) is almost never 0, so only a server night counts here
+// (SkySetting); before, every online level at its normal time lost its stock fog.
+static bool PixelFogOn() { return g_cardPixFog && !g_mainMenu && (SkySetting() != 0 || g_fogOver); }
 // Fog with our time of day is its own option, off by default (Noah 2026-11-21): while our time of day is on and
 // the Fog row is off, the game's fog stays switched off (weather fog still works: it turns this off while it shows).
 static bool g_todFogOff = false;
-static bool TodFogOff() { return !g_mainMenu && TodSetting() != 0 && !g_fogOver; }  // our time of day never shows the game's faint TOD fog (Fog row = ground mist now)
+static bool TodFogOff() { return !g_mainMenu && SkySetting() != 0 && !g_fogOver; }  // our time of day never shows the game's faint TOD fog (Fog row = ground mist now)
 static void TodFogStates(IDirect3DDevice9* dev) {
     bool off = TodFogOff();
     if (off == g_todFogOff && !off) return;

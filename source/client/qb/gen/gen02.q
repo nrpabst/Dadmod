@@ -417,6 +417,9 @@ endscript
 
 script dadmod_gfx_reset
     THUGRECOMP_GfxReset
+    dadmod_tod_kali_follow tod = 0
+    Change dadmod_tod_last = 0
+    dadmod_tod_refresh
     if ScreenElementExists id = dadmod_gfx_menu
         dadmod_pause_graphics
         return

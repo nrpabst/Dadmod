@@ -147,6 +147,13 @@ static void Assemble() {
             ++skipped;
             continue;
         }
+        // its scene file wasn't installed (Setup couldn't rebuild it from this game's files): not installed, so it
+        // doesn't count as failed and the menu scenes aren't put together again on every start (Noah 2026-11-22)
+        if (GetFileAttributesA((dir + r[1]).c_str()) == INVALID_FILE_ATTRIBUTES) {
+            if (have) DeleteFileA(target.c_str());
+            ++skipped;
+            continue;
+        }
         if (have && same) { ++kept; continue; }
         if (BuildOne(pre, dir + r[1], r[2], r[3], target)) ++built; else ++failed;
     }

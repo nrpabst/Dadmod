@@ -79,7 +79,7 @@ data\pre\THPGTrainingscn.prx 77db72c2ba495b5adf4de92fe5d36036
 data\pre\P8Training_scripts.prx d6be5da13113db6323ed343b625228d6
 data\pre\P8Trainingcol.prx 0176390d0260ad68e8114735c477a08a
 data\pre\P8Trainingscn.prx 3965ae9d1da4471da4bcec05d815225a
-data\pre\P8Suburbs_scripts.prx fff56f568c7abf4bfb3dafbdb5ebc3fa
+data\pre\P8Suburbs_scripts.prx 82bbcdf8e214323f96e3920c1f4baa41
 data\pre\P8Suburbscol.prx 025f905b67f36d8141e16c1c84be16af
 data\pre\P8Suburbsscn.prx 71b6f65997cd103cc1703ff0f2d96e27
 data\sounds\P8Suburbs\p8s_0223d68a.snd 976c2b3e8ad7e684f3e0990561e0d171
@@ -110,7 +110,7 @@ data\sounds\P8Suburbs\p8s_de9f0cc7.snd 24054fa01eeea1680317f24609fbc0a6
 data\sounds\P8Suburbs\p8s_e0076ac3.snd 8bf11a2c84721f32bbef32b5c7386be0
 data\sounds\P8Suburbs\p8s_f86ca762.snd a1269eae5aa7885026164fb9ab9d210b
 data\sounds\P8Suburbs\p8s_ff0c311b.snd 043b746d3c21c5ba773ecd989d080afe
-data\pre\P8Downtown_scripts.prx e6ddb98d1a96cb8e21abc2c1a35bf93e
+data\pre\P8Downtown_scripts.prx eeba9c72fff8f14f90c559339ba47dbc
 data\pre\P8Downtowncol.prx 22bc43989270850605bf12b5329421fd
 data\pre\P8Downtownscn.prx 018c3d08c515b5255ebbcdcd2d932bfc
 data\sounds\P8Downtown\p8s_22965d50.snd 14330ca2915935a2de25e25551bbad28
@@ -125,7 +125,7 @@ data\sounds\P8Downtown\p8s_72e52564.snd 6905b7311ef73120e648368d704b37bb
 data\sounds\P8Downtown\p8s_aee391bd.snd 09416ccd09adb07476f76b3b6bdf38fd
 data\sounds\P8Downtown\p8s_d9e4a12b.snd a6afd059f8dae8f077d489d5b2e91241
 data\sounds\P8Downtown\p8s_e92dccdb.snd 710b0420605c5bc86da0d5a134bb0456
-data\pre\P8CarFactory_scripts.prx 14375201e6d1b1fe3a0b3e2071aeccc0
+data\pre\P8CarFactory_scripts.prx a7385ee4d3197cee1485daba6494c910
 data\pre\P8CarFactorycol.prx 952b4c51a43f7ec930df7b361452ad0a
 data\pre\P8CarFactoryscn.prx 104ffe9616d0e702701d575abdb31125
 data\sounds\P8CarFactory\p8s_0a10679d.snd 6842c5cae8446bddf487dd8d35aac64b
@@ -157,7 +157,7 @@ data\sounds\P8CarFactory\p8s_c8f7cfae.snd 0801d35bde66341eeb5f9ff38031b825
 data\sounds\P8CarFactory\p8s_e22e77bc.snd 892b78ab132484c07adffcb3132c8092
 data\sounds\P8CarFactory\p8s_f4922f87.snd f40fc6496ae3e8754ee2b9cd80ef67ee
 data\sounds\P8CarFactory\p8s_fd2463ac.snd 860e997b63a02dcb14114eb9c5b7a102
-data\pre\P8CretePark_scripts.prx d0c8ec4ccd250c1f497cecde1bd5a94c
+data\pre\P8CretePark_scripts.prx e06429b2ff9cfe5a3a724eccdfe777c9
 data\pre\P8CreteParkcol.prx 733572976a769451f7295cfc4232542f
 data\pre\P8CreteParkscn.prx 3a75d18f3ca85ac17e815e6b76601f4f
 data\sounds\P8CretePark\p8s_161e228b.snd 199c60f2dd991eb1353e8ec210d51d76

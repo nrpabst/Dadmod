@@ -2,6 +2,7 @@ r"""Re-read the converted P8 level files and check the invariants the engine rel
 (and that no two surfaces z-fight).
 
     python -I p8\tools\validate_p8.py [Level ...]      (run from work\; reads p8\build\tmp\<Level>)
+    python -I p8\tools\validate_p8.py --prx <file>_scripts.prx [...]   (node Links of installed / packaged files)
 
 Independent readers (not p8conv's writers). Exit code 1 if anything fails.
 """
@@ -327,28 +328,102 @@ def tex_ids(path):
     return ids
 
 
+LINKED = ('RailNode', 'ClimbingNode')
+
+
+def _cls_name(v):
+    """Class value as written by p8conv, or as qb.py decompiles it (a name, or #"0x..." when the table lacks it)"""
+    if v and v.startswith('#"0x'):
+        from qb import qbkey
+        for nm in ('RailNode', 'ClimbingNode', 'LevelGeometry', 'Restart', 'Waypoint'):
+            if int(v[2:-1], 16) == qbkey(nm):
+                return nm
+    return v
+
+
+def node_link_errors(text, p8_order=True):
+    """Problems in a <level>_NodeArray (.q text, ours or decompiled from an installed .qb):
+    - a Links index out of range;
+    - a RailNode / ClimbingNode linking to a node of another class (or a rail to an AbsentInNetGames rail when it
+      isn't absent itself): the engine's rail builder (0x57E960) loops forever looking for such a target, the level
+      load hangs (2026-11-22: ghost nodes inserted mid-array shifted every later index);
+    - p8_order: a P8 node after a node we added (named dadmod_* / TRG_*): our nodes must come after
+      every P8 node, or P8's Links point at the wrong nodes."""
+    out = []
+    k = text.find('\n]\n')
+    nodes = (text[:k] if k >= 0 else text).split('\n{\n')[1:]
+    cls = [_cls_name((re.search(r'^Class = (\S+)', n, re.M) or [None, None])[1]) for n in nodes]
+    absent = [re.search(r'^AbsentInNetGames$', n, re.M) is not None for n in nodes]
+    names = [(re.search(r'^Name = (\S+)', n, re.M) or [None, ''])[1] for n in nodes]
+    if p8_order:
+        ours = lambda nm: nm.startswith(('dadmod_', 'TRG_'))    # p8conv / build_p8 write P8's own names as #"0x..."
+        added = [i for i, nm in enumerate(names) if ours(nm)]
+        if added:
+            late = [i for i in range(added[0] + 1, len(nodes)) if not ours(names[i])]
+            if late:
+                out.append('P8 node %d (%s) comes after our added node %d (%s): added nodes must go after every P8 node'
+                           % (late[0], names[late[0]], added[0], names[added[0]]))
+    for i, n in enumerate(nodes):
+        m = re.search(r'^Links = \[ (.*) \]', n, re.M)
+        if not m:
+            continue
+        for x in m.group(1).split():
+            x = int(x)
+            if not 0 <= x < len(nodes):
+                out.append('node %d link %d out of range' % (i, x))
+            elif cls[i] in LINKED and (cls[x] != cls[i] or (cls[i] == 'RailNode' and absent[x] and not absent[i])):
+                out.append('%s %d links to node %d (%s%s)' % (cls[i], i, x, cls[x], ', AbsentInNetGames' if absent[x] else ''))
+    return out, len(nodes)
+
+
 def check_nodes(level, q):
     text = open(q, encoding='latin1').read()
-    nodes = text.split('\n{\n')[1:]
     names = re.findall(r'^Name = #"0x([0-9a-f]+)"', text, re.M)
     if len(names) != len(set(names)):
         err(level, 'duplicate node names')
-    cls = [(re.search(r'^Class = (\S+)', n, re.M) or [None, None])[1] for n in nodes]
-    absent = [re.search(r'^AbsentInNetGames$', n, re.M) is not None for n in nodes]
-    for i, n in enumerate(nodes):
-        m = re.search(r'^Links = \[ (.*) \]', n, re.M)
-        if m:
-            for x in m.group(1).split():
-                x = int(x)
-                if not 0 <= x < len(nodes):
-                    err(level, 'node %d link %d out of range' % (i, x))
-                elif cls[i] == 'RailNode' and (cls[x] != 'RailNode' or (absent[x] and not absent[i])):
-                    # the engine's rail builder (0x57E960) loops forever looking for such a target
-                    err(level, 'rail node %d links to node %d (%s%s)' % (i, x, cls[x], ', AbsentInNetGames' if absent[x] else ''))
-    return len(nodes)
+    problems, count = node_link_errors(text)
+    for e in problems:
+        err(level, e)
+    return count
+
+
+def prx_link_errors(path, p8_order=None):
+    """node_link_errors for every node array inside a level _scripts.prx (what Dev / the package actually loads).
+    p8_order defaults to on for P8*_scripts.prx. -> [message]"""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
+    import qb
+    from prx_extract import entries
+    if p8_order is None:
+        p8_order = os.path.basename(path).lower().startswith('p8')
+    out = []
+    for e in entries(path):
+        name, data = e[0], e[2]
+        if not name.lower().endswith('.qb'):
+            continue
+        try:
+            text = qb.decompile(data)
+        except Exception as x:              # noqa: BLE001 - a script file we can't read is a failure too
+            if b'NodeArray' in data:
+                out.append('%s: %s could not be decompiled (%s)' % (os.path.basename(path), name, x))
+            continue
+        if '_NodeArray = [' not in text:
+            continue
+        problems, _ = node_link_errors(text[text.index('_NodeArray = ['):], p8_order)
+        out += ['%s: %s: %s' % (os.path.basename(path), name, m) for m in problems]
+    return out
 
 
 def main():
+    if sys.argv[1:2] == ['--prx']:
+        # installed / packaged files: validate_p8.py --prx <file>_scripts.prx [...]
+        bad = []
+        for p in sys.argv[2:]:
+            e = prx_link_errors(p)
+            print('%-40s %s' % (os.path.basename(p), 'OK' if not e else '%d bad links' % len(e)))
+            bad += e
+        for e in bad[:60]:
+            print('FAIL', e)
+        sys.exit(1 if bad else 0)
     for level in sys.argv[1:] or LEVELS:
         d = os.path.join(TMP, level)
         tids = tex_ids(os.path.join(d, level + '.tex.xbx'))

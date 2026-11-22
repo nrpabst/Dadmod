@@ -16,7 +16,8 @@ casfix	client	later	prx:cas_ped_m.q prx:cas_ped_f.q data:models/THUGPRO_Peds	Ped
 casmod	client	yes	data:dadmod_casidle.qb prx:(flags)	Edit Skater mods (our own code, see casmod/README.txt)
 chaos	server	no	prx:net.q	?chaos server-wide
 chatart	client	no	prx:ButtonScripts.q	Alt+F12 chat pictures (sends chat lines in any server)
-chatkeep	client	later	prx:ButtonScripts.q prx:net.q	Keeps typed chat when a game starts (hooks StartingNewNetGame)
+chatkeep	client	no	-	Replaced 2026-11-22 by menukeep (old game-start-only chat keep; chatkeep.q no longer built)
+menukeep	client	yes	dadmod:dadmod_cars.qb wrap:9 stock scripts	Pause menu + chat box stay open at game end/start (Rankings wait), chat box comes back with its text, long chat lines split (Noah 2026-11-22)
 chatstick	server	no	dadmod:tools	Manager chat tab helpers
 cheats	server	no	prx:net.q dll:pcheats.inc	?cheats menu, host-answered
 controller	client	yes	dll:padhub.inc dadmod:padhub.log	Controller hotplug for player 1

@@ -1173,6 +1173,7 @@ float3 skylook(float3 c, float3 d, float style, float t, float tod, float3 st10,
     bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;  // golden, vapor, rainbow, candy
     float lum = dot(c, L);
     c = max(lerp(lum.xxx, c, 1 + (pop - 0.5) * 1.1), 0) * (1 + (pop - 0.5) * 0.25);
+    if (bright) return c;  // 2026-11-22 Noah: golden, vapor, rainbow and candy keep their daytime colors at every time of day
     if (tod > 0.5 && tod < 1.5) c = c * float3(1.06, 0.98, 0.92) * 1.04 + float3(1.0, 0.6, 0.45) * exp(-abs(el) * 7.0) * 0.08;
     else if (tod > 1.5 && tod < 2.5) c = c * float3(0.98, 1.0, 1.04) * 1.10;
     else if (tod > 2.5 && tod < 3.5) c = c * float3(1.10, 0.92, 0.82) + float3(1.0, 0.42, 0.12) * exp(-abs(el) * 5.0) * 0.18;
@@ -1195,8 +1196,6 @@ float3 skydir(float2 uv) {
 }
 float4 skyout(float3 c, float3 d, float style) {
     float3 st10 = 0, st06 = 0;  // the night/evening stars, made once
-    bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;
-    [branch] if (bright && (sk.x > 3.5 || (sk.w > 0.001 && sk.z > 3.5))) starfield2(d, p1.w, st10, st06);
     float3 a = 0, b = 0;  // the look for this time of day and, while it fades, the next one: one loop body (2026-11-21, smaller shaders)
     [loop] for (int i = 0; i < 2; i++) {
         if (i == 1 && sk.w <= 0.001) break;

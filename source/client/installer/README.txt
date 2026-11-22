@@ -189,12 +189,12 @@
       only).
     * Player speed: 1 to 4 slow motion, 5 normal, 6 to 10 a higher top
       speed.
-    * Bail cancel: press Square during a bail to get straight back on
-      your board, with a THPS1+2 style flicker and blue sparkles. Auto
-      bail cancel (default Off) does it on every bail by itself. Bail
-      cancel effects (default On) turns the whoosh, sparkles and flicker
-      off. All three are off in Firefight, King of the Hill and Capture
-      the Flag.
+    * Bail cancel: press Flip during a bail to get straight back on your
+      board, with a THPS1+2 style flicker and blue sparkles. Auto bail
+      cancel (default Off) does it on every bail by itself. Bail cancel
+      effects (default On) turns the whoosh, sparkles and flicker off.
+      All three are off in Firefight, King of the Hill and Capture the
+      Flag.
     * Bank drops.
     * BHRA keeps combo (default Off): a Bunny Hop Revert keeps your
       combo going. Easy BHRA (default Off): a longer revert window
@@ -213,7 +213,7 @@
       animation, search by name, star favorites, loop one and keep
       walking while it loops, and Kali's idle loops.
     * Throwables (Pause > dadmod > Throwables): get ammo and throw with
-      Square. Random Animal, Random Pedestrian, Random Junk, Skateboard,
+      Flip. Random Animal, Random Pedestrian, Random Junk, Skateboard,
       Bowling Ball, Mystery Box and Cars (a random car each throw).
       Other dadmod players see what you throw; players without dadmod
       see a COMBO O.
@@ -228,9 +228,10 @@
     * Drive 17 THUG Pro cars, 20 more THUG2 cars (More Cars) and 9 props
       like a traffic cone, a shopping cart and robots (Props), with the
       game's own car physics and engine sounds.
-    * Your movement keys give gas, brake and steer. Space (RB) is the
-      handbrake, Backspace gets out, H (L3) honks the horn. Get Out at
-      the top of the Cars page works too.
+    * Your movement keys give gas, brake and steer. Space (or the right
+      shoulder button) is the handbrake, Backspace or holding Grind gets
+      out, and H (or clicking in the left stick) honks the horn. Get Out
+      at the top of the Cars page works too.
     * Free skate only, offline and online, on any server. Players
       without dadmod see your car (the green tuner for the extra cars
       and props).
@@ -245,21 +246,22 @@
     * F6: noclip. F9, F10, F12: reorder menus.
 
   CONTROLS THE GAME DOESN'T SHOW
-  Buttons are given as PlayStation / Xbox. On the keyboard, use the keys
-  you bound to those buttons.
-    * Noclip on a controller: hold L1 + L2 + R1 + R2 (LB + LT + RB + RT)
-      together to turn it on or off, like F6.
-    * In noclip: hold Circle (B) to fly fast and Triangle (Y) to fly
-      slow. X (A) rises and Square (X) sinks. Hold L1 or R1 (LB or RB)
-      to turn. Tap L1 or R1 to switch between riding your board and
-      standing on foot. Tap Triangle (Y) to play your last animation.
-    * On foot: tap Triangle (Y) to play the last animation you picked in
-      Animations again. Standing still, Square (X) slaps and Circle (B)
-      sits down.
-    * Reposition camera (Main Menu options > Camera): W, A, S, D (or the
-      left stick) move the camera, E and Q (or Page Up and Page Down, LB
-      and RB) move it up and down, the arrow keys (or the right stick)
-      turn and tilt it, and Shift (or X / Square) moves faster.
+  Most of these use the game's own actions (Ollie, Flip, Grab, Grind,
+  Rotate left, Rotate right), so they follow your bindings in Dadmod >
+  Controls on any controller or keyboard.
+    * Noclip on a controller: hold both shoulder buttons and both
+      triggers at once to turn noclip on or off, like F6.
+    * In noclip: hold Grab to fly fast and Grind to fly slow. Ollie
+      rises and Flip sinks. Hold Rotate left or Rotate right to turn.
+      Tap Rotate left or Rotate right to switch between riding your
+      board and standing on foot. Tap Grind to play your last animation.
+    * On foot: tap Grind to play the last animation you picked in
+      Animations again. Standing still, Flip slaps and Grab sits down.
+    * Reposition camera (Main Menu options > Camera): W, A, S, D move
+      the camera, E and Q (or Page Up and Page Down) move it up and
+      down, the arrow keys turn and tilt it, and Shift moves faster. On
+      a controller the left stick moves, the right stick turns and the
+      shoulder buttons go up and down.
 
   GRAPHICS (DADMOD > GRAPHICS)
     * Display: Display mode (Windowed or Fullscreen), Resolution and

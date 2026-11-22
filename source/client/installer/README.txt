@@ -244,6 +244,23 @@
     * F11: save a PNG screenshot to dadmod\screenshots.
     * F6: noclip. F9, F10, F12: reorder menus.
 
+  CONTROLS THE GAME DOESN'T SHOW
+  Buttons are given as PlayStation / Xbox. On the keyboard, use the keys
+  you bound to those buttons.
+    * Noclip on a controller: hold L1 + L2 + R1 + R2 (LB + LT + RB + RT)
+      together to turn it on or off, like F6.
+    * In noclip: hold Circle (B) to fly fast and Triangle (Y) to fly
+      slow. X (A) rises and Square (X) sinks. Hold L1 or R1 (LB or RB)
+      to turn. Tap L1 or R1 to switch between riding your board and
+      standing on foot. Tap Triangle (Y) to play your last animation.
+    * On foot: tap Triangle (Y) to play the last animation you picked in
+      Animations again. Standing still, Square (X) slaps and Circle (B)
+      sits down.
+    * Reposition camera (Main Menu options > Camera): W, A, S, D (or the
+      left stick) move the camera, E and Q (or Page Up and Page Down, LB
+      and RB) move it up and down, the arrow keys (or the right stick)
+      turn and tilt it, and Shift (or X / Square) moves faster.
+
   GRAPHICS (DADMOD > GRAPHICS)
     * Display: Display mode (Windowed or Fullscreen), Resolution and
       V-sync. Press Apply to see them right away, then press it again

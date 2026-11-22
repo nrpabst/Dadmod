@@ -36,7 +36,10 @@ if ($cur) {
         $sr = New-Object IO.StreamReader($resp.GetResponseStream())
         $body = $sr.ReadToEnd(); $sr.Close(); $resp.Close()
         # the highest version among the published releases (betas included) that carry a dadmod.zip
-        foreach ($rel in @($body | ConvertFrom-Json)) {
+        # PowerShell 5.1 passes the parsed JSON array down the pipeline as ONE item, so @($body | ConvertFrom-Json)
+        # would be a 1-item array holding the whole list (every release skipped): store it first, then loop
+        $rels = $body | ConvertFrom-Json
+        foreach ($rel in @($rels)) {
             if (-not $rel -or $rel.draft) { continue }
             $rv = Version-Of "$($rel.tag_name)"
             if (-not $rv) { $rv = Version-Of "$($rel.name)" }
@@ -48,6 +51,7 @@ if ($cur) {
         $u = $null
         Write-Host 'Could not check for updates right now (no internet, or GitHub is busy). Using this package.'
     }
+    if ($u -and -not ($u.v -gt $cur)) { Write-Host "This is the newest dadmod ($ver)." }
     if ($u -and $u.v -gt $cur) {
         Write-Host ''
         Write-Host "dadmod $($u.tag) is out (this package is $ver)." -ForegroundColor Green

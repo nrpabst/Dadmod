@@ -1517,16 +1517,52 @@ float4 ps_bulbs(float2 uv : TEXCOORD0) : COLOR {
     return float4(c, 1);
 }
 // moonlight (after the night tint): lampc.x amount, lp[0].xyz direction to the moon; normals from the depth
+// 2026-11-23 (Noah: a dotted dark ring around the skater's shadow at night): the shadow decal's rim sits a little off
+// the ground in the depth buffer, so the normal worked out there (ddx/ddy) tipped sideways and those pixels lost or
+// gained moonlight: a broken ring around every skater shadow. Now each pixel takes the middle value (median) of the
+// moonlight at itself and at 4 points 3 pixels away, every one from a normal over 2-pixel spans (moon_ndl): a ring a
+// pixel or two wide is outvoted by the ground around it, while floors, walls and their edges keep their own light.
+// Tested in a College test copy (work/notes/shadow_rim): ring with the old shader at Moonlight 20, none at 0.
+float3 moon_p(float2 q) {
+    float d = tex2D(s1, q).r;
+    float2 ndc = float2(q.x * 2 - 1, 1 - q.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    return camp.xyz + dv * dist(d);
+}
+// one axis of the surface slope at P from the points 2 pixels to either side: across a thin raised sliver both halves
+// bend the opposite way by the same amount, so the whole span is used; across a real edge (floor to wall) one half is
+// much longer, so the shorter half is
+float3 moon_axis(float2 uv, float3 P, float2 o) {
+    float3 a = moon_p(uv + o) - P, b = P - moon_p(uv - o);
+    float la = dot(a, a), lb = dot(b, b);
+    if (la < lb * 4 && lb < la * 4) return a + b;
+    return la < lb ? a : b;
+}
+// moonlight at one screen point: 0 for the sky, else how much its surface faces the moon
+float moon_ndl(float2 q) {
+    float d = tex2D(s1, q).r;
+    if (d >= 0.99999) return 0;
+    float3 P = moon_p(q);
+    float3 n = normalize(cross(moon_axis(q, P, float2(0, px.y * 2)), moon_axis(q, P, float2(px.x * 2, 0))));
+    if (dot(n, camp.xyz - P) < 0) n = -n;
+    return saturate(dot(n, lp[0].xyz));
+}
+float med5(float a, float b, float c, float d, float e) {
+    float t;
+    t = min(a, b); b = max(a, b); a = t;
+    t = min(d, e); e = max(d, e); d = t;
+    t = min(a, d); d = max(a, d); a = t;
+    t = min(b, e); e = max(b, e); b = t;
+    t = min(c, d); d = max(c, d); c = t;
+    t = min(b, c); c = max(b, c); b = t;
+    t = min(c, d); d = max(c, d); c = t;
+    return min(max(b, c), d);
+}
 float4 ps_moon(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
-    float d0 = tex2D(s1, uv).r;
-    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
-    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
-    float3 P = camp.xyz + dv * dist(d0);
-    float3 n = normalize(cross(ddy(P), ddx(P)));
-    if (dot(n, camp.xyz - P) < 0) n = -n;
-    float ndl = saturate(dot(n, lp[0].xyz));
-    if (d0 >= 0.99999) ndl = 0;
+    float2 ox = float2(px.x * 3, 0), oy = float2(0, px.y * 3);
+    float ndl = med5(moon_ndl(uv), moon_ndl(uv + ox), moon_ndl(uv - ox), moon_ndl(uv + oy), moon_ndl(uv - oy));
+    if (tex2D(s1, uv).r >= 0.99999) ndl = 0;
     c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
     return float4(c, 1);
 }

@@ -1,6 +1,6 @@
 r"""Lit windows (mods/lamplights): the window textures of a level, picked by hand from the level's texture sheet,
 written as dadmod\lampwindows.txt lines the DLL can match against the game's own Direct3D textures:
-    <level> <width> <height> <dxt> <fnv1a of the first 128 bytes of mip 0>   ; <texture checksum>
+    <level> <width> <height> <dxt> <fnv1a of all of mip 0>   ; <texture checksum>
 Run from work:  python -I mods/lamplights/gen_windows.py   (writes mods/lamplights/data/lampwindows.txt)
 """
 import os, sys
@@ -93,7 +93,7 @@ def main():
         panes = read_panes(lvl); items = []
         for t in texs:
             if t.checksum in want and t.mips:
-                hsh = fnv(t.mips[0][:128])
+                hsh = fnv(t.mips[0])  # all of mip 0 (2026-11-23: the first 128 bytes matched ~130 other textures)
                 out.append(f'{lvl} {t.width} {t.height} {t.dxt} {hsh:08x}   ; {t.checksum:08x}')
                 if t.checksum in panes: write_mask(t, hsh, panes[t.checksum], items)
                 found += 1

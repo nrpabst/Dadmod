@@ -557,8 +557,9 @@ static bool LampsOn();
 static bool BulbsOn();
 static bool MoonOn();
 static bool WinLayerReady();
+static bool WindowsOn();
 static bool MistOn() { return V("gfx_todfog") > 0 && !g_mainMenu; }  // Fog row: ground mist (2026-11-21)
-static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || MoonOn(); }
+static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || MoonOn() || WindowsOn(); }  // windows: hidden behind closer things (2026-11-23)
 static bool SceneWanted() {
     return V("gfx_fxaa") || V("gfx_sharpen") || V("gfx_bloom") || V("gfx_bright") || V("gfx_contrast") || V("gfx_sat") ||
            V("gfx_vibrance") || V("gfx_gamma") || V("gfx_preset") || V("gfx_temp") || V("gfx_tint") || DepthWanted() ||
@@ -1494,17 +1495,12 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
 // ---- lit windows (mods/lamplights, 2026-11-22). ps_window: drawn (ps_2_0, with the game's own fixed-function vertices)
 // over the game's window-texture draws into a separate target; glass = dark / bluish texels, every window cell on or off
 float4 ps_window(float2 uv : TEXCOORD0, float3 cp : TEXCOORD1) : COLOR {
-    float4 pm = tex2D(s1, uv);  // px.z = 1: pane color map (rgb = this pane's lit color, a = pane), filtered + mipmapped
+    clip(tex2D(s0, uv).a - px.y);  // px.y = the game's alpha-test cut (-1 = none): see-through parts of the texture stay dark
+    float4 pm = tex2D(s1, uv);  // pane color map (rgb = this pane's lit color, a = pane), filtered + mipmapped
     float tv = frac(sin(dot(floor(uv), float2(12.9898, 78.233))) * 43758.5453);  // a little brightness change per texture repeat
     float3 o = pm.rgb * (0.85 + 0.15 * tv) * px.x * 0.6;
-    if (px.z < 0.5) {  // window texture without marked panes: dark glass cells (old fallback)
-        float3 t = tex2D(s0, uv).rgb;
-        float lum = dot(t, float3(0.3, 0.5, 0.2));
-        float h = frac(sin(dot(floor(uv * 12.0), float2(12.9898, 78.233))) * 43758.5453);
-        o = float3(1.0, 0.745, 0.47) * (1 - saturate((lum - 0.16) * 5.0)) * step(1.0 - px.y, h) * (0.6 + 0.4 * frac(h * 3.7)) * px.x * 0.6;
-    }
     if (px.w > 0.5) o = px.z > 0.5 ? float3(0, pm.a * 0.8, 0) : float3(0, 0, 0.5);  // gfx_windows 2: marked panes green, unmarked blue
-    return float4(o, abs(cp.z));  // alpha = view depth (camera-space z, stage 1 texcoord)
+    return float4(o, abs(cp.z));  // alpha = view depth (camera-space z, stage 1 texcoord); no pane map = not drawn (2026-11-23: the old cell look lit brick)
 }
 // ps_winvis: quarter-res copy of only the windows that are really visible (depth checked), the source of the spill:
 // r = glow, g = glow x window depth (log2(z) / 16), so after the blur g / r is the glow-weighted depth of the windows
@@ -3154,9 +3150,9 @@ static bool IsWindowTex(IDirect3DBaseTexture9* bt) {
             if (cand && dxt && SUCCEEDED(t->LockRect(0, &lr, nullptr, D3DLOCK_READONLY))) {
                 UINT rowBytes = (d.Width / 4 ? d.Width / 4 : 1) * (dxt == 1 ? 8 : 16), rows = d.Height / 4 ? d.Height / 4 : 1;
                 UINT h = 0x811C9DC5, n = 0;
-                for (UINT r = 0; r < rows && n < 128; ++r) {
+                for (UINT r = 0; r < rows; ++r) {  // all of mip 0 (2026-11-23: the first 128 bytes matched ~130 other textures)
                     const unsigned char* p = (const unsigned char*)lr.pBits + r * lr.Pitch;
-                    for (UINT i = 0; i < rowBytes && n < 128; ++i, ++n) h = (h ^ p[i]) * 0x01000193;
+                    for (UINT i = 0; i < rowBytes; ++i, ++n) h = (h ^ p[i]) * 0x01000193;
                 }
                 t->UnlockRect(0);
                 for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt && w.hash == h) yes = true;
@@ -3176,6 +3172,9 @@ static bool WinLayerReady() { return g_winTex && g_winFrame == g_presents; }
 static bool WindowsOn() { return V("gfx_windows") && g_bulbAmt > 0.01f && g_psWindow && !g_msaaOn && g_w && !g_mainMenu; }
 static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3DPRIMITIVETYPE pt, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
     if (g_winShareLoaded >= 0 && g_winShareLoaded != V("gfx_windowshare")) { WinCacheClear(); g_winShareLoaded = -1; return; }  // share changed: remake the pane colors
+    auto mk = g_winMask.find(tex);
+    IDirect3DTexture9* mask = mk == g_winMask.end() ? nullptr : mk->second;
+    if (!mask && V("gfx_windows") != 2) return;  // no pane map: no light at all (check mode still shows it blue)
     if (g_winW != g_w || g_winH != g_h || !g_winSurf) {
         if (g_winSurf) { g_winSurf->Release(); g_winSurf = nullptr; }
         if (g_winTex) { g_winTex->Release(); g_winTex = nullptr; }
@@ -3235,8 +3234,6 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION | 1);
     dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3);
     g_origST(dev, D3DTS_TEXTURE1, &ident);
-    auto mk = g_winMask.find(tex);
-    IDirect3DTexture9* mask = mk == g_winMask.end() ? nullptr : mk->second;
     IDirect3DBaseTexture9* oldT1 = nullptr;
     dev->GetTexture(1, &oldT1);
     DWORD s1min = 0, s1mag = 0, s1mip = 0, s1u = 0, s1v = 0;
@@ -3245,7 +3242,11 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     dev->SetTexture(1, mask);
     g_origSSS(dev, 1, D3DSAMP_MINFILTER, D3DTEXF_LINEAR); g_origSSS(dev, 1, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR); g_origSSS(dev, 1, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
     g_origSSS(dev, 1, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP); g_origSSS(dev, 1, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
-    float c0[4] = {V("gfx_windowstr") / 10.0f, V("gfx_windowshare") / 10.0f, mask ? 1.0f : 0.0f, V("gfx_windows") == 2 ? 1.0f : 0.0f};
+    DWORD ate = 0, afn = D3DCMP_ALWAYS, aref = 0;
+    dev->GetRenderState(D3DRS_ALPHATESTENABLE, &ate); dev->GetRenderState(D3DRS_ALPHAFUNC, &afn); dev->GetRenderState(D3DRS_ALPHAREF, &aref);
+    float cut = ate && (afn == D3DCMP_GREATER || afn == D3DCMP_GREATEREQUAL) ? (aref & 0xFF) / 255.0f + (afn == D3DCMP_GREATER ? 0.002f : 0.0f) : -1.0f;
+    g_origRS(dev, D3DRS_ALPHATESTENABLE, FALSE);  // our alpha is the window depth, not a cut-out
+    float c0[4] = {V("gfx_windowstr") / 10.0f, cut, mask ? 1.0f : 0.0f, V("gfx_windows") == 2 ? 1.0f : 0.0f};
     ++g_winDraws;
     dev->SetPixelShaderConstantF(0, c0, 1);
     dev->SetPixelShader(g_psWindow);
@@ -3262,6 +3263,7 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     g_origST(dev, D3DTS_TEXTURE1, &tm1);
     g_origRS(dev, D3DRS_ALPHABLENDENABLE, ab); g_origRS(dev, D3DRS_SRCBLEND, sb); g_origRS(dev, D3DRS_DESTBLEND, db);
     g_origRS(dev, D3DRS_BLENDOP, bo); g_origRS(dev, D3DRS_ZWRITEENABLE, zw); g_origRS(dev, D3DRS_ZFUNC, zf); g_origRS(dev, D3DRS_FOGENABLE, fog);
+    g_origRS(dev, D3DRS_ALPHATESTENABLE, ate);
     dev->SetRenderTarget(0, rt);
     dev->SetViewport(&vp);
     rt->Release();

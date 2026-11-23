@@ -66,7 +66,7 @@ static const Setting kSettings[] = {
     {"gfx_fwevery", 2, 0, 3, "unused since 2026-11-21 (Fireworks picks the interval itself); kept so old files load"},
     {"gfx_skywxver", 1, 0, 1, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
     {"gfx_lamps", 0, 0, 10, "street lights at night (no menu row since 2026-11-21, off by default): lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
-    {"gfx_windows", 1, 0, 2, "lit windows at night (mods/lamplights): 1 on, 0 off, 2 = check: marked panes green"},
+    {"gfx_windows", 1, 0, 3, "lit windows at night (mods/lamplights): 1 on, 0 off, 2 = check: marked panes green, 3 = check: hidden window pixels red"},
     {"gfx_windowstr", 10, 0, 20, "lit windows brightness x0.1"},
     {"gfx_windowshare", 3, 0, 10, "lit windows: share of windows lit x10%"},
     {"gfx_windowspill", 0, 0, 20, "lit windows: soft warm light spilling around them x0.1"},
@@ -284,7 +284,7 @@ static const LampKeyInfo kLampKeys[] = {
     {"gfx_lampstr", "how much the light pool brightens the ground: 0 .. 60, 10 = normal"},
     {"gfx_lamplift", "amber added to the pool even where the ground is very dark: 0 .. 60, 3 = normal (high looks foggy)"},
     {"gfx_lampreach", "how far each lamp's amber light reaches onto walls and buildings: 200 .. 3000, 1000 = normal"},
-    {"gfx_windows", "lit windows at night (warm light in building windows): 1 on, 0 off, 2 = check mode (marked panes green, unmarked blue)"},
+    {"gfx_windows", "lit windows at night (warm light in building windows): 1 on, 0 off, 2 = check mode (marked panes green, unmarked blue), 3 = check mode (window pixels hidden behind something show red)"},
     {"gfx_windowstr", "brightness of the lit windows: 0 .. 20, 10 = normal"},
     {"gfx_windowshare", "how many windows are lit: 0 .. 10, 3 = 30%"},
     {"gfx_windowspill", "soft warm light spilling around lit windows (not finished, off): 0 .. 20, 0 = off"},
@@ -1495,21 +1495,27 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
 }
 // ---- lit windows (mods/lamplights, 2026-11-22). ps_window: drawn (ps_2_0, with the game's own fixed-function vertices)
 // over the game's window-texture draws into a separate target; glass = dark / bluish texels, every window cell on or off
-float4 ps_window(float2 uv : TEXCOORD0, float4 cp : TEXCOORD1) : COLOR {  // cp = clip-space position (stage 1: camera-space position x this draw's projection)
+float4 ps_window(float2 uv : TEXCOORD0, float3 cp : TEXCOORD1) : COLOR {  // cp = camera-space position (stage 1 texcoord)
     clip(tex2D(s0, uv).a - px.y);  // px.y = the game's alpha-test cut (-1 = none): see-through parts of the texture stay dark
     float4 pm = tex2D(s1, uv);  // pane color map (rgb = this pane's lit color, a = pane), filtered + mipmapped
     float tv = frac(sin(dot(floor(uv), float2(12.9898, 78.233))) * 43758.5453);  // a little brightness change per texture repeat
     float3 o = pm.rgb * (0.85 + 0.15 * tv) * px.x * 0.6;
     if (px.w > 0.5) o = px.z > 0.5 ? float3(0, pm.a * 0.8, 0) : float3(0, 0, 0.5);  // gfx_windows 2: marked panes green, unmarked blue
-    // alpha = 1 - this pixel's depth-buffer value (z / w + the game's DEPTHBIAS, p1.x), so the composite compares depth with depth
-    // (2026-11-23 flicker: comparing view distances failed on depth-biased far windows); 1 - depth keeps half floats exact far away
-    return float4(o, 1 - saturate(cp.z / cp.w + p1.x));  // no pane map = not drawn (2026-11-23: the old cell look lit brick)
+    // alpha = 1 - this pixel's depth-buffer value incl. the game's DEPTHBIAS, so the composite compares depth with depth
+    // (2026-11-23 flicker: comparing view distances failed on depth-biased far windows). Worked out as
+    // (a z + b) / (_34 z + _44) - bias with a = _34 - _33, b = _44 - _43 made on the CPU in double: no 1 - 0.9999.. rounding far away
+    float u = (p1.x * cp.z + p1.y) / (p1.z * cp.z + p1.w) - p2.x;
+    return float4(o, saturate(u));  // no pane map = not drawn (2026-11-23: the old cell look lit brick)
 }
 // ps_winvis: quarter-res copy of only the windows that are really visible (depth checked), the source of the spill:
 // r = glow, g = glow x window depth (log2(z) / 16), so after the blur g / r is the glow-weighted depth of the windows
 // a window pixel is hidden when the depth buffer holds something else there: layer alpha u = 1 - window depth vs 1 - INTZ depth,
-// allowed 0.2 % of u (half-float rounding, about 6 units at 3000 away) + 3e-7 (24-bit depth steps)
-bool winhid(float u, float d0) { float u0 = 1 - d0; return abs(u - u0) > 3e-7 + u0 * 0.002; }
+// allowed 0.2 % of u (half-float rounding, about 6 units at 3000 away) + 3e-7 (24-bit depth steps) + the depth's own slope per
+// pixel x (1 + the largest SLOPESCALEDEPTHBIAS a window draw used, |lampc.w|): the game slope-biases some window meshes
+bool winhid(float u, float d0) {
+    float u0 = 1 - d0, sl = max(abs(ddx(d0)), abs(ddy(d0)));
+    return abs(u - u0) > 3e-7 + u0 * 0.002 + sl * (1 + abs(lampc.w));
+}
 float2 winvis1(float2 uv) {
     float4 w = tex2D(s2, uv);
     float d0 = tex2D(s1, uv).r, z = dist(d0);
@@ -1526,7 +1532,7 @@ float4 ps_wincomp(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float4 w = tex2D(s2, uv);
     if (lampc.y > 0.5) {  // the layer knows each window pixel's depth: only where that window is still the nearest thing
-        if (winhid(w.a, tex2D(s1, uv).r)) w.rgb = 0;
+        if (winhid(w.a, tex2D(s1, uv).r)) w.rgb = lampc.w < 0 && dot(w.rgb, 1) > 0 ? float3(1.5, 0, 0) / max(lampc.x, 0.05) : 0;  // gfx_windows 3: hidden = red
     }
     float2 sp = tex2D(s3, uv).rg;  // blurred quarter-res copy of the visible windows: soft warm light around them
     float zl = log2(max(dist(tex2D(s1, uv).r), 1.0)), wl = sp.g / max(sp.r, 0.0001) * 16.0;
@@ -1587,6 +1593,7 @@ static IDirect3DSurface9* g_winSurf = nullptr;
 static UINT g_winW = 0, g_winH = 0;
 static bool g_winDepth = false;  // the layer is half-float: its alpha holds each window pixel's depth
 static DWORD g_winFrame = 0xFFFFFFFF;
+static float g_winSlopeMax = 0;  // largest SLOPESCALEDEPTHBIAS seen on a window draw (the composite allows for it)
 static int g_winDraws = 0, g_winDrawsLast = 0;  // window redraws this frame / last frame (logged with the lamp passes)  // g_presents of the frame the layer was cleared in
 static void FreeTargets() {
     IUnknown** list[] = {(IUnknown**)&g_texA, (IUnknown**)&g_texB, (IUnknown**)&g_texC, (IUnknown**)&g_texD, (IUnknown**)&g_texE,
@@ -2612,7 +2619,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
                 dev->SetPixelShaderConstantF(5, dy, 1); Pass(dev, g_psBlur, sE, qw, qh, qw, qh, g_texF);
             }
         }
-        float hdr[4] = {g_bulbAmt, depthOk ? 1.0f : 0.0f, spill * 1.6f, 0};
+        float hdr[4] = {g_bulbAmt, depthOk ? 1.0f : 0.0f, spill * 1.6f, (V("gfx_windows") == 3 ? -1.0f : 1.0f) * (g_winSlopeMax + 0.001f)};  // w: slope allowance, < 0 = check mode 3
         dev->SetPixelShaderConstantF(28, hdr, 1);
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psWinComp, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, depthOk ? g_intz : nullptr, g_winTex, spill > 0 ? g_texE : nullptr);
@@ -3255,8 +3262,8 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
         rt->Release();
         return;
     }
-    float oldC0[8];
-    dev->GetPixelShaderConstantF(0, oldC0, 2);
+    float oldC0[12];
+    dev->GetPixelShaderConstantF(0, oldC0, 3);
     dev->SetRenderTarget(0, g_winSurf);
     dev->SetViewport(&vp);
     if (g_winFrame != g_presents) {
@@ -3278,10 +3285,12 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
     dev->GetTransform(D3DTS_TEXTURE1, &tm1);
     g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
     dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION | 1);
-    dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT4);
-    D3DMATRIX pr = g_proj;  // this draw's own projection (2026-11-23): stage 1 = clip-space position, so ps_window knows its depth value
+    dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3);
+    D3DMATRIX ident = {};
+    ident._11 = ident._22 = ident._33 = ident._44 = 1;
+    g_origST(dev, D3DTS_TEXTURE1, &ident);
+    D3DMATRIX pr = g_proj;  // this draw's own projection: ps_window works out its depth-buffer value from it
     dev->GetTransform(D3DTS_PROJECTION, &pr);
-    g_origST(dev, D3DTS_TEXTURE1, &pr);
     IDirect3DBaseTexture9* oldT1 = nullptr;
     dev->GetTexture(1, &oldT1);
     DWORD s1min = 0, s1mag = 0, s1mip = 0, s1u = 0, s1v = 0;
@@ -3298,17 +3307,20 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
     ++g_winDraws;
     DWORD dbias = 0, sbias = 0;
     dev->GetRenderState(D3DRS_DEPTHBIAS, &dbias); dev->GetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, &sbias);
-    if (sbias) { static bool once = false; if (!once) { once = true; mmenu::Log("gfx: lit windows: a window draw uses a slope depth bias (not matched)"); } }
-    float c1[4] = {*(float*)&dbias, 0, 0, 0};  // the game's depth bias (-2.6e-5 on some meshes, THUGPro.exe 0x4DC438); slope bias: not used by the game
+    float slopeb = *(float*)&sbias;
+    if (slopeb > g_winSlopeMax && slopeb < 1000.0f) { g_winSlopeMax = slopeb; mmenu::Log("gfx: lit windows: a window draw uses slope depth bias %.4f", slopeb); }
+    float c1[4] = {(float)((double)pr._34 - pr._33), (float)((double)pr._44 - pr._43), pr._34, pr._44};
+    float c2[4] = {*(float*)&dbias, 0, 0, 0};  // the game's depth bias (-2.6e-5 on some meshes, THUGPro.exe 0x4DC438)
     dev->SetPixelShaderConstantF(0, c0, 1);
     dev->SetPixelShaderConstantF(1, c1, 1);
+    dev->SetPixelShaderConstantF(2, c2, 1);
     dev->SetPixelShader(g_psWindow);
     if (wd.kind == 0) g_origDIP(dev, wd.pt, wd.b, wd.mi, wd.nv, wd.si, wd.pc);
     else if (wd.kind == 1) g_origDP(dev, wd.pt, wd.si, wd.pc);
     else g_origDPUP(dev, wd.pt, wd.pc, wd.up, wd.upst);
     dev->SetPixelShader(oldPS);
     if (oldPS) oldPS->Release();
-    dev->SetPixelShaderConstantF(0, oldC0, 2);
+    dev->SetPixelShaderConstantF(0, oldC0, 3);
     g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, sab); g_origRS(dev, D3DRS_SRCBLENDALPHA, sba); g_origRS(dev, D3DRS_DESTBLENDALPHA, dba);
     dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, tci); dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, ttf);
     dev->SetTexture(1, oldT1);

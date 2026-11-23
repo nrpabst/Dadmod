@@ -1592,14 +1592,14 @@ float4 ps_weather(float2 uv : TEXCOORD0) : COLOR {
     float3 o = camp.xyz;
     float sn = snow > wet ? 1 : 0, amt = max(saturate(rain), saturate(snow));  // one kind at a time (they cross-fade through clear)
     [branch] if (amt > 0.01) {
-        float f = 0.05 + 0.8 * amt;
+        float f = 0.02 + 0.85 * amt;
         float a = 0;
         [loop] for (int g = 0; g < 2; g++) {  // near grid, then the far one (one copy of the loop keeps the shader small)
             float fr = g;
             a += wxcols(o, d, min(rl, lerp(700.0 - 100.0 * sn, 2400.0 - 600.0 * sn, fr)), lerp(30.0 - 2.0 * sn, 140.0 - 30.0 * sn, fr), t, f, sn, fr) * (1.0 - 0.4 * fr);
         }
         float3 dc = sn > 0.5 ? float3(0.95, 0.97, 1.0) * (0.45 + 0.55 * lite) : float3(0.85, 0.88, 0.95) * (0.45 + 0.55 * lite) + fl * 0.4;
-        c = lerp(c, dc, saturate(a) * (sn > 0.5 ? 0.45 + 0.45 * amt : 0.22 + 0.3 * amt + 0.1 * storm));
+        c = lerp(c, dc, saturate(a) * (sn > 0.5 ? 0.45 + 0.45 * amt : 0.12 + 0.4 * amt + 0.1 * storm));
     }
     return float4(c, 1);
 }
@@ -2362,7 +2362,8 @@ static void UpdateWorld() {
     float step = dt / 12.0f;  // a full change takes about 12 seconds
     for (int k = 0; k < 4; ++k) {
         float d = target[k] - g_wxCur[k];
-        g_wxCur[k] += d > step ? step : d < -step ? -step : d;
+        float sk = target[k] > 0 && g_wxCur[k] > 0.02f ? dt : step;  // same kind, new Intensity: about 1 s (a new kind still fades in 12 s)
+        g_wxCur[k] += d > sk ? sk : d < -sk ? -sk : d;
         g_wx[0][k] = g_wxCur[k];
     }
     { float d = mist - g_wxMist; g_wxMist += d > step ? step : d < -step ? -step : d; }

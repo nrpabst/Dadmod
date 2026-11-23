@@ -48,31 +48,43 @@ script dadmod_wx_watch
         wait 30 gameframes
         if ObjectExists id = skater
             dadmod_wx_wanted
-            lvl = none
+            lvl = wxlvl_none
             GetLevelStructureName
             if GotParam level_structure_name
-                lvl = <level_structure_name>
+                if StructureContains structure = ( <level_structure_name> ) level
+                    FormatText ChecksumName = lvl "wxlvl_%a" a = ( <level_structure_name> . level )
+                endif
             endif
-            if not (<lvl> = ( dadmod_wx_level ))
+            grid = 0
+            changed = 0
+            if not (<lvl> = dadmod_wx_level)
                 Change dadmod_wx_level = <lvl>
-                Change dadmod_wx_kind = -1
+                grid = 1
+                changed = 1
             endif
-            if not ( ( <kind> = ( dadmod_wx_kind ) ) and ( <amt> = ( dadmod_wx_amt ) ) )
-                dadmod_wx_apply kind = <kind> amt = <amt>
+            if not (<kind> = dadmod_wx_kind)
+                grid = 1
+                changed = 1
+            endif
+            if not (<amt> = dadmod_wx_amt)
+                changed = 1
+            endif
+            if (<changed> = 1)
+                dadmod_wx_apply kind = <kind> amt = <amt> grid = <grid>
             endif
         endif
     repeat
 endscript
-script dadmod_wx_apply
+script dadmod_wx_apply grid = 1
     Change dadmod_wx_kind = <kind>
     Change dadmod_wx_amt = <amt>
     switch <kind>
     case 1
-        dadmod_wx_rain amt = <amt> storm = 0
+        dadmod_wx_rain amt = <amt> storm = 0 grid = <grid>
     case 2
-        dadmod_wx_rain amt = <amt> storm = 1
+        dadmod_wx_rain amt = <amt> storm = 1 grid = <grid>
     case 3
-        dadmod_wx_snow amt = <amt>
+        dadmod_wx_snow amt = <amt> grid = <grid>
     case 9
         Change dadmod_wx_on = 0
     default
@@ -86,7 +98,7 @@ script dadmod_wx_apply
     FormatText TextName = dbg "weather (local): kind %k intensity %a" k = <kind> a = <amt>
     THUGRECOMP_Log text = <dbg>
 endscript
-script dadmod_wx_rain
+script dadmod_wx_rain grid = 1
     rate = ( 3 + <amt> )
     blend = ( 4 + <amt> )
     splash = ( <amt> / 2 )
@@ -96,7 +108,9 @@ script dadmod_wx_rain
         blend = ( 8 + <amt> )
         splash = ( 2 + <amt> )
     endif
-    WeatherUpdateGrid
+    if (<grid> = 1)
+        WeatherUpdateGrid
+    endif
     WeatherSetSnowRate 0
     WeatherSetSnowColor 0
     WeatherSetRainActive
@@ -113,11 +127,13 @@ script dadmod_wx_rain
     WeatherSetRainRate <rate>
     Change dadmod_wx_on = 1
 endscript
-script dadmod_wx_snow amt = 5
+script dadmod_wx_snow amt = 5 grid = 1
     rate = ( 1 + ( <amt> / 3 ) )
     CastToInteger rate
     blend = ( 30 + ( <amt> * 3 ) )
-    WeatherUpdateGrid
+    if (<grid> = 1)
+        WeatherUpdateGrid
+    endif
     WeatherSetRainRate 0
     WeatherSetSplashRate 0
     WeatherSetRainColor top = 0 bottom = 0

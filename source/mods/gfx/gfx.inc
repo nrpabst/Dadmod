@@ -1495,20 +1495,25 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
 }
 // ---- lit windows (mods/lamplights, 2026-11-22). ps_window: drawn (ps_2_0, with the game's own fixed-function vertices)
 // over the game's window-texture draws into a separate target; glass = dark / bluish texels, every window cell on or off
-float4 ps_window(float2 uv : TEXCOORD0, float3 cp : TEXCOORD1) : COLOR {
+float4 ps_window(float2 uv : TEXCOORD0, float4 cp : TEXCOORD1) : COLOR {  // cp = clip-space position (stage 1: camera-space position x this draw's projection)
     clip(tex2D(s0, uv).a - px.y);  // px.y = the game's alpha-test cut (-1 = none): see-through parts of the texture stay dark
     float4 pm = tex2D(s1, uv);  // pane color map (rgb = this pane's lit color, a = pane), filtered + mipmapped
     float tv = frac(sin(dot(floor(uv), float2(12.9898, 78.233))) * 43758.5453);  // a little brightness change per texture repeat
     float3 o = pm.rgb * (0.85 + 0.15 * tv) * px.x * 0.6;
     if (px.w > 0.5) o = px.z > 0.5 ? float3(0, pm.a * 0.8, 0) : float3(0, 0, 0.5);  // gfx_windows 2: marked panes green, unmarked blue
-    return float4(o, abs(cp.z));  // alpha = view depth (camera-space z, stage 1 texcoord); no pane map = not drawn (2026-11-23: the old cell look lit brick)
+    // alpha = 1 - this pixel's depth-buffer value (z / w + the game's DEPTHBIAS, p1.x), so the composite compares depth with depth
+    // (2026-11-23 flicker: comparing view distances failed on depth-biased far windows); 1 - depth keeps half floats exact far away
+    return float4(o, 1 - saturate(cp.z / cp.w + p1.x));  // no pane map = not drawn (2026-11-23: the old cell look lit brick)
 }
 // ps_winvis: quarter-res copy of only the windows that are really visible (depth checked), the source of the spill:
 // r = glow, g = glow x window depth (log2(z) / 16), so after the blur g / r is the glow-weighted depth of the windows
+// a window pixel is hidden when the depth buffer holds something else there: layer alpha u = 1 - window depth vs 1 - INTZ depth,
+// allowed 0.2 % of u (half-float rounding, about 6 units at 3000 away) + 3e-7 (24-bit depth steps)
+bool winhid(float u, float d0) { float u0 = 1 - d0; return abs(u - u0) > 3e-7 + u0 * 0.002; }
 float2 winvis1(float2 uv) {
     float4 w = tex2D(s2, uv);
-    float z = dist(tex2D(s1, uv).r);
-    float i = abs(w.a - z) > 3.0 + z * 0.006 ? 0 : dot(w.rgb, float3(0.4, 0.4, 0.2));
+    float d0 = tex2D(s1, uv).r, z = dist(d0);
+    float i = winhid(w.a, d0) ? 0 : dot(w.rgb, float3(0.4, 0.4, 0.2));
     return float2(i, i * log2(max(z, 1.0)) / 16.0);
 }
 float4 ps_winvis(float2 uv : TEXCOORD0) : COLOR {
@@ -1521,8 +1526,7 @@ float4 ps_wincomp(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float4 w = tex2D(s2, uv);
     if (lampc.y > 0.5) {  // the layer knows each window pixel's depth: only where that window is still the nearest thing
-        float z = dist(tex2D(s1, uv).r);
-        if (abs(w.a - z) > 3.0 + z * 0.006) w.rgb = 0;
+        if (winhid(w.a, tex2D(s1, uv).r)) w.rgb = 0;
     }
     float2 sp = tex2D(s3, uv).rg;  // blurred quarter-res copy of the visible windows: soft warm light around them
     float zl = log2(max(dist(tex2D(s1, uv).r), 1.0)), wl = sp.g / max(sp.r, 0.0001) * 16.0;
@@ -3251,8 +3255,8 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
         rt->Release();
         return;
     }
-    float oldC0[4];
-    dev->GetPixelShaderConstantF(0, oldC0, 1);
+    float oldC0[8];
+    dev->GetPixelShaderConstantF(0, oldC0, 2);
     dev->SetRenderTarget(0, g_winSurf);
     dev->SetViewport(&vp);
     if (g_winFrame != g_presents) {
@@ -3270,13 +3274,14 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
     DWORD sab = 0, sba = 0, dba = 0, tci = 0, ttf = 0;
     dev->GetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, &sab); dev->GetRenderState(D3DRS_SRCBLENDALPHA, &sba); dev->GetRenderState(D3DRS_DESTBLENDALPHA, &dba);
     dev->GetTextureStageState(1, D3DTSS_TEXCOORDINDEX, &tci); dev->GetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, &ttf);
-    D3DMATRIX tm1, ident = {};
-    ident._11 = ident._22 = ident._33 = ident._44 = 1;
+    D3DMATRIX tm1;
     dev->GetTransform(D3DTS_TEXTURE1, &tm1);
     g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
     dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION | 1);
-    dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3);
-    g_origST(dev, D3DTS_TEXTURE1, &ident);
+    dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT4);
+    D3DMATRIX pr = g_proj;  // this draw's own projection (2026-11-23): stage 1 = clip-space position, so ps_window knows its depth value
+    dev->GetTransform(D3DTS_PROJECTION, &pr);
+    g_origST(dev, D3DTS_TEXTURE1, &pr);
     IDirect3DBaseTexture9* oldT1 = nullptr;
     dev->GetTexture(1, &oldT1);
     DWORD s1min = 0, s1mag = 0, s1mip = 0, s1u = 0, s1v = 0;
@@ -3291,14 +3296,19 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, co
     g_origRS(dev, D3DRS_ALPHATESTENABLE, FALSE);  // our alpha is the window depth, not a cut-out
     float c0[4] = {V("gfx_windowstr") / 10.0f, cut, mask ? 1.0f : 0.0f, V("gfx_windows") == 2 ? 1.0f : 0.0f};
     ++g_winDraws;
+    DWORD dbias = 0, sbias = 0;
+    dev->GetRenderState(D3DRS_DEPTHBIAS, &dbias); dev->GetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, &sbias);
+    if (sbias) { static bool once = false; if (!once) { once = true; mmenu::Log("gfx: lit windows: a window draw uses a slope depth bias (not matched)"); } }
+    float c1[4] = {*(float*)&dbias, 0, 0, 0};  // the game's depth bias (-2.6e-5 on some meshes, THUGPro.exe 0x4DC438); slope bias: not used by the game
     dev->SetPixelShaderConstantF(0, c0, 1);
+    dev->SetPixelShaderConstantF(1, c1, 1);
     dev->SetPixelShader(g_psWindow);
     if (wd.kind == 0) g_origDIP(dev, wd.pt, wd.b, wd.mi, wd.nv, wd.si, wd.pc);
     else if (wd.kind == 1) g_origDP(dev, wd.pt, wd.si, wd.pc);
     else g_origDPUP(dev, wd.pt, wd.pc, wd.up, wd.upst);
     dev->SetPixelShader(oldPS);
     if (oldPS) oldPS->Release();
-    dev->SetPixelShaderConstantF(0, oldC0, 1);
+    dev->SetPixelShaderConstantF(0, oldC0, 2);
     g_origRS(dev, D3DRS_SEPARATEALPHABLENDENABLE, sab); g_origRS(dev, D3DRS_SRCBLENDALPHA, sba); g_origRS(dev, D3DRS_DESTBLENDALPHA, dba);
     dev->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, tci); dev->SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, ttf);
     dev->SetTexture(1, oldT1);

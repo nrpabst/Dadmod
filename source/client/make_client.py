@@ -245,6 +245,9 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'lampwindows'))
     shutil.copyfile(os.path.join(lsrc, 'lampwindows.txt'), os.path.join(out, 'dadmod', 'lampwindows.txt'))
     want.append(os.path.join('dadmod', 'lampwindows.txt'))
+    # lamp post recipes (2026-11-23): which scene objects of the player's own THUG2 / THUG Pro levels make each post
+    shutil.copyfile(os.path.join(lsrc, 'lamprecipes.txt'), os.path.join(out, 'dadmod', 'lamprecipes.txt'))
+    want.append(os.path.join('dadmod', 'lamprecipes.txt'))
     for n in sorted(os.listdir(os.path.join(lsrc, 'lampwindows'))):
         if n.lower().endswith('.raw'):
             shutil.copyfile(os.path.join(lsrc, 'lampwindows', n), os.path.join(out, 'dadmod', 'lampwindows', n))

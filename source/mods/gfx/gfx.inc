@@ -2335,7 +2335,7 @@ static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); g_bulbPost.clear(
 // else the level that just loaded (nullptr = the last level SetLevel saw)
 static void WinLevelHook(const char* lv, bool loading);
 static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b, bool post = false) {
-    if (g_bulbs.size() >= 1024) return;
+    if (g_bulbs.size() >= 4096) return;  // 2026-11-23: room for every map getting lamps (was 1024)
     g_bulbDrop.push_back(drop);
     g_bulbPost.resize(g_bulbs.size(), 0);
     g_bulbPost.push_back(post ? 1 : 0);

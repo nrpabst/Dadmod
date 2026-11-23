@@ -435,6 +435,8 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "../../mods/skatercopy/skatercopy.inc"  // Copy Scales From / Copy Tricks From another saved skater (reads Save\*.SKA)
 #include "../../mods/fullscreen/fullscreen.inc"    // Graphics > Display live (THUGRECOMP_DisplayLive) + Alt+Enter fullscreen toggle (Noah 2026-11-21: in the player build)
+#include "../../mods/lamplights/lampsrc.inc"      // lamp post models built from the player's own THUG2 / THUG Pro files
+#include "../../mods/lamplights/lampmodels.inc"   // lamp posts drawn per map (merged per model part)
 #include "../../mods/lamplights/lamplights.inc"    // street lamps + lit windows at night (Chicago): engine LevelLights, bulbs/pools/windows drawn by gfx.inc
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
 
@@ -525,6 +527,7 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_AddLevelLight", lamplights::CF_AddLevelLight },
     { "THUGRECOMP_LampBulbsClear", lamplights::CF_LampBulbsClear },
     { "THUGRECOMP_LampBulb", lamplights::CF_LampBulb },
+    { "THUGRECOMP_LampPost", lamplights::CF_LampPost },
     { "THUGRECOMP_LampNight", lamplights::CF_LampNight },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },

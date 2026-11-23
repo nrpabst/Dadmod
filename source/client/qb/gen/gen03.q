@@ -549,9 +549,7 @@ script dadmod_lamp_add
     FormatText ChecksumName = nm "dadmod_ll_%s_%d" s = <level> d = <id>
     THUGRECOMP_AddLevelLight Name = <nm> Pos = <light> Brightness = 0.0 InnerRadius = ( <reachset> * 0.5 ) OuterRadius = ( <reachset> * 1.0 ) color = [ 255 150 50 ] ExcludeSkater
     if GotParam model
-        if ScriptExists dadmod_lampedit_ship
-            dadmod_lampedit_ship model = <model> model_pos = <model_pos> model_rot = <model_rot>
-        endif
+        THUGRECOMP_LampPost model = <model> Pos = <model_pos> rot = <model_rot>
     endif
 endscript
 

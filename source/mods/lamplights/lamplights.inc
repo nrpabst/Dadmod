@@ -43,6 +43,7 @@ static bool __cdecl CF_AddLevelLight(void* params, void* script) {
 static bool __cdecl CF_LampBulbsClear(void* params, void* script) {
     (void)script;
     gfx::BulbClear();
+    lampmdl::LevelReset();
     const char* lv = nullptr;
     bool loading = params && IntParam(params, "loading", 0) != 0;
     if (params && !loading) GetStringParam(params, "level", &lv);
@@ -59,6 +60,20 @@ static bool __cdecl CF_LampBulb(void* params, void* script) {
     int r = IntParam(params, "r", 255), g = IntParam(params, "g", 176), b = IntParam(params, "b", 80);
     int drop = IntParam(params, "drop", 440);
     gfx::BulbAdd(pos[0], pos[1], pos[2], (float)pool, (float)drop, r / 255.0f, g / 255.0f, b / 255.0f, IntParam(params, "post", 0) != 0);
+    return true;
+}
+
+// THUGRECOMP_LampPost model = "SF2:e2885a9f" Pos = (base) rot = degrees: a lamp post that ships with the map
+// (lamps_<level>.q entry with a model). Built from the player's own game files; no source = no post (the light stays)
+static bool __cdecl CF_LampPost(void* params, void* script) {
+    (void)script;
+    const char* key = nullptr;
+    if (!params || !GetStringParam(params, "model", &key) || !key) return false;
+    int mi = lampmdl::Find(key);
+    if (mi < 0) return false;
+    float pos[4] = { 0, 0, 0, 1 };
+    ((void(__cdecl*)(void*, float*))0x45C050)(params, pos);
+    lampmdl::AddPost(mi, pos[0], pos[1], pos[2], mmenu::FloatParam(params, "rot", 0));
     return true;
 }
 

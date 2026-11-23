@@ -21,7 +21,31 @@ jobs:
           fi
           cat release/dadmod.zip.part* > dadmod.zip
           echo "$(tr -d ' \r\n' < release/dadmod.zip.md5)  dadmod.zip" | md5sum -c -
-          gh release create "v$V" dadmod.zip --repo "$GITHUB_REPOSITORY" --target main \
+          # map packs (Noah 2026-11-23): the extra levels are separate assets dadmod-maps-<pack>.zip, listed in
+          # release/map_packs.txt as "<pack> <asset> <size> <md5>". A changed pack is pushed as release/<asset>.partNN;
+          # an unchanged one is copied from an earlier release (drafts included), so it is never pushed again.
+          assets=(dadmod.zip)
+          if [ -f release/map_packs.txt ]; then
+            while read -r pack asset size md5; do
+              [ -n "${md5:-}" ] || continue
+              if ls release/"$asset".part* >/dev/null 2>&1; then
+                cat release/"$asset".part* > "$asset"
+                echo "$asset: from this push"
+              else
+                for u in $(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                    --jq ".[] | .assets[] | select(.name == \"$asset\" and .size == $size) | .url"); do
+                  gh api -H 'Accept: application/octet-stream' "$u" > "$asset"
+                  [ "$(md5sum < "$asset" | cut -d' ' -f1)" = "$md5" ] && { echo "$asset: reused ($u)"; break; }
+                  rm -f "$asset"
+                done
+              fi
+              [ -f "$asset" ] || { echo "$asset: not pushed and no earlier release has it (md5 $md5)"; exit 1; }
+              echo "$md5  $asset" | md5sum -c -
+              [ "$(stat -c%s "$asset")" = "$size" ] || { echo "$asset: wrong size"; exit 1; }
+              assets+=("$asset")
+            done < <(tr -d '\r' < release/map_packs.txt)
+          fi
+          gh release create "v$V" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target main \
             --title "dadmod $V" --notes-file release/notes.md --latest
           gh release view "v$V" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "\(.name) \(.size)"'
           # Keep only the newest release public: Setup.bat from 0.10.0 and older only finds updates when

@@ -440,6 +440,209 @@ static void PatchIsAliveMissingNode() {
     DebugLog("crashlog: IsAlive missing node guard applied (0x565BB0)");
 }
 
+
+// Screen-element morph to a missing element (2026-11-23 scan): CF_DoScreenElementMorph (0x4AD540) resolves the id
+// with 0x4AD1E0 into [esp+4]; unlike its sibling CF_SetScreenElementProps (0x4AD4C0, which null-checks), it then does
+// mov edx,[ecx] / call [edx+0x24] with no check, so a missing id crashes at 0x4AD579 reading 0 (work\crash_analysis.md;
+// also reachable from the network -- thugpro.dll's 0x48 handler lets other players run DoScreenElementMorph on you).
+// The 18 bytes from 0x4AD575 to 0x4AD587 become a jump to a stub that mirrors the sibling: set the SEH state var, then
+// run the vtable call only when the element pointer is non-NULL. A missing element now does nothing.
+static void PatchScreenMorphNull() {
+    BYTE* at = (BYTE*)0x4AD575;
+    static const BYTE orig[18] = { 0x8B,0x4C,0x24,0x04, 0x8B,0x11, 0x56, 0xC7,0x44,0x24,0x1C,0x00,0x00,0x00,0x00, 0xFF,0x52,0x24 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: screen morph null guard skipped, bytes at 0x4AD575 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0x4C; *s++ = 0x24; *s++ = 0x04;                      // mov ecx,[esp+4]
+    *s++ = 0xC7; *s++ = 0x44; *s++ = 0x24; *s++ = 0x1C; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00;  // mov [esp+0x1C],0
+    *s++ = 0x85; *s++ = 0xC9;                                                // test ecx,ecx
+    *s++ = 0x74; *s++ = 0x06;                                                // jz +6 (skip the vtable call)
+    *s++ = 0x8B; *s++ = 0x11;                                                // mov edx,[ecx]
+    *s++ = 0x56;                                                            // push esi
+    *s++ = 0xFF; *s++ = 0x52; *s++ = 0x24;                                   // call [edx+0x24]
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x4AD587 - (DWORD)(s + 5); s += 5;         // jmp 0x4AD587
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x4AD575 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: screen morph null guard applied (0x4AD575)");
+}
+
+// Host level-change send to a player who just left (2026-11-23 scan): the net message queue (0x457EB0) resolves a
+// connection by id with 0x457910 (returns 0 when the slot is empty), then at 0x458148 reads byte [edi+0x60] with no
+// null check, crashing while the host changes level as someone drops (Dev crash.log, reading 0x60 ecx=0). The 6 bytes
+// at 0x458146 (mov edi,eax; test byte [edi+0x60],8) become a jump to a stub that skips to the loop-continue 0x4581D4
+// when the connection is NULL and otherwise runs the test and returns to the original jne.
+static void PatchLevelChangeSendNull() {
+    BYTE* at = (BYTE*)0x458146;
+    static const BYTE orig[6] = { 0x8B,0xF8, 0xF6,0x47,0x60,0x08 };          // mov edi,eax; test byte [edi+0x60],8
+    if (memcmp(at, orig, sizeof orig) != 0 || at[6] != 0x0F || at[7] != 0x85) {
+        DebugLog("crashlog: level-change send null guard skipped, bytes at 0x458146 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0xF8;                                                // mov edi,eax
+    *s++ = 0x85; *s++ = 0xFF;                                                // test edi,edi
+    *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4581D4 - (DWORD)(s + 4); s += 4; // jz 0x4581D4
+    *s++ = 0xF6; *s++ = 0x47; *s++ = 0x60; *s++ = 0x08;                      // test byte [edi+0x60],8
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x45814C - (DWORD)(s + 5); s += 5;         // jmp 0x45814C (original jne)
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x458146 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: level-change send null guard applied (0x458146)");
+}
+
+
+// Per-letter text effect buffer overflow (2026-11-23 scan): the text setter at 0x48D530 keeps one fixed 96-byte
+// buffer (allocated once with 0x5BAFC0(0x60,...)) and strcpy's the string into it with no length check (loop at
+// 0x48D580), so a string of 96+ bytes overruns the heap block and corrupts it (shows up later as a 0x5BA0CA free
+// crash). The copy loop (17 bytes at 0x48D579) becomes a jump to a stub that copies at most 95 chars then NUL-
+// terminates, so a long string is clipped instead of overflowing.
+static void PatchPerLetterTextOverflow() {
+    BYTE* at = (BYTE*)0x48D579;
+    static const BYTE orig[17] = { 0x8B,0x4C,0x24,0x08, 0x8B,0x56,0x0C, 0x8A,0x01, 0x41, 0x88,0x02, 0x42, 0x84,0xC0, 0x75,0xF6 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: per-letter text overflow guard skipped, bytes at 0x48D579 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0x4C; *s++ = 0x24; *s++ = 0x08;   // 0x00 mov ecx,[esp+8]  (src)
+    *s++ = 0x8B; *s++ = 0x56; *s++ = 0x0C;                // 0x04 mov edx,[esi+0xC] (dest)
+    *s++ = 0x8D; *s++ = 0x42; *s++ = 0x5F;                // 0x07 lea eax,[edx+0x5F] (limit = dest+95)
+    *s++ = 0x50;                                          // 0x0A push eax
+    *s++ = 0x3B; *s++ = 0x14; *s++ = 0x24;                // 0x0B cmp edx,[esp]      (LOOP)
+    *s++ = 0x73; *s++ = 0x0C;                             // 0x0E jae TERM(0x1C)
+    *s++ = 0x8A; *s++ = 0x01;                             // 0x10 mov al,[ecx]
+    *s++ = 0x41;                                          // 0x12 inc ecx
+    *s++ = 0x88; *s++ = 0x02;                             // 0x13 mov [edx],al
+    *s++ = 0x42;                                          // 0x15 inc edx
+    *s++ = 0x84; *s++ = 0xC0;                             // 0x16 test al,al
+    *s++ = 0x75; *s++ = 0xF1;                             // 0x18 jne LOOP(0x0B)
+    *s++ = 0xEB; *s++ = 0x03;                             // 0x1A jmp DONE(0x1F)
+    *s++ = 0xC6; *s++ = 0x02; *s++ = 0x00;                // 0x1C mov byte [edx],0  (TERM)
+    *s++ = 0x58;                                          // 0x1F pop eax           (DONE)
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x48D58A - (DWORD)(s + 5); s += 5;   // 0x20 jmp 0x48D58A
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x48D579 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: per-letter text overflow guard applied (0x48D579)");
+}
+
+// Missing level object used as a parameter source (2026-11-23 scan): a node looked up by name (0x45C1B0) returns NULL
+// when it isn't in the level, and several goal / trigger / rail paths then read parameters off it. GetChecksum/GetParam
+// (0x476950, __thiscall, ret 0xC) and GotParam (0x476B40, __thiscall, ret 4) both read [ecx+4] with no null check, so a
+// NULL struct crashes at 0x476953 / 0x476B41 reading 0x4 (e.g. a converted/P8 level trigger face with no TriggerScript
+// node). Each entry becomes a jump to a stub that returns "not found" (0) for a NULL this and otherwise runs the
+// original code. This covers the online- and custom-map-reachable node reads in one place (the IsAlive goal path is
+// also guarded separately at 0x565BB0).
+static void PatchGetParamNullThis() {
+    BYTE* at = (BYTE*)0x476950;
+    static const BYTE orig[6] = { 0x51, 0x53, 0x56, 0x8B,0x71,0x04 };       // push ecx; push ebx; push esi; mov esi,[ecx+4]
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: GetParam null-this guard skipped, bytes at 0x476950 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xC9;                             // 0x00 test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                             // 0x02 jz ZERO(0x0F)
+    *s++ = 0x51; *s++ = 0x53; *s++ = 0x56;                // 0x04 push ecx; push ebx; push esi
+    *s++ = 0x8B; *s++ = 0x71; *s++ = 0x04;                // 0x07 mov esi,[ecx+4]
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x476956 - (DWORD)(s + 5); s += 5;   // 0x0A jmp 0x476956
+    *s++ = 0x32; *s++ = 0xC0;                             // 0x0F xor al,al   (ZERO)
+    *s++ = 0xC2; *s++ = 0x0C; *s++ = 0x00;                // 0x11 ret 0xC
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x476950 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: GetParam null-this guard applied (0x476950)");
+}
+
+static void PatchGotParamNullThis() {
+    BYTE* at = (BYTE*)0x476B40;
+    static const BYTE orig[6] = { 0x56, 0x8B,0x71,0x04, 0x85,0xF6 };        // push esi; mov esi,[ecx+4]; test esi,esi
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: GotParam null-this guard skipped, bytes at 0x476B40 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xC9;                             // 0x00 test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                             // 0x02 jz ZERO(0x0F)
+    *s++ = 0x56;                                          // 0x04 push esi
+    *s++ = 0x8B; *s++ = 0x71; *s++ = 0x04;                // 0x05 mov esi,[ecx+4]
+    *s++ = 0x85; *s++ = 0xF6;                             // 0x08 test esi,esi
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x476B46 - (DWORD)(s + 5); s += 5;   // 0x0A jmp 0x476B46
+    *s++ = 0x33; *s++ = 0xC0;                             // 0x0F xor eax,eax  (ZERO)
+    *s++ = 0xC2; *s++ = 0x04; *s++ = 0x00;                // 0x11 ret 4
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x476B40 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: GotParam null-this guard applied (0x476B40)");
+}
+
+
+// Missing model geometry over the network (2026-11-23 scan): the per-model geometry walk at 0x45D3A0 loads a geometry
+// slot (edi = [ebx + index*12 + 0x1000C]) and reads [edi+4] with no null check, so a model whose geometry didn't load
+// crashes at 0x45D3B5 reading 0x4 (a car/model a client doesn't have; CreateCompositeObject is also reachable from the
+// network). The 9 bytes at 0x45D3B5 become a jump to a stub that skips this model's draw (straight to the epilogue at
+// 0x45D3DA) when the geometry slot is NULL and otherwise runs the original. The "stock models only online" rule stays
+// the first line of defense; this stops a bad model name from the network from crashing the receiver.
+static void PatchModelGeometryNull() {
+    BYTE* at = (BYTE*)0x45D3B5;
+    static const BYTE orig[9] = { 0x8B,0x47,0x04, 0x33,0xF6, 0x85,0xC0, 0x76,0x1C };   // mov eax,[edi+4]; xor esi,esi; test eax,eax; jbe 0x45D3DA
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: model geometry null guard skipped, bytes at 0x45D3B5 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xFF;                             // 0x00 test edi,edi
+    *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x45D3DA - (DWORD)(s + 4); s += 4;   // 0x02 jz 0x45D3DA (skip draw)
+    *s++ = 0x8B; *s++ = 0x47; *s++ = 0x04;                // 0x08 mov eax,[edi+4]
+    *s++ = 0x33; *s++ = 0xF6;                             // 0x0B xor esi,esi
+    *s++ = 0x85; *s++ = 0xC0;                             // 0x0D test eax,eax
+    *s++ = 0x0F; *s++ = 0x86; *(DWORD*)s = 0x45D3DA - (DWORD)(s + 4); s += 4;   // 0x0F jbe 0x45D3DA
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x45D3BE - (DWORD)(s + 5); s += 5;            // 0x15 jmp 0x45D3BE (loop body)
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x45D3B5 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: model geometry null guard applied (0x45D3B5)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -451,6 +654,12 @@ static void Install() {
     PatchGlobalFlags();
     PatchParticleNullVB();
     PatchIsAliveMissingNode();
+    PatchScreenMorphNull();
+    PatchLevelChangeSendNull();
+    PatchPerLetterTextOverflow();
+    PatchGetParamNullThis();
+    PatchGotParamNullThis();
+    PatchModelGeometryNull();
 }
 
 }  // namespace crashlog

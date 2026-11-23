@@ -10175,6 +10175,8 @@ dadmod_gfx_lists = [
 { list = gfx_fireworks names = ["Off" "On wins" "Every 1 min" "Every 3 min" "Every 5 min" "Every 10 min"] }
 { list = gfx_fps names = ["Off" "On" "Tiny, in the corner"] }
 { list = gfx_shotkey names = ["Off" "On"] }
+{ list = gfx_lamplights names = ["Off" "On"] }
+{ list = gfx_lampposts names = ["Hide" "Show"] }
 { list = gfx_shothud names = ["Off" "On"] }
 { list = gfx_vsync names = ["Game default" "On" "Off"] }
 { list = gfx_framegen names = ["Off" "Auto (your monitor)" "120 Hz" "144 Hz" "165 Hz" "180 Hz" "240 Hz"] }

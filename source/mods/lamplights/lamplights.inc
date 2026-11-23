@@ -58,7 +58,7 @@ static bool __cdecl CF_LampBulb(void* params, void* script) {
     int pool = IntParam(params, "pool", 450);
     int r = IntParam(params, "r", 255), g = IntParam(params, "g", 176), b = IntParam(params, "b", 80);
     int drop = IntParam(params, "drop", 440);
-    gfx::BulbAdd(pos[0], pos[1], pos[2], (float)pool, (float)drop, r / 255.0f, g / 255.0f, b / 255.0f);
+    gfx::BulbAdd(pos[0], pos[1], pos[2], (float)pool, (float)drop, r / 255.0f, g / 255.0f, b / 255.0f, IntParam(params, "post", 0) != 0);
     return true;
 }
 

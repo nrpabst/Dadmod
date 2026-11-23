@@ -4276,6 +4276,8 @@ static const char kLayoutDefault[] =
 "  item|gfx_wxamt|||\n"
 "  item|gfx_fireworks|||\n"
 "  item|gfx_fwnow|||\n"
+"  item|gfx_lamplights|||\n"
+"  item|gfx_lampposts|||\n"
 "  item|gfx_skydef|||\n"
 "menu||Controls||Controller settings: background input, stick dead zone, button swap, launcher layout, key and button bindings, controller popups\n"
 "  item|gfx_bginput|||\n"

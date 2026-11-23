@@ -494,8 +494,9 @@ MAP_PACKS = ('cities', 'p8', 'classic', 'thpg')
 
 def map_pack_of(rel):
     low = rel.lower().replace('/', '\\')
-    if low.startswith('user\\data\\levels\\'):
-        return 'cities'                  # Larxian's Philly / Baltimore / DC (+ their skies)
+    if low.startswith('user\\data\\levels\\') or (low.startswith('user\\') and low.endswith('.level.dat')):
+        return 'cities'                  # Larxian's Philly / Baltimore / DC (+ their skies and the User\\<city>.level.dat
+                                         # entries, which list them in the Imported tab: only with the city files)
     name = low.rsplit('\\', 1)[-1]
     if name.startswith('p8') or '\\p8' in low:
         return 'p8'                      # our Project 8 conversions and their sounds

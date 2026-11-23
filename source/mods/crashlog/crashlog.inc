@@ -447,6 +447,8 @@ static void PatchIsAliveMissingNode() {
 // also reachable from the network -- thugpro.dll's 0x48 handler lets other players run DoScreenElementMorph on you).
 // The 18 bytes from 0x4AD575 to 0x4AD587 become a jump to a stub that mirrors the sibling: set the SEH state var, then
 // run the vtable call only when the element pointer is non-NULL. A missing element now does nothing.
+// Fixed 2026-11-23: the stub sets the state var BEFORE its push esi, so the offset is 0x18, not the original 0x1C;
+// 0x1C overwrote the SEH frame and crashed at boot.
 static void PatchScreenMorphNull() {
     BYTE* at = (BYTE*)0x4AD575;
     static const BYTE orig[18] = { 0x8B,0x4C,0x24,0x04, 0x8B,0x11, 0x56, 0xC7,0x44,0x24,0x1C,0x00,0x00,0x00,0x00, 0xFF,0x52,0x24 };
@@ -458,7 +460,7 @@ static void PatchScreenMorphNull() {
     if (!stub) return;
     BYTE* s = stub;
     *s++ = 0x8B; *s++ = 0x4C; *s++ = 0x24; *s++ = 0x04;                      // mov ecx,[esp+4]
-    *s++ = 0xC7; *s++ = 0x44; *s++ = 0x24; *s++ = 0x1C; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00;  // mov [esp+0x1C],0
+    *s++ = 0xC7; *s++ = 0x44; *s++ = 0x24; *s++ = 0x18; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00;  // mov [esp+0x18],0 (= original [esp+0x1C] after its push esi)
     *s++ = 0x85; *s++ = 0xC9;                                                // test ecx,ecx
     *s++ = 0x74; *s++ = 0x06;                                                // jz +6 (skip the vtable call)
     *s++ = 0x8B; *s++ = 0x11;                                                // mov edx,[ecx]

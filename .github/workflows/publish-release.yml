@@ -1,0 +1,43 @@
+name: Publish dadmod release
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['release/VERSION']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Join zip and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V=$(tr -d ' \r\n' < release/VERSION)
+          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$V already exists, nothing to do"; exit 0
+          fi
+          cat release/dadmod.zip.part* > dadmod.zip
+          echo "$(tr -d ' \r\n' < release/dadmod.zip.md5)  dadmod.zip" | md5sum -c -
+          gh release create "v$V" dadmod.zip --repo "$GITHUB_REPOSITORY" --target main \
+            --title "dadmod $V" --notes-file release/notes.md --latest
+          gh release view "v$V" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "\(.name) \(.size)"'
+          # Keep only the newest release public: Setup.bat from 0.10.0 and older only finds updates when
+          # GitHub lists ONE release (PowerShell 5.1 JSON bug). Older releases become drafts; tags and zips stay.
+          for t in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,isDraft --jq '.[] | select(.isDraft|not) | .tagName'); do
+            [ "$t" = "v$V" ] || { echo "drafting $t"; gh release edit "$t" --repo "$GITHUB_REPOSITORY" --draft=true; }
+          done
+          n=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select(.draft|not)] | length')
+          [ "$n" = "1" ] || { echo "expected 1 public release, found $n"; exit 1; }
+          # what an old Setup.bat sees (no token); GitHub may cache it for a minute, so retry
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            tags=$(curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" | jq -r 'if type=="array" then [.[].tag_name] | join(" ") else "ERR" end')
+            echo "public releases (no token): $tags"
+            [ "$tags" = "v$V" ] && { ok=1; break; }
+            sleep 20
+          done
+          [ "$ok" = "1" ] || { echo "unauthenticated releases list is not just v$V"; exit 1; }
+          git push origin --delete "$GITHUB_REF_NAME" || true

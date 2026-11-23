@@ -4250,8 +4250,6 @@ static const char kLayoutDefault[] =
 "menu||Sky & weather||Sky, fog, time of day, weather and fireworks\n"
 "  item|gfx_tod|||\n"
 "  item|gfx_galaxy|||\n"
-"  item|gfx_todfog|||\n"
-"  item|gfx_fogamt|||\n"
 "  item|gfx_skypop|||\n"
 "  item|gfx_weather|||\n"
 "  item|gfx_wxamt|||\n"
@@ -4317,6 +4315,27 @@ static void LoadLayout() {
                 WriteWholeFile(path, data);
                 Log("layout: moved Time of day to the top of Sky & weather");
             }
+        }
+    }
+    // 2026-11-23: the Fog and Fog intensity rows are gone (fog is a Weather choice, Intensity covers it): drop their lines
+    {
+        bool cut = false;
+        std::string out;
+        size_t s0 = 0;
+        while (s0 < data.size()) {
+            size_t e = data.find('\n', s0);
+            size_t n = e == std::string::npos ? data.size() : e + 1;
+            std::string line = data.substr(s0, n - s0);
+            if (line.find("item|gfx_todfog|") != std::string::npos || line.find("item|gfx_fogamt|") != std::string::npos) cut = true;
+            else out += line;
+            s0 = n;
+        }
+        if (cut) {
+            CreateDirectoryA(ExeDirFile("backups").c_str(), nullptr);
+            WriteWholeFile(ExeDirFile("backups\\dadmod_layout.txt.before_wx_rows"), data);
+            data = out;
+            WriteWholeFile(path, data);
+            Log("layout: removed the old Fog rows from Sky & weather");
         }
     }
     g_lay.clear();

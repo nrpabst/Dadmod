@@ -53,18 +53,20 @@ static const Setting kSettings[] = {
                                 "7 storm, 8 golden hour, 9 vaporwave, 10 hellfire, 11 underwater, 12 rainbow, 13 black hole, 14 cotton candy"},
     {"gfx_tod", 0, 0, 6, "time of day: 0 level default, 1 morning, 2 day, 3 evening, 4 night, 5 evening with the lights on, 6 dawn (sun coming up, lights still on)"},
     {"gfx_daylen", 2, 0, 4, "unused since 2026-11-21 (the Dynamic time of day was removed); kept so old files load"},
-    {"gfx_weather", 0, 0, 4, "weather: 0 off, 1 rain, 2 heavy rain with lightning, 3 snow, 4 random (clear, rain, storm or snow, changes every few minutes)"},
+    {"gfx_weather", 0, 0, 5, "weather: 0 off, 1 rain, 2 thunderstorm, 3 snow, 4 fog, 5 random (clear, rain, storm, snow or fog, changes every few minutes)"},
+    {"gfx_wxnow", 0, 0, 4, "the weather shown right now (set by the game; Random picks it): 0 clear, 1 rain, 2 storm, 3 snow, 4 fog"},
+    {"gfx_wxsrv", 0, 0, 4, "weather the server runs (set by the game from a server ?rain etc; wins over the Weather row): 0 none, 1 rain, 2 storm, 3 snow, 4 blizzard"},
     {"gfx_wxclear", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
     {"gfx_wxrain", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
     {"gfx_wxstorm", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
     {"gfx_wxsnow", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
     {"gfx_wxfog", 1, 0, 1, "unused since 2026-11-21 (Random weather picks from clear, rain, storm and snow); kept so old files load"},
-    {"gfx_wxamt", 6, 1, 10, "weather intensity: 1 light .. 10 heavy"},
-    {"gfx_todfog", 0, 0, 4, "ground mist: 0 off, 1 knee high, 2 head high, 3 first floor, 4 rooftops"},
-    {"gfx_fogamt", 5, 1, 10, "ground mist intensity: 1 light .. 10 thick"},
+    {"gfx_wxamt", 5, 1, 10, "weather intensity: 1 light .. 10 heavy (rain, storm, snow and fog)"},
+    {"gfx_todfog", 0, 0, 4, "unused since 2026-11-23 (fog is a Weather choice now); kept so old files load"},
+    {"gfx_fogamt", 5, 1, 10, "unused since 2026-11-23 (Intensity covers fog now); kept so old files load"},
     {"gfx_fireworks", 0, 0, 5, "fireworks: 0 off, 1 when someone wins a game, 2-5 on wins and every 1 / 3 / 5 / 10 minutes"},
     {"gfx_fwevery", 2, 0, 3, "unused since 2026-11-21 (Fireworks picks the interval itself); kept so old files load"},
-    {"gfx_skywxver", 1, 0, 1, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
+    {"gfx_skywxver", 2, 0, 2, "settings version of the Sky & weather page (old weather / fireworks values were converted once)"},
     {"gfx_lamps", 0, 0, 10, "street lights at night (no menu row since 2026-11-21, off by default): lamps in the level glow and light up around them in the evening and at night: 0 off .. 10 bright"},
     {"gfx_windows", 1, 0, 2, "lit windows at night (mods/lamplights): 1 on, 0 off, 2 = check: marked panes green"},
     {"gfx_windowstr", 10, 0, 20, "lit windows brightness x0.1"},
@@ -351,6 +353,17 @@ static void Load() {
             mmenu::Log("gfx: sky & weather settings converted:%s", what.empty() ? " nothing to change" : what.c_str());
             migrate = true;
         }
+        // one Weather row + one Intensity row (2026-11-23): Random moves from 4 to 5, the old Fog row becomes Weather Fog
+        if (rawVer < 2) {
+            std::string what;
+            int iw = Index("gfx_weather"), ifog = Index("gfx_todfog"), ifa = Index("gfx_fogamt"), ia = Index("gfx_wxamt"), iver = Index("gfx_skywxver");
+            if (g_val[iw] == 4) { g_val[iw] = 5; what += " Random 4->5"; }
+            else if (g_val[iw] == 0 && g_val[ifog] > 0) { g_val[iw] = 4; g_val[ia] = g_val[ifa]; what += " Fog row -> Weather Fog, Intensity " + std::to_string(g_val[ia]); }
+            g_val[ifog] = 0;
+            g_val[iver] = 2;
+            mmenu::Log("gfx: weather settings converted to one Weather row:%s", what.empty() ? " nothing to change" : what.c_str());
+            migrate = true;
+        }
     }
     // Noah 2026-10-26: mirror mode starts off every time the game starts (later gfx.ini reloads keep it)
     static bool first = true;
@@ -362,6 +375,8 @@ static void Load() {
         first = false;
         int m = Index("gfx_mirror");
         if (m >= 0 && g_val[m]) { g_val[m] = 0; migrate = true; }
+        int ws = Index("gfx_wxsrv");  // server weather never carries over from the last session
+        if (ws >= 0 && g_val[ws]) { g_val[ws] = 0; migrate = true; }
     }
     if (migrate) Save();
     g_iniTime = IniTime();
@@ -557,8 +572,9 @@ static bool LampsOn();
 static bool BulbsOn();
 static bool MoonOn();
 static bool WinLayerReady();
-static bool MistOn() { return V("gfx_todfog") > 0 && !g_mainMenu; }  // Fog row: ground mist (2026-11-21)
 static bool DepthWanted() { return MistOn() || V("gfx_debug") || V("gfx_ssao") || V("gfx_fog") || V("gfx_dof") || V("gfx_outline") || WeatherOn() || FireworksLive() || LampsOn() || BulbsOn() || MoonOn(); }
+static float g_wxMist = 0;  // ground mist amount from the weather (Fog weather 1, rain / storm / snow a little), eased
+static bool MistOn() { return g_wxMist > 0.004f && !g_mainMenu; }  // ground mist (2026-11-21), from the Weather row since 2026-11-23
 static bool SceneWanted() {
     return V("gfx_fxaa") || V("gfx_sharpen") || V("gfx_bloom") || V("gfx_bright") || V("gfx_contrast") || V("gfx_sat") ||
            V("gfx_vibrance") || V("gfx_gamma") || V("gfx_preset") || V("gfx_temp") || V("gfx_tint") || DepthWanted() ||
@@ -726,8 +742,8 @@ float4 fogc : register(c13); // haze color
 float4 tx0 : register(c14);  // FPS text glyphs 0-3 (-1 = blank)
 float4 tx1 : register(c15);  // glyphs 4-6, screenshot flash
 float4 sk : register(c16);   // sky pass: time of day (0-5), sky boost (0-1), next time of day, blend; screen pass: -, -, tiny FPS, -
-float4 wx : register(c17);   // weather amounts: rain, snow, fog, storm (0-1+)
-float4 wx2 : register(c18);  // light level (1 day .. 0.3 night), lightning threshold, wet, -
+float4 wx : register(c17);   // weather amounts: rain, snow, lightning flash, storm (0-1)
+float4 wx2 : register(c18);  // light level (1 day .. 0.3 night), lightning bolt azimuth, wet, -
 float4 wxc : register(c19);  // fog / overcast color
 float4 fw[8] : register(c20); // fireworks shells: azimuth, elevation, age (s, < 0 = rising), hue
 struct V { float4 pos : POSITION; float2 uv : TEXCOORD0; };
@@ -1277,68 +1293,6 @@ float lightning(float t, float thr) {
     float hit = step(thr, hash12(float2(slot, 4.1)));
     return hit * (exp(-ph * 9.0) + 0.6 * exp(-abs(ph - 0.22) * 25.0));
 }
-// particles live on spheres around the camera, so turning the camera moves them the right way;
-// a layer is hidden where the scene is closer than the layer
-float rainlayer(float az, float el, float t, float k, float z, float amt) {
-    float D = k < 0.5 ? 160.0 : (k < 1.5 ? 450.0 : 1200.0);
-    if (z < D) return 0;
-    float n = k < 0.5 ? 70.0 : (k < 1.5 ? 140.0 : 260.0);
-    float v = el * n * 0.25 + t * (k < 0.5 ? 9.0 : (k < 1.5 ? 7.0 : 5.0));
-    float u = az * n / 6.2831853 * 6.2831853 + v * 0.10;
-    float2 c = floor(float2(u, v)), f = frac(float2(u, v));
-    float h = hash12(c + k * 31.0);
-    if (h > amt * 0.55) return 0;
-    float x = hash12(c + 7.3 + k), y0 = hash12(c + 3.1 + k) * 0.5;
-    float w = k < 0.5 ? 0.035 : (k < 1.5 ? 0.03 : 0.025);
-    float s = smoothstep(w, 0, abs(f.x - (0.1 + x * 0.8))) * smoothstep(y0, y0 + 0.08, f.y) * smoothstep(y0 + 0.5, y0 + 0.3, f.y);
-    return s * (k < 0.5 ? 0.9 : (k < 1.5 ? 0.6 : 0.4));
-}
-float snowlayer(float az, float el, float t, float k, float z, float amt) {
-    float D = k < 0.5 ? 120.0 : (k < 1.5 ? 350.0 : 900.0);
-    if (z < D) return 0;
-    float n = k < 0.5 ? 45.0 : (k < 1.5 ? 90.0 : 160.0);
-    float v = el * n + t * (k < 0.5 ? 1.3 : (k < 1.5 ? 1.0 : 0.8));
-    float u = az * n + sin(t * 0.7 + floor(v) * 1.3 + k) * 0.35;
-    float2 c = floor(float2(u, v)), f = frac(float2(u, v));
-    float h = hash12(c + k * 17.0);
-    if (h > amt * 0.45) return 0;
-    float2 pos = float2(hash12(c + 2.7), hash12(c + 5.9)) * 0.7 + 0.15;
-    float r = (k < 0.5 ? 0.11 : (k < 1.5 ? 0.09 : 0.07)) * (0.6 + 0.4 * hash12(c + 9.1));
-    return smoothstep(r, r * 0.35, length(f - pos)) * (k < 0.5 ? 0.95 : (k < 1.5 ? 0.75 : 0.5));
-}
-float4 ps_weather(float2 uv : TEXCOORD0) : COLOR {
-    float3 c = tex2D(s0, uv).rgb;
-    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
-    float3 d = normalize(vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz);
-    float z = 100000.0;
-    bool sky = false;
-    if (p9.z > 0) { float d0 = tex2D(s1, uv).r; z = dist(d0); sky = d0 >= 0.99999; }
-    float rain = wx.x, snow = wx.y, fog = wx.z, storm = wx.w, lite = wx2.x, t = p1.w;
-    float lum = dot(c, L);
-    float wetness = saturate(rain + storm * 0.6);
-    float over = saturate(rain * 0.8 + storm * 0.5 + snow * 0.5 + fog * 0.35);
-    if (sky) c = lerp(c, wxc.rgb * (0.55 + 0.45 * lum), over * 0.75);
-    else {
-        c = lerp(c, lum.xxx * float3(0.9, 0.94, 1.0), wetness * 0.35) * (1 - 0.22 * wetness);
-        c += pow(saturate(lum), 2.5) * wetness * wx2.z * saturate(-d.y * 4) * 0.35;  // wet shine on the ground
-        // the distance fog itself is the game's own per-draw fog now (ApplyWeatherFog), which also fogs
-        // see-through draws (fences, signs, glass, leaves) that a depth-based pass can't
-    }
-    float fl = lightning(t, wx2.y) * saturate(storm);
-    c += fl * (sky ? 0.6 : 0.3) * float3(0.8, 0.85, 1.0) * (0.5 + lite * 0.5);
-    float az = atan2(d.x, d.z), el = asin(clamp(d.y, -1, 1));
-    [branch] if (wetness > 0.01) {
-        float r = 0;
-        [loop] for (int k = 0; k < 3; k++) r += rainlayer(az, el, t, k, z, wetness);
-        c = lerp(c, float3(0.75, 0.8, 0.88) * (0.4 + 0.6 * lite) + fl * 0.5, saturate(r) * 0.45);
-    }
-    [branch] if (snow > 0.01) {
-        float sn = 0;
-        [loop] for (int k = 0; k < 3; k++) sn += snowlayer(az, el, t, k, z, saturate(snow));
-        c = lerp(c, float3(0.95, 0.97, 1.0) * (0.45 + 0.55 * lite), saturate(sn));
-    }
-    return float4(c, 1);
-}
 // ---- fireworks (drawn additively right after the sky, so the level covers them)
 float4 ps_fireworks(float2 uv : TEXCOORD0) : COLOR {
     if (p9.z > 0 && tex2D(s1, uv).r < 0.99999) return float4(0, 0, 0, 1);
@@ -1564,6 +1518,90 @@ float4 ps_groundmist(float2 uv : TEXCOORD0) : COLOR {
     float od = gm.x * len * k * (0.6 + 0.8 * n);
     float a = min(1 - exp(-od), gm.w);
     return float4(lerp(c, gmc.rgb, a), 1);
+}
+// ---- weather (2026-11-23 rework, Noah: "the effects look like ass"): drops and flakes sit in the world. The view ray
+// walks a grid of vertical columns around the camera (one drop line per column), so drops move past as you skate,
+// keep their perspective when you look up or down, stop at walls and have no screen pattern. Two grids: near (fine)
+// and far (coarse, fainter) for reach. The game's own weather adds splashes. s0 color, s1 depth when p9.z > 0.
+// wx: rain, snow, lightning flash, storm; wx2: light level, bolt azimuth, wet, -; wxc: overcast color; camp: camera
+float wxcols(float3 o, float3 d, float rl, float cs, float t, float fill, float snow, float far) {
+    float2 dxz = d.xz;
+    float hl = length(dxz);
+    if (hl < 0.03) return 0;
+    float2 cell = floor(o.xz / cs);
+    float2 st = float2(dxz.x >= 0 ? 1 : -1, dxz.y >= 0 ? 1 : -1);
+    float2 inv = 1.0 / max(abs(dxz), 0.0001);
+    float2 tm = abs((cell + max(st, 0)) * cs - o.xz) * inv;
+    float2 td = cs * inv;
+    float acc = 0;
+    [loop] for (int i = 0; i < 12; i++) {  // 2026-11-23: 20 steps cost ~14 fps (60 -> 46); 12 near + 12 far is plenty
+        float h = hash12(cell);
+        [branch] if (h < fill) {
+            float2 p = (cell + 0.15 + 0.7 * float2(hash12(cell + 7.1), hash12(cell + 3.3))) * cs;
+            if (snow > 0.5) p += float2(sin(t * 0.9 + h * 40.0), cos(t * 0.7 + h * 23.0)) * cs * 0.12;
+            float tc = dot(p - o.xz, dxz) / (hl * hl);
+            [branch] if (tc > 16.0 && tc < rl) {
+                float lat = length(o.xz + dxz * tc - p);
+                float w = max(0.35, tc * 0.0018);
+                float y = o.y + d.y * tc;
+                float a;
+                if (snow > 0.5) {
+                    float v = (y + t * 34.0 + h * 977.0) / 70.0;
+                    float fy = (frac(v) - 0.5) * 70.0;
+                    float r = 1.1 + 0.8 * hash12(cell + floor(v));
+                    a = smoothstep(r + w, r * 0.3, length(float2(lat, fy))) * min(1.0, 1.6 / w);
+                } else {
+                    float v = (y + t * 300.0 + h * 977.0) / 150.0;
+                    float fy = frac(v) * 150.0;
+                    float ls = 26.0 + far * 18.0;
+                    a = smoothstep(w, 0, lat) * step(fy, ls) * (1 - fy / ls) * min(1.0, 0.7 / w);
+                }
+                acc += a * saturate(1.3 - tc / rl) * saturate((tc - 16.0) / 40.0);
+            }
+        }
+        if (tm.x < tm.y) { cell.x += st.x; tm.x += td.x; } else { cell.y += st.y; tm.y += td.y; }
+        if (min(tm.x, tm.y) > rl) break;
+    }
+    return acc;
+}
+float4 ps_weather(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float3 d = normalize(dv);
+    float rl = 600.0;  // no depth (MSAA): keep the drops close and treat everything as ground
+    bool sky = false;
+    if (p9.z > 0) { float d0 = tex2D(s1, uv).r; sky = d0 >= 0.99999; rl = sky ? 4000.0 : dist(d0) * length(dv); }
+    float rain = wx.x, snow = wx.y, fl = wx.z, storm = wx.w, lite = wx2.x, t = p1.w;
+    if (wx2.w > 0.5) fl = lightning(t, 0.74) * saturate(storm);  // Storm sky: flash with its strikes
+    float wet = saturate(rain + storm * 0.6);
+    float over = saturate(rain * 0.6 + storm * 0.6 + snow * 0.45);
+    float lum = dot(c, L);
+    if (sky) {
+        c = lerp(c, wxc.rgb * (0.6 + 0.4 * lum), over * 0.6);
+        float az = atan2(d.x, d.z), el = asin(clamp(d.y, -1, 1));
+        float da = az - wx2.y; da -= 6.2831853 * round(da / 6.2831853);
+        float jag = (hash12(float2(floor(el * 40.0), wx2.y)) - 0.5) * 0.025 + (hash12(float2(floor(el * 9.0), wx2.y + 1.0)) - 0.5) * 0.06;
+        float bolt = exp(-abs(da - jag) * 600.0) * smoothstep(0.02, 0.12, el) * smoothstep(0.75, 0.45, el) * (1 - wx2.w);
+        c += fl * (bolt * 1.6 * float3(0.85, 0.9, 1.0) + 0.35 * float3(0.75, 0.8, 1.0));
+    } else {
+        c *= 1 - 0.1 * over;
+        c += pow(saturate(lum), 2.5) * wet * wx2.z * saturate(-d.y * 4) * 0.2;
+        c += fl * 0.18 * float3(0.8, 0.85, 1.0) * (0.4 + 0.6 * lite);
+    }
+    float3 o = camp.xyz;
+    float sn = snow > wet ? 1 : 0, amt = max(wet, saturate(snow));  // one kind at a time (they cross-fade through clear)
+    [branch] if (amt > 0.01) {
+        float f = 0.2 + 0.55 * amt;
+        float a = 0;
+        [loop] for (int g = 0; g < 2; g++) {  // near grid, then the far one (one copy of the loop keeps the shader small)
+            float fr = g;
+            a += wxcols(o, d, min(rl, lerp(700.0 - 100.0 * sn, 2400.0 - 600.0 * sn, fr)), lerp(30.0 - 2.0 * sn, 140.0 - 30.0 * sn, fr), t, f, sn, fr) * (1.0 - 0.4 * fr);
+        }
+        float3 dc = sn > 0.5 ? float3(0.95, 0.97, 1.0) * (0.45 + 0.55 * lite) : float3(0.85, 0.88, 0.95) * (0.45 + 0.55 * lite) + fl * 0.4;
+        c = lerp(c, dc, saturate(a) * (sn > 0.5 ? 0.85 : 0.42 + 0.18 * storm));
+    }
+    return float4(c, 1);
 }
 )HLSL";
 
@@ -2289,34 +2327,64 @@ static void UpdateWorld() {
     for (int k = 0; k < 3; ++k) g_wx[2][k] = look.fog[k];
     g_wx[2][3] = 1;
 
-    // weather: a fixed kind, or Random (a new pick every 3-6 minutes from clear, rain, storm and snow; 2026-11-21
-    // the old Dynamic picks and fog weather were dropped: the Fog row's ground mist does fog now)
+    // weather (2026-11-23 rework): 0 off, 1 rain, 2 thunderstorm, 3 snow, 4 fog, 5 Random (a new pick every 3-6
+    // minutes from clear, rain, storm, snow and fog). One Intensity (gfx_wxamt 1-10) drives every kind, fog included.
+    // The kind shown now goes to gfx_wxnow, which the QB side reads to run the game's own weather (splashes, far drops).
     int w = V("gfx_weather"), type = w;
-    if (w == 4) {
+    if (w == 5) {
         if (now >= g_dynNext) {
-            static const int weights[4] = {35, 20, 10, 12};  // clear, rain, storm, snow
-            int r = rand() % (35 + 20 + 10 + 12), pick = 0;
+            static const int weights[5] = {35, 20, 10, 12, 10};  // clear, rain, storm, snow, fog
+            int r = rand() % (35 + 20 + 10 + 12 + 10), pick = 0;
             while (r >= weights[pick]) r -= weights[pick++];
             g_dynType = pick;
             g_dynNext = now + 180 + rand() % 180;
-            static const char* kNames[] = {"clear", "rain", "storm", "snow"};
+            static const char* kNames[] = {"clear", "rain", "storm", "snow", "fog"};
             mmenu::Log("gfx: random weather -> %s", kNames[pick]);
         }
         type = g_dynType;
     } else g_dynNext = 0;
-    float A = V("gfx_wxamt") / 7.0f, target[4] = {};
+    int srv = V("gfx_wxsrv");  // a server ?rain / ?storm / ?snow / ?blizzard wins (the game runs its drops; we match the look)
+    if (srv > 0) type = srv == 4 ? 3 : srv;
+    if (g_mainMenu) type = 0;
+    { int iw = Index("gfx_wxnow"); if (iw >= 0) g_val[iw] = srv > 0 ? 0 : type; }
+    int I = V("gfx_wxamt");
+    float A = I / 10.0f, target[4] = {}, mist = 0;
+    if (srv > 0) { static const float kSrv[5] = {0, 0.6f, 0.7f, 0.5f, 0.95f}; A = kSrv[srv]; }
     switch (type) {
-        case 1: target[0] = A; target[2] = 0.15f * A; break;
-        case 2: target[0] = 1.2f * A; target[2] = 0.2f * A; target[3] = A; break;
-        case 3: target[1] = A; target[2] = 0.25f * A; break;
+        case 1: target[0] = A; mist = 0.25f; break;
+        case 2: target[0] = 0.4f + 0.6f * A; target[3] = 1; mist = 0.35f; break;
+        case 3: target[1] = A; mist = 0.4f; break;
+        case 4: mist = 1; break;
     }
+    // one kind at a time: rain and snow cross-fade through clear (Random can jump straight from one to the other)
+    if (target[1] > 0 && (g_wxCur[0] > 0.02f || g_wxCur[3] > 0.02f)) target[1] = 0;
+    if ((target[0] > 0 || target[3] > 0) && g_wxCur[1] > 0.02f) { target[0] = 0; target[3] = 0; }
     float step = dt / 12.0f;  // a full change takes about 12 seconds
     for (int k = 0; k < 4; ++k) {
         float d = target[k] - g_wxCur[k];
         g_wxCur[k] += d > step ? step : d < -step ? -step : d;
         g_wx[0][k] = g_wxCur[k];
     }
-    g_wx[1][0] = lite; g_wx[1][1] = V("gfx_galaxy") == 7 ? 0.74f : 0.9f; g_wx[1][2] = 1; g_wx[1][3] = 0;
+    { float d = mist - g_wxMist; g_wxMist += d > step ? step : d < -step ? -step : d; }
+    // lightning: random gaps (heavier storms strike more often), a double flicker, and a bolt somewhere in the sky
+    static double strike = 0, nextStrike = 0;
+    static float boltAz = 0;
+    if (g_wxCur[3] > 0.3f) {
+        if (!nextStrike) nextStrike = now + 4 + Rnd() * 6;
+        if (now >= nextStrike) {
+            strike = now;
+            float fx = -g_view._13, fz = -g_view._33;  // somewhere in front of the camera, mostly
+            boltAz = atan2f(fx, fz) + (Rnd() - 0.5f) * 2.2f;
+            float gap = 26.0f - 1.8f * I;  // Intensity 1: about 24 s apart .. 10: about 8 s
+            nextStrike = now + gap * (0.6 + Rnd() * 0.8);
+        }
+    } else nextStrike = 0;
+    float ph = (float)(now - strike), flash = 0;
+    if (strike && ph < 1.0f) flash = (expf(-ph * 9.0f) + 0.6f * expf(-fabsf(ph - 0.22f) * 25.0f)) * g_wxCur[3];
+    bool stormSky = GalaxyOn() && V("gfx_galaxy") == 7;  // the Storm sky flashes on its own beat: the weather follows it
+    if (stormSky) flash = 0;
+    g_wx[0][2] = flash;
+    g_wx[1][0] = lite; g_wx[1][1] = boltAz; g_wx[1][2] = 1; g_wx[1][3] = stormSky ? 1.0f : 0.0f;
 
     // fireworks: a won game (last_game.txt is rewritten), THUGPro Manager's Launch now, or the timer
     int fwm = V("gfx_fireworks");
@@ -2449,17 +2517,16 @@ static float MistFloor(float camY) {
 static void MistConsts(float out[2][4]) {
     static const float kHs[5] = {0, 0.45f * 20, 0.45f * 75, 0.45f * 170, 0.45f * 450};
     static const float kD[5] = {0, 0.0078f, 0.0029f, 0.00147f, 0.00084f};
-    int lv = V("gfx_todfog");
-    if (lv < 1) lv = 1;
-    if (lv > 4) lv = 4;
+    int lv = 2;  // head high (2026-11-23: the height choice went with the Fog row; Fog weather uses head high)
     const D3DMATRIX& m = g_view;
     float camY = -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23);
     float ground = MistFloor(camY);
     // Fog intensity: 6 = the original thickness, default 5; above 6 it climbs fast (Noah 2026-11-21: "10 needs to be much
     // more dense", then "even the scale out"): every step is 1.75x the one before: 1 = 0.06x, 4 = 0.33x, 6 = 1x, 8 = 3.1x, 10 = 9.4x;
     // the mist may cover more above 6 (cap 0.92 at 6 .. 0.985 at 10)
-    int fa = V("gfx_fogamt");
-    float amt = powf(1.75f, (float)(fa - 6));
+    int fa = V("gfx_wxamt");  // the weather Intensity (2026-11-23)
+    if (V("gfx_wxnow") != 4 && fa > 6) fa = 6;  // rain / storm / snow add a light mist: only Fog gets the very thick top end
+    float amt = powf(1.75f, (float)(fa - 6)) * g_wxMist;
     float cap = fa <= 6 ? 0.92f : 0.92f + (fa - 6) * 0.01625f;
     out[0][0] = kD[lv] * amt; out[0][1] = kHs[lv]; out[0][2] = ground; out[0][3] = cap;
     // color: the time of day fog color; at Night / Evening lights a dark blue-gray scaled by the light level
@@ -2597,7 +2664,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         dev->SetPixelShaderConstantF(29, cam, 1);
         dev->SetPixelShaderConstantF(80, &mc[0][0], 2);
         static bool once = false;
-        if (!once) { once = true; mmenu::Log("gfx: ground mist on 3D scene (level %d)", V("gfx_todfog")); }
+        if (!once) { once = true; mmenu::Log("gfx: ground mist on 3D scene (weather %d)", V("gfx_wxnow")); }
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psGroundMist, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
         cur = dst;
@@ -2719,6 +2786,12 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
     }
     if (WeatherOn() && g_psWeather) {
         dev->SetPixelShaderConstantF(17, &g_wx[0][0], 3);
+        {
+            const D3DMATRIX& m = g_view;
+            float cam[4] = {-(m._41 * m._11 + m._42 * m._12 + m._43 * m._13), -(m._41 * m._21 + m._42 * m._22 + m._43 * m._23),
+                            -(m._41 * m._31 + m._42 * m._32 + m._43 * m._33), 1};
+            dev->SetPixelShaderConstantF(29, cam, 1);  // ps_weather's drops sit in the world around the camera
+        }
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psWeather, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intzUsed && !g_msaaOn ? g_intz : nullptr);
         cur = dst;
@@ -3003,7 +3076,7 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
     float* end = (float*)kFogEndVar;
     float wet = g_wxCur[0] + g_wxCur[3] * 0.6f;
     if (wet > 1) wet = 1;
-    float fd = g_wxCur[2] * 0.0007f + g_wxCur[1] * 0.00014f + wet * 0.00006f;  // same density the old pass used
+    float fd = g_wxCur[2] * 0.0007f; (void)wet;  // 2026-11-23: weather no longer adds the game fog (ground mist does it); [2] stays 0
     bool ours = g_fogOver && *on == g_ourFogOn && *color == g_ourFogColor && *start == g_ourFogStart && *end == g_ourFogEnd;
     if (fd > 0.00002f) {
         if (!ours) {  // first time, or the game set new fog (time of day / level): remember the game's

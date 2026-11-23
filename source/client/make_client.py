@@ -511,7 +511,7 @@ def default_settings(out):
                'gfx_temp', 'gfx_tint', 'gfx_galaxy', 'gfx_tod', 'gfx_todfog', 'gfx_weather', 'gfx_fireworks', 'gfx_lamps', 'gfx_skypop',
                'gfx_fps', 'gfx_shothud', 'gfx_mirror')
     gl = [(l.split('=')[0].strip() + ' = 0') if l.split('=')[0].strip() in gfx_off else l for l in gl]
-    gfx_fixed = {'gfx_fogamt': 5, 'gfx_skywxver': 1,  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
+    gfx_fixed = {'gfx_fogamt': 5, 'gfx_wxamt': 5, 'gfx_skywxver': 2,  # 2026-11-21: Fog intensity default 5; Sky & weather settings already converted
                  'gfx_tricksfx': 30, 'gfx_levelsfx': 100, 'gfx_telesfx': 100}  # 0.9.19: sound sliders as shipped before (Dev has them muted for testing); Frame generation default Off (gfx_off)
     gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
     # street lamps + lit windows (mods/lamplights, 0.10.1): Dev's lamp test values never ship; a fresh install gets the

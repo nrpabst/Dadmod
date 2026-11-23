@@ -1,5 +1,128 @@
 dadmod_gen03_names = [ IsTrue GotParam ScreenElementExists ]
 
+dadmod_c2_physfix = {
+SportsCar = {
+mass = 4400
+moment_of_inertia = (40000000.0,5600000.0,40000000.0)
+suspension_center_of_mass = (0.0,-22.0,30.0)
+colliders = [
+[
+(36.0,26.0,125.0)
+(-36.0,26.0,125.0)
+(36.0,26.0,-35.0)
+]
+[
+(26.0,44.0,70.0)
+(-26.0,44.0,70.0)
+(26.0,44.0,0.0)
+]
+]
+body_restitution = 0.2
+body_friction = 0.2
+body_wipeout_friction = 0.4
+body_spring = 1200
+collision_control = 0.3
+max_steering_angle = 38
+constant_rotational_damping = 200000
+quadratic_rotational_damping = 0.0001
+in_air_slerp_strength = 8
+in_air_slerp_time_delay = 0.3
+engine = {
+drive_torque = 600
+drag_torque = 600
+upshift_rpm = 6000
+differential_ratio = 5
+reverse_torque_ratio = 1
+gear_ratios = [ 4.2 3 1.8 0.9 0 ]
+}
+all_wheels = {
+radius = 11
+moment = 3570
+spring_rate = 455
+damping_rate = 60
+static_friction = 2.6
+min_static_grip_velocity = 4
+max_static_grip_velocity = 8
+min_dynamic_grip_velocity = 18
+handbrake_torque = 4000
+brake_torque = 2930
+}
+Wheels = [
+{
+max_draw_y_offset = -25
+steering = left
+drive = No
+brake_torque = 3200
+dynamic_friction = 2.6
+handbrake_throttle_friction = 2.2
+handbrake_locked_friction = 2.2
+}
+{
+max_draw_y_offset = -25
+steering = right
+drive = No
+brake_torque = 3200
+dynamic_friction = 2.6
+handbrake_throttle_friction = 2.2
+handbrake_locked_friction = 2.2
+}
+{
+max_draw_y_offset = -21
+steering = fixed
+drive = Yes
+brake_torque = 2130
+dynamic_friction = 1.5
+handbrake_throttle_friction = 1.2
+handbrake_locked_friction = 1.0
+}
+{
+max_draw_y_offset = -21
+steering = fixed
+drive = Yes
+brake_torque = 2130
+dynamic_friction = 1.5
+handbrake_throttle_friction = 1.2
+handbrake_locked_friction = 1.0
+}
+]
+}
+}
+
+script dadmod_cars_extra_items
+    dadmod_cars_item_x t = "Hearse" c = dadmod_car_hearse
+    dadmod_cars_item_x t = "Woodie Wagon" c = dadmod_car_woodie
+    dadmod_cars_item_x t = "Sedan" c = dadmod_car_sedan
+    dadmod_cars_item_x t = "Smart Car" c = dadmod_car_smart
+    dadmod_cars_item_x t = "Hippie Van" c = dadmod_car_hippyvan
+    dadmod_cars_item_x t = "Delivery Van" c = dadmod_car_benzvan
+    dadmod_cars_item_x t = "Minivan" c = dadmod_car_minivan
+    dadmod_cars_item_x t = "Old Van" c = dadmod_car_oldvan
+    dadmod_cars_item_x t = "SUV" c = dadmod_car_suv
+    dadmod_cars_item_x t = "Rust Bucket" c = dadmod_car_rust
+    dadmod_cars_item_x t = "Liberty" c = dadmod_car_liberty
+    dadmod_cars_item_x t = "Barcelona Taxi" c = dadmod_car_bcntaxi
+    dadmod_cars_item_x t = "Neon" c = dadmod_car_neon
+    dadmod_cars_item_x t = "Box Truck" c = dadmod_car_dctruck
+    dadmod_cars_item_x t = "Tour Bus" c = dadmod_car_tourbus
+    dadmod_cars_item_x t = "ATV" c = dadmod_car_atv
+    dadmod_cars_item_x t = "Parade Float" c = dadmod_car_mardi
+    dadmod_cars_item_x t = "Duck Boat" c = dadmod_car_duck
+    dadmod_cars_item_x t = "Submarine" c = dadmod_car_sub
+    dadmod_cars_item_x t = "Streetcar" c = dadmod_car_streetcar
+endscript
+
+script dadmod_cars_prop_items
+    dadmod_cars_item_x t = "Traffic Cone" c = dadmod_prop_cone
+    dadmod_cars_item_x t = "Shopping Cart" c = dadmod_prop_cart
+    dadmod_cars_item_x t = "Scooter" c = dadmod_prop_scooter
+    dadmod_cars_item_x t = "Small Robot" c = dadmod_prop_robot
+    dadmod_cars_item_x t = "Robot 2" c = dadmod_prop_robot2
+    dadmod_cars_item_x t = "Treasure Chest" c = dadmod_prop_chest
+    dadmod_cars_item_x t = "Copper Bike" c = dadmod_prop_bike
+    dadmod_cars_item_x t = "Mini Car" c = dadmod_prop_mini
+    dadmod_cars_item_x t = "Half Pipe" c = dadmod_prop_halfpipe
+endscript
+
 script dadmod_throw_menu
     dialog_box_exit
     generic_menu_cleanup
@@ -389,7 +512,11 @@ dadmod_throw_ball = "Bowling balls"
 }
 
 script dadmod_lamplights_level
-    THUGRECOMP_LampBulbsClear
+    if GotParam level
+        THUGRECOMP_LampBulbsClear level = <level>
+    else
+        THUGRECOMP_LampBulbsClear
+    endif
     keep = 1
     if GotParam game
         if ( ( <game> = THPS1 ) or ( <game> = THPS2 ) or ( <game> = THPS3 ) or ( <game> = THPS4 ) )
@@ -399,6 +526,9 @@ script dadmod_lamplights_level
     THUGRECOMP_SettingSave key = "gfx_keeplit" value = <keep>
     KillSpawnedScript Name = dadmod_lamp_night
     if GotParam level
+        if ScriptExists dadmod_lampedit_level_hook
+            dadmod_lampedit_level_hook level = <level>
+        endif
         FormatText ChecksumName = list "dadmod_lamps_%s" s = <level>
         if GlobalExists Name = <list> Type = array
             THUGRECOMP_SettingLoad key = "gfx_lampreach"
@@ -433,12 +563,20 @@ script dadmod_lamp_night
         THUGRECOMP_LampNight
         if not ( <night> = <last> )
             <last> = <night>
-            if ( <night> = 1 )
-                <pct> = 100.0
-            else
-                <pct> = 0.0
-            endif
-            ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+            <lampstep> = 1
+            begin
+                if ( <night> = 1 )
+                    <pct> = ( <lampstep> * 5.0 )
+                else
+                    <pct> = ( 100.0 - <lampstep> * 5.0 )
+                endif
+                ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+                <lampstep> = ( <lampstep> + 1 )
+                if ( <lampstep> > 20 )
+                    break
+                endif
+                wait 0.15 seconds
+            repeat
         endif
         wait 0.5 seconds
     repeat
@@ -492,5 +630,20 @@ dadmod_lamps_hof = [
 { id = 35 light = (-458.0,610.2,1493.2) reach = 917.0 pool = (-458.0,208.9,1493.2) poolr = 517 bulbs = [ { Pos = (-357.7,651.8,1589.8) } { Pos = (-554.1,655.4,1392.6) } ] }
 { id = 36 light = (3402.3,610.2,484.6) reach = 917.0 pool = (3402.3,208.9,484.6) poolr = 517 bulbs = [ { Pos = (3405.2,651.8,627.5) } { Pos = (3405.9,655.4,342.9) } ] }
 { id = 37 light = (-800.9,610.2,2211.4) reach = 917.0 pool = (-800.9,208.9,2211.4) poolr = 517 bulbs = [ { Pos = (-797.9,651.8,2354.4) } { Pos = (-797.3,655.4,2069.8) } ] }
+]
+
+dadmod_lamps_sf2 = [
+{ id = 1 light = (687.6,321.4,-712.6) reach = 561.2 pool = (687.6,157.2,-712.6) poolr = 450 bulbs = [ { Pos = (687.5,360.2,-712.6) } ] }
+{ id = 2 light = (363.6,321.4,1135.6) reach = 561.2 pool = (363.6,157.2,1135.6) poolr = 450 bulbs = [ { Pos = (363.6,360.2,1135.6) } ] }
+{ id = 3 light = (363.6,321.4,3780.7) reach = 561.2 pool = (363.6,157.2,3780.7) poolr = 450 bulbs = [ { Pos = (363.6,360.2,3780.7) } ] }
+{ id = 4 light = (687.6,321.4,5628.8) reach = 561.2 pool = (687.6,157.2,5628.8) poolr = 450 bulbs = [ { Pos = (687.5,360.2,5628.8) } ] }
+{ id = 5 light = (-1110.2,292.5,3123.5) reach = 482.0 pool = (-1110.2,181.2,3123.5) poolr = 450 bulbs = [ { Pos = (-1110.2,332.9,3123.5) } ] }
+{ id = 6 light = (-1110.2,292.5,1789.2) reach = 482.0 pool = (-1110.2,181.2,1789.2) poolr = 450 bulbs = [ { Pos = (-1110.2,332.9,1789.2) } ] }
+{ id = 7 light = (-1886.3,130.5,2673.9) reach = 350.0 pool = (-1886.3,131.2,2673.9) poolr = 300 bulbs = [ { Pos = (-1885.9,180.5,2673.7) } ] }
+{ id = 8 light = (-1886.3,130.5,2241.9) reach = 350.0 pool = (-1886.3,131.2,2241.9) poolr = 300 bulbs = [ { Pos = (-1885.9,180.5,2241.7) } ] }
+{ id = 9 light = (-363.4,321.4,-186.8) reach = 561.2 pool = (-363.4,157.2,-186.8) poolr = 450 bulbs = [ { Pos = (-363.4,360.2,-186.9) } ] }
+{ id = 10 light = (-363.4,321.4,1576.6) reach = 561.2 pool = (-363.4,157.2,1576.6) poolr = 450 bulbs = [ { Pos = (-363.4,360.2,1576.5) } ] }
+{ id = 11 light = (-363.4,321.4,3340.1) reach = 561.2 pool = (-363.4,157.2,3340.1) poolr = 450 bulbs = [ { Pos = (-363.4,360.2,3339.9) } ] }
+{ id = 12 light = (-363.4,321.4,5103.5) reach = 561.2 pool = (-363.4,157.2,5103.5) poolr = 450 bulbs = [ { Pos = (-363.4,360.2,5103.3) } ] }
 ]
 

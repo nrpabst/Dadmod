@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.10.1 beta · for THUG Pro**
+**0.10.2 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -17,7 +17,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.10.1](#6-whats-new-in-0101)
+6. [What's new in 0.10.2](#6-whats-new-in-0102)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,7 +32,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 4. Pick **1) Install** (or **1) Update** if dadmod is already in).
 5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.10.1 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.10.2 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -148,10 +148,10 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * **Reposition camera** (Main Menu options > Camera): W, A, S, D move the camera, E and Q (or Page Up and Page Down) move it up and down, the arrow keys turn and tilt it, and Shift moves faster. On a controller the left stick moves, the right stick turns and the shoulder buttons go up and down.
 
 ### Graphics (Dadmod > Graphics)
-* Display: Display mode (Windowed or Fullscreen), Resolution and V-sync. Press Apply to see them right away, then press it again within 15 seconds to keep them, or they go back by themselves.
+* Display: Display mode (Windowed or Fullscreen), Resolution and V-sync. Press Apply to see them right away, then press it again within 15 seconds to keep them, or they go back by themselves. Distance clipping, Clip distance and Distance fog are the THUG Pro launcher's own settings.
 * Textures: Texture filtering (up to 16x), Texture sharpness and Smooth menu graphics.
 * Anti-aliasing: FXAA (Fast or High quality) and MSAA (2x to 8x, after a restart).
-* Effects: Sharpening, Bloom, Ambient occlusion, Distance haze, Depth of field, Outlines (or a cel-shaded cartoon look) and Motion blur.
+* Effects: Sharpening, Bloom, Ambient occlusion, Distance haze, Depth of field, Outlines (or a cel-shaded cartoon look) and Motion blur. Skater shadow, Particles, Level lights, Skater lights and THUG Pro screen effects are the THUG Pro launcher's own settings, so the launcher and dadmod always show the same values.
 * Color: a Color look (Vivid, Warm, Cool, Film, Black and white, Retro, Night, Sunset, Overcast, VHS), plus Brightness, Contrast, Saturation, Vibrance, Gamma, Color temperature and Tint.
 * Retro: Pixelate, CRT TV (scanlines, optionally curved), Film grain, Chromatic aberration and Vignette.
 * Extras: FPS counter, Screenshot key (F11), Screenshots show menus, and Frame generation (Off, Auto or 120 to 240 Hz: smoother motion on fast monitors while the game itself runs at 60).
@@ -160,13 +160,12 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * Made for every DirectX 9 graphics card. If a card can't make one effect, only that effect turns off.
 
 ### Sky & weather (Pause > dadmod > Sky & weather)
-* Time of day: Level / server, Morning, Day, Sunset, Night, Evening (lights on) or Dawn. Night, Evening and Dawn darken the whole level while its own lights stay lit. Online your pick shows on your screen only. It follows Kali Mod's Time Of Day menu too.
+* Time of day: Level / server, Dawn, Morning, Day, Evening, Evening (lights on) or Night. Night, Evening lights and Dawn darken the whole level while its own lights stay lit. Online your pick shows on your screen only. It follows Kali Mod's Time Of Day menu too. On Level / server, a server's night looks like Night, and dark skies darken the map to match.
 * Sky: swap every level's sky for Milky way, Nebula, Deep space, Matrix, Aurora, Synthwave, Storm, Golden hour, Vaporwave, Hellfire, Underwater, Rainbow, Black hole or Cotton candy. Sky boost gives richer sky colors for the time of day, with stars at night.
-* Fog: a ground mist from knee high up to the rooftops, with Fog intensity 1 to 10.
-* Weather: Rain, Thunderstorm, Snow or Random, with Weather intensity.
+* Weather: Rain, Thunderstorm, Snow, Fog or Random, with Intensity 1 to 10. Rain and snow fall in the world around you and stop at walls. When a server turns on rain or snow, the server's weather wins until it stops.
 * Fireworks when someone wins, or every 1, 3, 5 or 10 minutes, and Launch fireworks now.
 * Default sky puts the whole page back.
-* Chicago at night: the street lamps glow and light the ground, and building windows light up. Always on. If you like to tinker, the lamp and window numbers are in `dadmod\gfx.ini` under "Street lamps", each with a note on what it does.
+* Chicago and San Francisco at night: the street lamps glow and light the ground, and building windows light up. Always on. If you like to tinker, the lamp and window numbers are in `dadmod\gfx.ini` under "Street lamps", each with a note on what it does.
 
 ### Sound (Dadmod > Graphics > Sound)
 * Level sounds, Special trick sounds and Teleporter sounds, each 0 to 100.
@@ -191,14 +190,37 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * Updates in game (Dadmod > Download newest update, then Restart to install update) or with Setup.bat.
 * Your settings, screenshots and logs live in the `dadmod` folder in your game folder.
 
-## 6. What's new in 0.10.1
+## 6. What's new in 0.10.2
 
 ### New
+* **New weather:** Sky & weather now has two rows, Weather (Off, Rain, Thunderstorm, Snow, Fog, Random) and Intensity (1 to 10). Rain and snow fall in the world around you and stop at walls, with the game's own rain and splashes on the ground.
+* **Thunderstorm:** an overcast sky, wet ground and lightning bolts.
+* Random weather changes every few minutes and fades between them.
+* **San Francisco at night:** street lamps and lit windows, like Chicago. Always on, nothing to set.
+* Dadmod > Graphics has the THUG Pro launcher's graphics settings as rows: distance clipping, clip distance, distance fog, skater shadow, level lights, particles, skater lights and THUG Pro screen effects. They always match the launcher.
+
+### Changed
+* Time of day "Sunset" is now "Evening" and looks softer. Evening lights is brighter.
+* A server's night now looks like picking Night yourself, with the street lamps and windows lit.
+* Dark skies (Milky way, Nebula, Aurora and more) darken the map to match, unless you pick a Time of day.
+* The old Fog rows are part of Weather now. Your Fog setting carries over.
+* When a server turns on rain or snow, the server's weather wins. Yours comes back when it stops.
+* Street lamp light fades in and out instead of popping on.
+
+### Fixed
+* The controller no longer gets stuck after dragging the mouse camera on foot.
+* Bail cancel and getting out of a car keep your Skater shadow setting (before, you always got the full-body shadow).
+* Lit windows: walls no longer light up by mistake, windows hide behind poles and signs, and far windows don't flicker.
+* Golden hour works on graphics cards that only allow small shaders (they showed the Milky way instead).
+
+### 0.10.1
+
+#### New
 * **Chicago at night:** street lamps glow and light the ground around them, and building windows light up (Time of day Evening lights, Night or Dawn). Always on, nothing to set.
 * On a controller, click both sticks in (**L3 + R3**) to open Change Level, like the Home key (offline, or when you host).
 * **Noclip with the mouse:** hold the left button and drag to turn the camera, right click pauses, and Continue can be clicked.
 
-### Changed
+#### Changed
 * The pause menu and the chat box stay open when a game ends or a new one starts. Long chat lines are split instead of cut off.
 * Sky & weather: Time of day is the first row.
 * Bail cancel effects Off also turns off the flicker.
@@ -206,7 +228,7 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * Project 8 maps: real looping level sounds. The Suburbs fountain is quieter and the pool-deck planters have their own sound.
 * Auto-Goto now starts Off.
 
-### Fixed
+#### Fixed
 * Crash as a level starts from Level Select, or when going back to the main menu (skater camera).
 * Crash when quitting the game after playing a level.
 * Rare crash while drawing particle effects (low video memory).

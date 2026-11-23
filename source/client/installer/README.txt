@@ -267,13 +267,17 @@
     * Display: Display mode (Windowed or Fullscreen), Resolution and
       V-sync. Press Apply to see them right away, then press it again
       within 15 seconds to keep them, or they go back by themselves.
+      Distance clipping, Clip distance and Distance fog are the THUG Pro
+      launcher's own settings.
     * Textures: Texture filtering (up to 16x), Texture sharpness and
       Smooth menu graphics.
     * Anti-aliasing: FXAA (Fast or High quality) and MSAA (2x to 8x,
       after a restart).
     * Effects: Sharpening, Bloom, Ambient occlusion, Distance haze,
       Depth of field, Outlines (or a cel-shaded cartoon look) and Motion
-      blur.
+      blur. Skater shadow, Particles, Level lights, Skater lights and
+      THUG Pro screen effects are the THUG Pro launcher's own settings,
+      so the launcher and dadmod always show the same values.
     * Color: a Color look (Vivid, Warm, Cool, Film, Black and white,
       Retro, Night, Sunset, Overcast, VHS), plus Brightness, Contrast,
       Saturation, Vibrance, Gamma, Color temperature and Tint.
@@ -290,26 +294,29 @@
       effect, only that effect turns off.
 
   SKY & WEATHER (PAUSE > DADMOD > SKY & WEATHER)
-    * Time of day: Level / server, Morning, Day, Sunset, Night, Evening
-      (lights on) or Dawn. Night, Evening and Dawn darken the whole
-      level while its own lights stay lit. Online your pick shows on
-      your screen only. It follows Kali Mod's Time Of Day menu too.
+    * Time of day: Level / server, Dawn, Morning, Day, Evening, Evening
+      (lights on) or Night. Night, Evening lights and Dawn darken the
+      whole level while its own lights stay lit. Online your pick shows
+      on your screen only. It follows Kali Mod's Time Of Day menu too.
+      On Level / server, a server's night looks like Night, and dark
+      skies darken the map to match.
     * Sky: swap every level's sky for Milky way, Nebula, Deep space,
       Matrix, Aurora, Synthwave, Storm, Golden hour, Vaporwave,
       Hellfire, Underwater, Rainbow, Black hole or Cotton candy. Sky
       boost gives richer sky colors for the time of day, with stars at
       night.
-    * Fog: a ground mist from knee high up to the rooftops, with Fog
-      intensity 1 to 10.
-    * Weather: Rain, Thunderstorm, Snow or Random, with Weather
-      intensity.
+    * Weather: Rain, Thunderstorm, Snow, Fog or Random, with Intensity
+      1 to 10. Rain and snow fall in the world around you and stop at
+      walls. When a server turns on rain or snow, the server's weather
+      wins until it stops.
     * Fireworks when someone wins, or every 1, 3, 5 or 10 minutes, and
       Launch fireworks now.
     * Default sky puts the whole page back.
-    * Chicago at night: the street lamps glow and light the ground, and
-      building windows light up. Always on. If you like to tinker, the
-      lamp and window numbers are in dadmod\gfx.ini under "Street
-      lamps", each with a note on what it does.
+    * Chicago and San Francisco at night: the street lamps glow and
+      light the ground, and building windows light up. Always on. If
+      you like to tinker, the lamp and window numbers are in
+      dadmod\gfx.ini under "Street lamps", each with a note on what it
+      does.
 
   SOUND (DADMOD > GRAPHICS > SOUND)
     * Level sounds, Special trick sounds and Teleporter sounds, each 0
@@ -353,6 +360,47 @@
 ==========================================================================
  6. WHAT'S NEW IN @DADMOD_VERSION@
 ==========================================================================
+
+  NEW
+    + New weather: Sky & weather now has two rows, Weather (Off, Rain,
+      Thunderstorm, Snow, Fog, Random) and Intensity (1 to 10). Rain
+      and snow fall in the world around you and stop at walls, with
+      the game's own rain and splashes on the ground.
+    + Thunderstorm: an overcast sky, wet ground and lightning bolts.
+    + Random weather changes every few minutes and fades between them.
+    + San Francisco at night: street lamps and lit windows, like
+      Chicago. Always on, nothing to set.
+    + Dadmod > Graphics has the THUG Pro launcher's graphics settings
+      as rows: distance clipping, clip distance, distance fog, skater
+      shadow, level lights, particles, skater lights and THUG Pro
+      screen effects. They always match the launcher.
+
+  CHANGED
+    ~ Time of day "Sunset" is now "Evening" and looks softer.
+      Evening lights is brighter.
+    ~ A server's night now looks like picking Night yourself, with
+      the street lamps and windows lit.
+    ~ Dark skies (Milky way, Nebula, Aurora and more) darken the map
+      to match, unless you pick a Time of day.
+    ~ The old Fog rows are part of Weather now. Your Fog setting
+      carries over.
+    ~ When a server turns on rain or snow, the server's weather wins.
+      Yours comes back when it stops.
+    ~ Street lamp light fades in and out instead of popping on.
+
+  FIXED
+    x The controller no longer gets stuck after dragging the mouse
+      camera on foot.
+    x Bail cancel and getting out of a car keep your Skater shadow
+      setting (before, you always got the full-body shadow).
+    x Lit windows: walls no longer light up by mistake, windows hide
+      behind poles and signs, and far windows don't flicker.
+    x Golden hour works on graphics cards that only allow small
+      shaders (they showed the Milky way instead).
+
+
+  0.10.1
+  ------
 
   NEW
     + Chicago at night: street lamps glow and light the ground around
@@ -696,16 +744,7 @@
 ==========================================================================
 
   If Setup stops, it tells you why.
-
-  If the game didn't start, the next start uses safe start by itself
-  (see Under the hood in 5. What's in dadmod).
-
-  Logs are in  <your game folder>\dadmod\ :
-    * client.log: what dadmod did at startup, and safe start's decisions.
-    * mainmenu.log: graphics card checks, fullscreen and other in-game
-      notes.
-    * crash.log: what the game was doing if it closed by itself.
-    * padhub.log: controllers being dropped and picked up again.
+  Logs are in:  <your game folder>\dadmod\client.log
 
 
 ==========================================================================

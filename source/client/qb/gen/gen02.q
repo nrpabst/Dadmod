@@ -4,6 +4,9 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen (a borderless window that fills the screen). Pick it, then press Apply. Alt+Enter switches it anytime." pdesc = "Window or fullscreen. Pick, then press Apply. Alt+Enter switches anytime."
     dadmod_ui_item id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The window size the game draws at (the sizes that fit your screen). Fullscreen always uses your monitor's own size. Pick it, then press Apply." pdesc = "Window size. Fullscreen always uses your monitor's size. Pick, then Apply."
     dadmod_ui_item id = gfx_dispapply key = "none" label = "Apply" kind = dispapply min = 0 max = 0 def = 0 desc = "Makes the picked display mode and resolution happen now. Press it again within 15 seconds to keep them, or they go back." pdesc = "Apply the picks. Press again within 15 seconds to keep them."
+    dadmod_ui_item id = gfx_clip key = "gfx_clip" label = "Distance clipping" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_clip desc = "Stops drawing parts of the level that are far away, which can help on a slow computer. Set how far with Clip distance. The same setting as Enable Distance Clipping in the THUG Pro launcher." pdesc = "Stops drawing far-away parts of the level. Can help on a slow computer."
+    dadmod_ui_item id = gfx_clipdist key = "gfx_clipdist" label = "Clip distance" kind = num min = 5 max = 100 step = 5 def = 100 desc = "How far you can see while Distance clipping is on: 5 is close, 100 is far. The same setting as the Near/Far slider in the THUG Pro launcher." pdesc = "How far you see with Distance clipping on: 5 close, 100 far."
+    dadmod_ui_item id = gfx_clipfog key = "gfx_clipfog" label = "Distance fog" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_clipfog desc = "Fades the far-away edge into fog so the level does not just stop. Only works while Distance clipping is on. The same setting as Enable Fog in the THUG Pro launcher." pdesc = "Fades the clipping edge into fog. Only works with Distance clipping on."
     dadmod_ui_item id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show."
     dadmod_ui_item id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little."
     dadmod_ui_item id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer."
@@ -17,6 +20,11 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_dof key = "gfx_dof" label = "Depth of field" kind = num min = 0 max = 10 def = 0 desc = "Blurs things far away like a camera lens, keeping you and the area around you sharp. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Blurs far-away things like a camera lens. Off while MSAA is on."
     dadmod_ui_item id = gfx_outline key = "gfx_outline" label = "Outlines" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_outline desc = "Dark outlines around shapes, or a full cartoon cel-shaded look. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Dark outlines, or a cartoon cel-shaded look. Off while MSAA is on."
     dadmod_ui_item id = gfx_mblur key = "gfx_mblur" label = "Motion blur" kind = num min = 0 max = 10 def = 0 desc = "Blends in a little of the last frame for a smooth, fast feel. High values leave ghost trails. Changes show right away." pdesc = "Blends in a little of the last frame. High values leave ghost trails."
+    dadmod_ui_item id = gfx_skshadow key = "gfx_skshadow" label = "Skater shadow" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_skshadow desc = "The shadow under your skater. Circle is a plain round spot. Full body is the shape of your skater, and the sharp ones show it in more detail. The same setting as Skater Shadow Quality in the THUG Pro launcher." pdesc = "A round spot, or your skater's full shape (sharper further right)."
+    dadmod_ui_item id = gfx_particles key = "gfx_particles" label = "Particles" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_particles desc = "Sparks, smoke, splashes and other particle effects. Off can help on a slow computer. The same setting as Disable Particles in the THUG Pro launcher. Takes effect after a restart." pdesc = "Sparks, smoke and splashes. Takes effect after a restart."
+    dadmod_ui_item id = gfx_levellights key = "gfx_levellights" label = "Level lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_levellights desc = "The lights placed around levels, like street lamps, that light up your skater and things near them. Shows from the next level you load. The same setting as Disable Level Lights in the THUG Pro launcher." pdesc = "Lights placed around levels. Shows from the next level you load."
+    dadmod_ui_item id = gfx_skaterlights key = "gfx_skaterlights" label = "Skater lights" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_skaterlights desc = "THUG Pro's own extra lighting on skaters. The same setting as Disable Skater Lights in the THUG Pro launcher. Takes effect after a restart." pdesc = "THUG Pro's extra lighting on skaters. Takes effect after a restart."
+    dadmod_ui_item id = gfx_tpscreenfx key = "gfx_tpscreenfx" label = "THUG Pro screen effects" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_tpscreenfx desc = "THUG Pro's own full-screen shader effects, separate from the dadmod effects on this page. The same setting as Disable Screen Effects in the THUG Pro launcher. Takes effect after a restart." pdesc = "THUG Pro's own screen shader effects. Takes effect after a restart."
     dadmod_ui_item id = gfx_preset key = "gfx_preset" label = "Color look" kind = gfxlist min = 0 max = 10 def = 0 list = gfx_preset desc = "A one-click color grade on top of the sliders. None leaves the colors as the game made them. Changes show right away." pdesc = "A one-click color grade on top of the sliders. None leaves the colors alone."
     dadmod_ui_item id = gfx_bright key = "gfx_bright" label = "Brightness" kind = num min = -10 max = 10 def = 0 desc = "Lifts or lowers the whole picture. 0 is normal. Changes show right away."
     dadmod_ui_item id = gfx_contrast key = "gfx_contrast" label = "Contrast" kind = num min = -10 max = 10 def = 0 desc = "Difference between darks and lights. 0 is normal. Changes show right away."
@@ -36,10 +44,8 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp."
     dadmod_ui_item id = gfx_lampdel key = "gfx_lampdel" label = "Remove nearest street light" kind = gfxact min = 0 max = 0 def = 0 desc = "Removes the street light closest to the camera."
     dadmod_ui_item id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
-    dadmod_ui_item id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
-    dadmod_ui_item id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
-    dadmod_ui_item id = gfx_todfog key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
-    dadmod_ui_item id = gfx_fogamt key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
+    dadmod_ui_item id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_weather desc = "Rain, a thunderstorm, snow or fog over every level, or Random (changes every few minutes). Set how heavy with Intensity."
+    dadmod_ui_item id = gfx_wxamt key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up."
     dadmod_ui_item id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
     dadmod_ui_item id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
     dadmod_ui_item id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number."
@@ -398,6 +404,9 @@ script dadmod_ui_change
         endif
     endif
     THUGRECOMP_SettingSave key = <key> value = <value>
+    if (<key> = "gfx_skshadow")
+        dadmod_shadow_refresh
+    endif
     if (<key> = "ui_rainbow")
         if (<value> = 10)
             dadmod_ui_random_roll
@@ -464,7 +473,7 @@ script dadmod_sky_default
     THUGRECOMP_SettingSave key = "gfx_skypop" value = 0
     THUGRECOMP_SettingSave key = "gfx_lamps" value = 0
     THUGRECOMP_SettingSave key = "gfx_weather" value = 0
-    THUGRECOMP_SettingSave key = "gfx_wxamt" value = 6
+    THUGRECOMP_SettingSave key = "gfx_wxamt" value = 5
     THUGRECOMP_SettingSave key = "gfx_todfog" value = 0
     THUGRECOMP_SettingSave key = "gfx_fogamt" value = 5
     THUGRECOMP_SettingSave key = "gfx_fireworks" value = 0
@@ -2817,6 +2826,7 @@ script dadmod_tod_watch_start
     SpawnScript dadmod_tod_watch NotSessionSpecific = 1
     SpawnScript dadmod_balance_net_watch NotSessionSpecific = 1
     SpawnScript dadmod_mirror_watch NotSessionSpecific = 1
+    dadmod_wx_watch_start
 endscript
 
 script dadmod_balance_meter_side
@@ -4717,6 +4727,9 @@ script dadmod_cars_exit_now
         dadmod_c2_pos = <Pos>
         if ObjectExists id = PlayerVehicleCamera
             ToggleUserControlledVehicleMode
+            if ObjectExists id = skater
+                Skater : dadmod_shadow_restore
+            endif
         else
             PlayerVehicle : Die
             dadmod_cars_cleanup
@@ -4751,7 +4764,7 @@ script dadmod_cars_cleanup
     Skater : UnsetDriving
     Skater : unhide
     Skater : ReturnBoardToSkater
-    Skater : Obj_ShadowOn ShadowType = Detailed
+    Skater : dadmod_shadow_restore
     Skater : ResetRigidBodyCollisionRadiusBoost
     GoalManager_HideAllGoalPeds 0
     Change driving_parked_car = 0
@@ -12347,128 +12360,5 @@ CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch =
 FullCollision = 5000
 }
 }
-endscript
-
-dadmod_c2_physfix = {
-SportsCar = {
-mass = 4400
-moment_of_inertia = (40000000.0,5600000.0,40000000.0)
-suspension_center_of_mass = (0.0,-22.0,30.0)
-colliders = [
-[
-(36.0,26.0,125.0)
-(-36.0,26.0,125.0)
-(36.0,26.0,-35.0)
-]
-[
-(26.0,44.0,70.0)
-(-26.0,44.0,70.0)
-(26.0,44.0,0.0)
-]
-]
-body_restitution = 0.2
-body_friction = 0.2
-body_wipeout_friction = 0.4
-body_spring = 1200
-collision_control = 0.3
-max_steering_angle = 38
-constant_rotational_damping = 200000
-quadratic_rotational_damping = 0.0001
-in_air_slerp_strength = 8
-in_air_slerp_time_delay = 0.3
-engine = {
-drive_torque = 600
-drag_torque = 600
-upshift_rpm = 6000
-differential_ratio = 5
-reverse_torque_ratio = 1
-gear_ratios = [ 4.2 3 1.8 0.9 0 ]
-}
-all_wheels = {
-radius = 11
-moment = 3570
-spring_rate = 455
-damping_rate = 60
-static_friction = 2.6
-min_static_grip_velocity = 4
-max_static_grip_velocity = 8
-min_dynamic_grip_velocity = 18
-handbrake_torque = 4000
-brake_torque = 2930
-}
-Wheels = [
-{
-max_draw_y_offset = -25
-steering = left
-drive = No
-brake_torque = 3200
-dynamic_friction = 2.6
-handbrake_throttle_friction = 2.2
-handbrake_locked_friction = 2.2
-}
-{
-max_draw_y_offset = -25
-steering = right
-drive = No
-brake_torque = 3200
-dynamic_friction = 2.6
-handbrake_throttle_friction = 2.2
-handbrake_locked_friction = 2.2
-}
-{
-max_draw_y_offset = -21
-steering = fixed
-drive = Yes
-brake_torque = 2130
-dynamic_friction = 1.5
-handbrake_throttle_friction = 1.2
-handbrake_locked_friction = 1.0
-}
-{
-max_draw_y_offset = -21
-steering = fixed
-drive = Yes
-brake_torque = 2130
-dynamic_friction = 1.5
-handbrake_throttle_friction = 1.2
-handbrake_locked_friction = 1.0
-}
-]
-}
-}
-
-script dadmod_cars_extra_items
-    dadmod_cars_item_x t = "Hearse" c = dadmod_car_hearse
-    dadmod_cars_item_x t = "Woodie Wagon" c = dadmod_car_woodie
-    dadmod_cars_item_x t = "Sedan" c = dadmod_car_sedan
-    dadmod_cars_item_x t = "Smart Car" c = dadmod_car_smart
-    dadmod_cars_item_x t = "Hippie Van" c = dadmod_car_hippyvan
-    dadmod_cars_item_x t = "Delivery Van" c = dadmod_car_benzvan
-    dadmod_cars_item_x t = "Minivan" c = dadmod_car_minivan
-    dadmod_cars_item_x t = "Old Van" c = dadmod_car_oldvan
-    dadmod_cars_item_x t = "SUV" c = dadmod_car_suv
-    dadmod_cars_item_x t = "Rust Bucket" c = dadmod_car_rust
-    dadmod_cars_item_x t = "Liberty" c = dadmod_car_liberty
-    dadmod_cars_item_x t = "Barcelona Taxi" c = dadmod_car_bcntaxi
-    dadmod_cars_item_x t = "Neon" c = dadmod_car_neon
-    dadmod_cars_item_x t = "Box Truck" c = dadmod_car_dctruck
-    dadmod_cars_item_x t = "Tour Bus" c = dadmod_car_tourbus
-    dadmod_cars_item_x t = "ATV" c = dadmod_car_atv
-    dadmod_cars_item_x t = "Parade Float" c = dadmod_car_mardi
-    dadmod_cars_item_x t = "Duck Boat" c = dadmod_car_duck
-    dadmod_cars_item_x t = "Submarine" c = dadmod_car_sub
-    dadmod_cars_item_x t = "Streetcar" c = dadmod_car_streetcar
-endscript
-
-script dadmod_cars_prop_items
-    dadmod_cars_item_x t = "Traffic Cone" c = dadmod_prop_cone
-    dadmod_cars_item_x t = "Shopping Cart" c = dadmod_prop_cart
-    dadmod_cars_item_x t = "Scooter" c = dadmod_prop_scooter
-    dadmod_cars_item_x t = "Small Robot" c = dadmod_prop_robot
-    dadmod_cars_item_x t = "Robot 2" c = dadmod_prop_robot2
-    dadmod_cars_item_x t = "Treasure Chest" c = dadmod_prop_chest
-    dadmod_cars_item_x t = "Copper Bike" c = dadmod_prop_bike
-    dadmod_cars_item_x t = "Mini Car" c = dadmod_prop_mini
-    dadmod_cars_item_x t = "Half Pipe" c = dadmod_prop_halfpipe
 endscript
 

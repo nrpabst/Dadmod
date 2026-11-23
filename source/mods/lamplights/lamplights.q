@@ -1,5 +1,9 @@
 script dadmod_lamplights_level
-    THUGRECOMP_LampBulbsClear
+    if GotParam level
+        THUGRECOMP_LampBulbsClear level = <level>
+    else
+        THUGRECOMP_LampBulbsClear
+    endif
     keep = 1
     if GotParam game
         if ( ( <game> = THPS1 ) or ( <game> = THPS2 ) or ( <game> = THPS3 ) or ( <game> = THPS4 ) )

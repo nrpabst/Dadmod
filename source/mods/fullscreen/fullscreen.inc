@@ -252,6 +252,7 @@ static void __cdecl KbReadWrap() {
     if (alt && enter) InterlockedExchange(&g_holdEnter, 1);
     if (g_holdEnter && !enter) InterlockedExchange(&g_holdEnter, 0);
     if (alt || g_holdEnter) { k[0x1C] = 0; k[0x9C] = 0; }
+    if (padhub::HideDpad()) { k[0xC8] = k[0xD0] = k[0xCB] = k[0xCD] = 0; }  // Lamp Editor: arrows pick lamps, not move the camera
 }
 static bool PatchCall(DWORD at, void* to) {
     BYTE* p = (BYTE*)at;

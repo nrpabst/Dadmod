@@ -103,6 +103,8 @@ static const int kCount = sizeof kSettings / sizeof kSettings[0];
 static int g_val[kCount];
 static volatile LONG g_dirtyPost = 1;
 static FILETIME g_iniTime = {};
+static int g_fileVal[kCount];  // multi-instance (2026-11-23): each value as gfx.ini held it when this game last read or wrote it
+static bool g_mine[kCount];    // changed in this game since its last save: a save writes these and keeps the file's other values
 
 static int Index(const char* key) {
     for (int i = 0; i < kCount; ++i) if (!_stricmp(kSettings[i].key, key)) return i;
@@ -298,6 +300,62 @@ static bool IsLampKey(const char* k) {
     for (const auto& l : kLampKeys) if (!_stricmp(k, l.key)) return true;
     return false;
 }
+// ---- two games open from one folder (Noah 2026-11-23: "the graphics settings change both instances"; one save file) ----
+// Both games share dadmod\gfx.ini and dadmod\panel_settings.txt. Every save a game writes starts with
+// "; dadmod game <pid> <hash>" (hash = FNV-1a of the rest of the file). A change with a good stamp came from a game,
+// so a running game ignores it and keeps its own values; anything else (THUGPro Manager, a text editor) still applies
+// live, but only the values that actually changed. A save writes only what this game changed, so the file always holds
+// the latest change from either game and the next launch starts with that.
+static unsigned StampHash(const char* p, size_t n) {
+    unsigned h = 2166136261u;
+    for (size_t i = 0; i < n; ++i) { h ^= (unsigned char)p[i]; h *= 16777619u; }
+    return h;
+}
+static std::string Stamped(const std::string& body) {
+    char s[64];
+    _snprintf(s, sizeof s, "; dadmod game %lu %08x\r\n", (unsigned long)GetCurrentProcessId(), StampHash(body.data(), body.size()));
+    s[sizeof s - 1] = 0;
+    return s + body;
+}
+static bool StampOk(const std::string& data) {
+    if (data.compare(0, 14, "; dadmod game ")) return false;
+    size_t e = data.find('\n');
+    if (e == std::string::npos) return false;
+    unsigned long pid = 0; unsigned h = 0;
+    if (sscanf(data.c_str() + 14, "%lu %x", &pid, &h) != 2) return false;
+    return h == StampHash(data.data() + e + 1, data.size() - e - 1);
+}
+static std::string StripStamp(const std::string& data) {
+    if (data.compare(0, 14, "; dadmod game ")) return data;
+    size_t e = data.find('\n');
+    return e == std::string::npos ? std::string() : data.substr(e + 1);
+}
+// the values in a gfx.ini text (has[i] = the file names that setting)
+static void ParseVals(const std::string& data, int* v, bool* has, std::string* shot, bool* hasShot) {
+    for (int i = 0; i < kCount; ++i) { v[i] = kSettings[i].def; has[i] = false; }
+    *hasShot = false;
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        if (!line.compare(0, 11, "gfx_shotdir")) {
+            size_t q = line.find('=');
+            if (q != std::string::npos) { *shot = mmenu::Trim(line.substr(q + 1)); *hasShot = true; }
+            continue;
+        }
+        size_t c = line.find(';');
+        if (c != std::string::npos) line = line.substr(0, c);
+        size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        int i = Index(mmenu::Trim(line.substr(0, eq)).c_str());
+        if (i < 0) continue;
+        int x = atoi(line.c_str() + eq + 1);
+        v[i] = x < kSettings[i].lo ? kSettings[i].lo : x > kSettings[i].hi ? kSettings[i].hi : x;
+        has[i] = true;
+    }
+}
+
 static FILETIME IniTime() {
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (GetFileAttributesExA(ExeDirFile("gfx.ini").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
@@ -378,6 +436,7 @@ static void Load() {
         int ws = Index("gfx_wxsrv");  // server weather never carries over from the last session
         if (ws >= 0 && g_val[ws]) { g_val[ws] = 0; migrate = true; }
     }
+    for (int i = 0; i < kCount; ++i) { g_fileVal[i] = g_val[i]; g_mine[i] = migrate; }
     if (migrate) Save();
     g_iniTime = IniTime();
     SyncInput();
@@ -385,19 +444,48 @@ static void Load() {
 }
 
 static void Save() {
+    // only what this game changed; every other value stays as the file has it (another open game may have changed it)
+    std::string cur, fshot;
+    int fv[kCount], w[kCount];
+    bool fh[kCount], fhs = false;
+    if (ReadWholeFile(ExeDirFile("gfx.ini"), cur)) ParseVals(cur, fv, fh, &fshot, &fhs);
+    else for (int i = 0; i < kCount; ++i) fh[i] = false;
+    for (int i = 0; i < kCount; ++i) w[i] = g_mine[i] || !fh[i] ? g_val[i] : fv[i];
+    std::string shotDir = fhs ? fshot : g_shotDir;
     std::string out = "; Dadmod graphics settings (Dadmod > Graphics in game, or THUGPro Manager). Changes apply live\r\n"
                       "; except MSAA and v-sync, which need a restart. Delete this file for the defaults.\r\n";
     for (int i = 0; i < kCount; ++i)
         if (!IsLampKey(kSettings[i].key))
-            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
-    out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + g_shotDir + "\r\n";
+            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(w[i]) + "\r\n";
+    out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + shotDir + "\r\n";
     out += "\r\n; ---- Street lamps ----\r\n";
     for (const auto& l : kLampKeys) {
         int i = Index(l.key);
-        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(g_val[i]) + "\r\n";
+        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(w[i]) + "\r\n";
     }
-    WriteWholeFile(ExeDirFile("gfx.ini"), out);
+    WriteWholeFile(ExeDirFile("gfx.ini"), Stamped(out));
+    for (int i = 0; i < kCount; ++i) { g_fileVal[i] = w[i]; g_mine[i] = false; }
     g_iniTime = IniTime();
+}
+// gfx.ini changed while this game runs: another open game's save is ignored (this game keeps its own settings);
+// an edit from THUGPro Manager or a text editor applies the values it changed. A deleted file means defaults (as before).
+static void ReloadChanged() {
+    std::string data, shot;
+    if (!ReadWholeFile(ExeDirFile("gfx.ini"), data)) { Load(); return; }
+    int fv[kCount];
+    bool fh[kCount], hs = false;
+    ParseVals(data, fv, fh, &shot, &hs);
+    if (!StampOk(data)) {
+        int n = 0;
+        for (int i = 0; i < kCount; ++i)
+            if (fh[i] && fv[i] != g_fileVal[i]) { g_val[i] = fv[i]; ++n; }
+        if (hs) g_shotDir = shot;
+        mmenu::Log("gfx: gfx.ini edited outside the game: %d setting(s) applied", n);
+    }
+    for (int i = 0; i < kCount; ++i) if (fh[i]) g_fileVal[i] = fv[i];
+    g_iniTime = IniTime();
+    SyncInput();
+    InterlockedExchange(&g_dirtyPost, 1);
 }
 
 static int TodNow();
@@ -547,17 +635,93 @@ bool SetKey(const char* key, int value) {
     if (i < 0) return false;
     int was = g_val[i];
     g_val[i] = value < kSettings[i].lo ? kSettings[i].lo : value > kSettings[i].hi ? kSettings[i].hi : value;
+    g_mine[i] = true;
     if (!_stricmp(key, "gfx_tricksfx") && was && !g_val[i]) StopSpecialStream("menu");
     if (!_stricmp(key, "gfx_tricksfx") && g_val[i] && was != g_val[i]) SetSpecialStreamVolume(g_trickBaseVol * g_val[i] / 100.0f);
     if (!_stricmp(key, "gfx_postfx")) {
         int set = Index("gfx_postfxset");
-        if (set >= 0) g_val[set] = 1;   // the row was used: dadmod now switches ReShade's own effects with it
+        if (set >= 0) { g_val[set] = 1; g_mine[set] = true; }   // the row was used: dadmod now switches ReShade's own effects with it
         if (was != g_val[i]) mmenu::Log("gfx: graphics effects -> %s (menu)", g_val[i] ? "ReShade (dadmod's screen effects skipped)" : "dadmod");
     }
     Save();
     SyncInput();
     InterlockedExchange(&g_dirtyPost, 1);
     return true;
+}
+// ---- dadmod\panel_settings.txt (THUGRECOMP_SettingSave/Load keys that are not gfx_*; modes.inc / client common.inc call
+// these). Read once, then answered from memory; a save changes only its own key in the file; a change another open game
+// made is ignored and one from a tool (panel tuner, THUGPro Manager) applies its changed keys (see StampOk above).
+typedef std::vector<std::pair<std::string, int>> PanelList;
+static PanelList g_panel, g_panelFile;
+static FILETIME g_panelTime = {};
+static bool g_panelRead = false;
+static FILETIME PanelTime() {
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (GetFileAttributesExA(ExeDirFile("panel_settings.txt").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
+    return FILETIME{};
+}
+static int* PanelFind(PanelList& l, const std::string& k) {
+    for (auto& e : l) if (e.first == k) return &e.second;
+    return nullptr;
+}
+static void PanelPut(PanelList& l, const std::string& k, int v) {
+    if (int* p = PanelFind(l, k)) *p = v; else l.push_back(std::make_pair(k, v));
+}
+static void PanelParse(const std::string& data, PanelList& out) {   // "key value" lines; the first line for a key counts
+    out.clear();
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        size_t sp = line.find(' ');
+        if (line.empty() || line[0] == ';' || sp == std::string::npos) continue;
+        std::string k = line.substr(0, sp);
+        if (!PanelFind(out, k)) out.push_back(std::make_pair(k, atoi(line.c_str() + sp + 1)));
+    }
+}
+static void PanelSync() {
+    FILETIME t = PanelTime();
+    if (g_panelRead && !CompareFileTime(&t, &g_panelTime)) return;
+    std::string data;
+    bool ok = ReadWholeFile(ExeDirFile("panel_settings.txt"), data);
+    PanelList f;
+    if (ok) PanelParse(data, f);
+    if (!g_panelRead) g_panel = f;
+    else if (ok && !StampOk(data))
+        for (auto& e : f) { int* old = PanelFind(g_panelFile, e.first); if (!old || *old != e.second) PanelPut(g_panel, e.first, e.second); }
+    g_panelFile = f;
+    g_panelTime = t;
+    g_panelRead = true;
+}
+bool PanelGet(const char* key, int* value) {
+    PanelSync();
+    int* p = PanelFind(g_panel, key);
+    if (!p) return false;
+    *value = *p;
+    return true;
+}
+bool PanelSet(const char* key, int value) {
+    PanelSync();
+    PanelPut(g_panel, key, value);
+    std::string path = ExeDirFile("panel_settings.txt"), data, out;
+    ReadWholeFile(path, data);
+    data = StripStamp(data);
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        if (line.empty()) continue;
+        size_t sp = line.find(' ');
+        if (sp != std::string::npos && line.substr(0, sp) == key) continue;
+        out += line + "\r\n";
+    }
+    out += std::string(key) + " " + std::to_string(value) + "\r\n";
+    bool ok = WriteWholeFile(path, Stamped(out));
+    PanelParse(out, g_panelFile);
+    g_panelTime = PanelTime();
+    return ok;
 }
 bool GetKey(const char* key, int* value) {
     if (tp::Get(key, value)) return true;
@@ -574,6 +738,7 @@ static bool __cdecl CF_GfxReset(void*, void*) {
         const char* k = kSettings[i].key;
         if (!_strnicmp(k, "gfx_wx", 6) || !_stricmp(k, "gfx_weather") || !_stricmp(k, "gfx_fireworks") || !_stricmp(k, "gfx_fwevery") || !_stricmp(k, "gfx_bginput") || !_stricmp(k, "gfx_deadzone") || !_stricmp(k, "gfx_abswap") || !_stricmp(k, "gfx_launchbinds") || !_stricmp(k, "gfx_padpopup")) continue;
         g_val[i] = kSettings[i].def;
+        g_mine[i] = true;
     }
     Save();
     InterlockedExchange(&g_dirtyPost, 1);
@@ -3284,7 +3449,7 @@ static void CheckKeysAndIni() {
         FILETIME t = IniTime();
         if (CompareFileTime(&t, &g_iniTime)) {
             int trick = V("gfx_tricksfx"), postfx = V("gfx_postfx");
-            Load();
+            ReloadChanged();
             if (trick && !V("gfx_tricksfx")) InterlockedExchange(&g_trickStopPending, 1);
             else if (V("gfx_tricksfx") && trick != V("gfx_tricksfx")) InterlockedExchange(&g_trickVolPending, 1);
             if (postfx != V("gfx_postfx"))

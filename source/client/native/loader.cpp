@@ -511,7 +511,26 @@ static bool __cdecl CF_ModelExists(void* params, void* script) {
     return false;
 }
 
+// THUGRECOMP_GameFileExists file="data\\pre\\P8Suburbsscn.prx"  true when that file is in the game folder (a path
+// relative to THUGPro.exe's folder; no "..", no drive). Noah 2026-11-23: the extra maps come in separate map packs
+// the installer fetches; a level whose files aren't there yet is greyed out in level select instead of loading.
+static bool __cdecl CF_GameFileExists(void* params, void* script) {
+    (void)script;
+    const char* m = NULL;
+    if (!GetStringParam(params, "file", &m) || !m || !*m || strstr(m, "..") || strchr(m, ':') || m[0] == '\\' || m[0] == '/') return false;
+    char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if (!len || len >= MAX_PATH) return false;
+    char* slash = strrchr(path, '\\');
+    if (!slash) return false;
+    slash[1] = 0;
+    std::string f = std::string(path) + m;
+    DWORD a = GetFileAttributesA(f.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 static struct CFuncEntry g_cfuncs[] = {
+    { "THUGRECOMP_GameFileExists", CF_GameFileExists },
     { "THUGRECOMP_ModelExists", CF_ModelExists },
     { "THUGRECOMP_ClientLog", CF_ClientLog },
     { "THUGRECOMP_SafeStartInfo", CF_SafeStartInfo },

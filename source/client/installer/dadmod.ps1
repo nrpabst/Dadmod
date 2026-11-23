@@ -165,36 +165,10 @@ function Check-Update($current) {
     return @{ state = 'newer'; version = $v; tag = $tag; url = "$($asset.browser_download_url)"; size = [long]$asset.size; text = "dadmod $tag is out (you have $current)." }
 }
 
-# downloads the release zip, puts its Setup.bat / files.dad / README.txt into this dadmod-install folder and runs the
-# new version's installer on $g (the normal Update: settings in dadmod\ stay)
-function Get-Update($u, $g, $have = '') {
-    $tmp = Join-Path $env:TEMP ('dadmod_update_' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $tmp | Out-Null
-    try {
-        $zip = Join-Path $tmp 'dadmod.zip'
-        $mb = [math]::Round($u.size / 1MB)
-        # the game already downloaded it (Pause > dadmod > Download newest update): use that copy when it's whole
-        if ($have -and (Test-Path -LiteralPath $have) -and ($u.size -le 0 -or (Get-Item -LiteralPath $have).Length -eq $u.size)) {
-            Say "Using the dadmod $($u.tag) download from the game ($mb MB)."
-            $zip = $have
-        } else {
-            Say "Downloading dadmod $($u.tag) ($mb MB)..."
-            try {
-                $wc = New-Object Net.WebClient
-                $wc.Headers.Add('User-Agent', 'dadmod-setup')
-                $wc.DownloadFile($u.url, $zip)
-            } catch { Say 'The download failed (internet dropped?). Nothing was changed. Try again later.'; return $false }
-        }
-        if ($u.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne $u.size) { Say 'The download came out the wrong size. Nothing was changed. Try again later.'; return $false }
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $x = Join-Path $tmp 'zip'
-        try { [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x) } catch { Say 'The downloaded zip is damaged. Nothing was changed. Try again later.'; return $false }
-        $dad = @(Get-ChildItem -LiteralPath $x -Recurse -Filter 'files.dad')
-        if ($dad.Count -ne 1) { Say 'The downloaded zip has no files.dad. Nothing was changed.'; return $false }
-        $src = $dad[0].DirectoryName
-        # unpack the new files.dad (same reader as Setup.bat: DADMODPK1 or the LZMA DADMODPK2) and run its installer
-        if (-not ('DadmodPack2' -as [type])) {
-            Add-Type -TypeDefinition @'
+# the files.dad / map pack reader (DADMODPK1 or the LZMA DADMODPK2); Get-Update and the map packs use it
+function Use-Pack2 {
+    if (-not ('DadmodPack2' -as [type])) {
+        Add-Type -TypeDefinition @'
 using System; using System.IO;
 // dadmod files.dad reader (Noah 2026-11-18). DADMODPK1 = zip XORed with the key in header byte 15.
 // DADMODPK2 = the same, but the zip (stored, no compression) is packed with LZMA ("alone" format: 5 property bytes,
@@ -368,7 +342,38 @@ public static class DadmodPack2 {
     }
 }
 '@
+    }
+}
+
+# downloads the release zip, puts its Setup.bat / files.dad / README.txt into this dadmod-install folder and runs the
+# new version's installer on $g (the normal Update: settings in dadmod\ stay)
+function Get-Update($u, $g, $have = '') {
+    $tmp = Join-Path $env:TEMP ('dadmod_update_' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    try {
+        $zip = Join-Path $tmp 'dadmod.zip'
+        $mb = [math]::Round($u.size / 1MB)
+        # the game already downloaded it (Pause > dadmod > Download newest update): use that copy when it's whole
+        if ($have -and (Test-Path -LiteralPath $have) -and ($u.size -le 0 -or (Get-Item -LiteralPath $have).Length -eq $u.size)) {
+            Say "Using the dadmod $($u.tag) download from the game ($mb MB)."
+            $zip = $have
+        } else {
+            Say "Downloading dadmod $($u.tag) ($mb MB)..."
+            try {
+                $wc = New-Object Net.WebClient
+                $wc.Headers.Add('User-Agent', 'dadmod-setup')
+                $wc.DownloadFile($u.url, $zip)
+            } catch { Say 'The download failed (internet dropped?). Nothing was changed. Try again later.'; return $false }
         }
+        if ($u.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne $u.size) { Say 'The download came out the wrong size. Nothing was changed. Try again later.'; return $false }
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $x = Join-Path $tmp 'zip'
+        try { [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x) } catch { Say 'The downloaded zip is damaged. Nothing was changed. Try again later.'; return $false }
+        $dad = @(Get-ChildItem -LiteralPath $x -Recurse -Filter 'files.dad')
+        if ($dad.Count -ne 1) { Say 'The downloaded zip has no files.dad. Nothing was changed.'; return $false }
+        $src = $dad[0].DirectoryName
+        # unpack the new files.dad (same reader as Setup.bat: DADMODPK1 or the LZMA DADMODPK2) and run its installer
+        Use-Pack2
         $inner = Join-Path $tmp 'pkg.zip'
         try { [DadmodPack2]::Unpack($dad[0].FullName, $inner) } catch { Say 'The downloaded files.dad is damaged. Nothing was changed.'; return $false }
         $nx = Join-Path $tmp 'x'
@@ -572,6 +577,90 @@ function Write-Problem($g, $recipes, $head = 'Why it stopped:') {
     }
 }
 
+# map packs (Noah 2026-11-23): the extra levels are separate release assets, so an update only downloads dadmod.zip
+function Map-PackLabel($pk) {
+    switch ($pk) {
+        'cities' { return 'Proving Ground cities by Larxian (Philly, Baltimore, DC)' }
+        'p8' { return 'Project 8 maps' }
+        'classic' { return 'classic maps (Streets and the THPS2 levels)' }
+        'thpg' { return 'THPG Training map' }
+    }
+    return "$pk maps"
+}
+
+# the download address of a map pack: the asset with that name and size on a published dadmod release
+$script:ReleaseList = $null
+function Find-PackUrl($info) {
+    if (-not $script:ReleaseList) {
+        $api = $env:DADMOD_UPDATE_URL
+        if (-not $api) { $api = "https://api.github.com/repos/$UpdateRepo/releases?per_page=30" }
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+        try {
+            $req = [Net.HttpWebRequest]::Create($api)
+            $req.UserAgent = 'dadmod-setup'
+            $req.Accept = 'application/vnd.github+json'
+            $req.Timeout = 8000
+            $req.ReadWriteTimeout = 8000
+            $resp = $req.GetResponse()
+            $sr = New-Object IO.StreamReader($resp.GetResponseStream())
+            $body = $sr.ReadToEnd(); $sr.Close(); $resp.Close()
+            $script:ReleaseList = @($body | ConvertFrom-Json)
+        } catch { return $null }
+    }
+    foreach ($rel in @($script:ReleaseList)) {
+        if (-not $rel -or $rel.draft) { continue }
+        foreach ($a in @($rel.assets)) {
+            if ("$($a.name)" -ieq $info.asset -and [long]$a.size -eq $info.size) { return "$($a.browser_download_url)" }
+        }
+    }
+    return $null
+}
+
+# -> the stored zip inside a map pack (files/<path in the game folder>), in $tmp; $null when it can't be had
+function Get-MapPack($info, $g, $tmp) {
+    $label = Map-PackLabel $info.name
+    $mb = [math]::Max(1, [math]::Round($info.size / 1MB))
+    $zip = $null
+    # one the player put next to Setup.bat (or in the game's dadmod-install folder)
+    foreach ($d in @($Pkg, (Join-Path $g 'dadmod-install'))) {
+        if (-not $d) { continue }
+        $c = Join-Path $d $info.asset
+        if ((Test-Path -LiteralPath $c) -and (Get-Item -LiteralPath $c).Length -eq $info.size -and (Md5 $c) -eq $info.md5) {
+            Say "Using $($info.asset) from $d."
+            $zip = $c; break
+        }
+    }
+    if (-not $zip) {
+        $url = Find-PackUrl $info
+        if (-not $url) { return $null }
+        Say "Downloading the $label ($mb MB)..."
+        $zip = Join-Path $tmp $info.asset
+        try {
+            $wc = New-Object Net.WebClient
+            $wc.Headers.Add('User-Agent', 'dadmod-setup')
+            $wc.DownloadFile($url, $zip)
+        } catch { Say 'The download failed (internet dropped?).'; return $null }
+        if ((Get-Item -LiteralPath $zip).Length -ne $info.size -or (Md5 $zip) -ne $info.md5) { Say 'The download came out wrong.'; return $null }
+    }
+    Say "Unpacking the $label..."
+    Use-Pack2
+    $x = Join-Path $tmp ($info.name + '_x')
+    try {
+        [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x)
+        $dad = @(Get-ChildItem -LiteralPath $x -Filter '*.dad' -File)
+        if ($dad.Count -ne 1) { return $null }
+        $inner = Join-Path $tmp ($info.name + '_files.zip')
+        [DadmodPack2]::Unpack($dad[0].FullName, $inner)
+        return $inner
+    } catch {
+        Say "The $label download is damaged."
+        return $null
+    } finally {
+        Remove-Item -LiteralPath $x -Recurse -Force -ErrorAction SilentlyContinue
+        if ($zip -and $zip.StartsWith($tmp)) { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 function Install($g, [bool]$repair = $false) {
     if (-not (Test-Path -LiteralPath (Join-Path $Files 'binkw32.dll'))) { Fail "the package is missing files\binkw32.dll (unzip the whole package first)" }
     $dadmod = Join-Path $g 'dadmod'
@@ -630,11 +719,27 @@ function Install($g, [bool]$repair = $false) {
     # the extra levels' files (installer\vault_levels.txt: "<path> <md5>"): a copy the player already had stays theirs,
     # untouched and unlisted (same file: kept; a different version: kept too, and named in the summary)
     $vault = @{}
+    $vrel = @{}
+    $vpack = @{}
     $vl = Join-Path $Here 'vault_levels.txt'
     if (Test-Path -LiteralPath $vl) {
         foreach ($l in Get-Content -LiteralPath $vl) {
             $p = $l.Trim() -split '\s+'
-            if ($p[0]) { $vault[$p[0].ToLower()] = $(if ($p.Count -gt 1) { $p[1].ToLower() } else { '' }) }
+            if ($p[0]) {
+                $vault[$p[0].ToLower()] = $(if ($p.Count -gt 1) { $p[1].ToLower() } else { '' })
+                $vrel[$p[0].ToLower()] = $p[0]
+                $vpack[$p[0].ToLower()] = $(if ($p.Count -gt 2) { $p[2].ToLower() } else { '' })
+            }
+        }
+    }
+    # Noah 2026-11-23: the extra levels come in map packs (release assets dadmod-maps-<pack>.zip), listed in
+    # installer\map_packs.txt as "<pack> <asset> <size> <md5>"
+    $packs = @{}
+    $mp = Join-Path $Here 'map_packs.txt'
+    if (Test-Path -LiteralPath $mp) {
+        foreach ($l in Get-Content -LiteralPath $mp) {
+            $p = $l.Trim() -split '\s+'
+            if ($p.Count -ge 4) { $packs[$p[0].ToLower()] = @{ name = $p[0].ToLower(); asset = $p[1]; size = [long]$p[2]; md5 = $p[3].ToLower() } }
         }
     }
     $before = @{}
@@ -670,6 +775,75 @@ function Install($g, [bool]$repair = $false) {
         if ($rel.ToLower().StartsWith('user\')) { (Get-Item -LiteralPath $dst).LastWriteTime = Get-Date }
         [void]$added.Add($rel)
     }
+    # the extra levels from the map packs (Noah 2026-11-23): only files that are missing, or ours but an older version,
+    # are fetched, from a dadmod-maps-<pack>.zip next to Setup.bat or else downloaded from the dadmod releases. A copy
+    # the player already had (not in install.json) stays theirs, untouched and unlisted.
+    $need = @{}
+    $srcRoot = (Resolve-Path -LiteralPath $Files).Path
+    foreach ($low in @($vault.Keys | Sort-Object)) {
+        $rel = $vrel[$low]
+        if ($packs.Count -eq 0 -or -not $vpack[$low]) { continue }            # an older package: its loop above did these
+        if (Test-Path -LiteralPath (Join-Path $srcRoot $rel)) { continue }     # (same: the file came inside files.dad)
+        $dst = Join-Path $g $rel
+        $have = Test-Path -LiteralPath $dst
+        if ($have -and -not $before[$low]) {
+            $kept++
+            if ($vault[$low] -and ((Md5 $dst) -ne $vault[$low])) { [void]$otherVer.Add($rel) }
+            continue
+        }
+        if (-not $have -and $rel -match '^user\\([^\\]+)\.level\.dat$' -and -not $before[$low]) {
+            $other = Other-LevelDat $g $Matches[1] (Split-Path -Leaf $rel)
+            if ($other) { [void]$dupNames.Add("$($Matches[1]) (you have it as User\$other)"); $kept++; continue }
+        }
+        if ($rel -match '^data\\pre\\(.+)scn\.prx$') {
+            if (Test-Path -LiteralPath (Join-Path $g ('User\data\pre\' + (Split-Path -Leaf $rel)))) { [void]$customToo.Add($Matches[1]) }
+        }
+        if ($have -and (-not $vault[$low] -or (Md5 $dst) -eq $vault[$low])) { [void]$added.Add($rel); continue }
+        if (-not $have -and ($before[$low] -or $repair)) { [void]$restored.Add($rel) }
+        $pk = $vpack[$low]
+        if (-not $need.ContainsKey($pk)) { $need[$pk] = New-Object System.Collections.ArrayList }
+        [void]$need[$pk].Add($rel)
+    }
+    $missingPacks = New-Object System.Collections.ArrayList
+    if ($need.Count) {
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $mtmp = Join-Path $env:TEMP ('dadmod_maps_' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $mtmp | Out-Null
+        try {
+            foreach ($pk in @($need.Keys | Sort-Object)) {
+                $inner = $null
+                if ($packs.ContainsKey($pk)) { $inner = Get-MapPack $packs[$pk] $g $mtmp }
+                $bad = 0
+                if ($inner) {
+                    $za = [IO.Compression.ZipFile]::OpenRead($inner)
+                    try {
+                        $ents = @{}
+                        foreach ($e in $za.Entries) { $ents[$e.FullName.ToLower()] = $e }
+                        foreach ($rel in $need[$pk]) {
+                            $e = $ents[('files/' + $rel.Replace('\', '/')).ToLower()]
+                            $dst = Join-Path $g $rel
+                            if (-not $e) { $bad++; continue }
+                            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+                            $tmpf = $dst + '.dadmodnew'
+                            [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $tmpf, $true)
+                            if ($vault[$rel.ToLower()] -and ((Md5 $tmpf) -ne $vault[$rel.ToLower()])) { Remove-Item -LiteralPath $tmpf -Force; $bad++; continue }
+                            Move-Item -LiteralPath $tmpf -Destination $dst -Force
+                            if ($rel.ToLower().StartsWith('user\')) { (Get-Item -LiteralPath $dst).LastWriteTime = Get-Date }
+                            [void]$added.Add($rel)
+                        }
+                    } finally { $za.Dispose() }
+                    Remove-Item -LiteralPath $inner -Force -ErrorAction SilentlyContinue
+                }
+                if (-not $inner -or $bad) {
+                    [void]$missingPacks.Add($pk)
+                    foreach ($rel in $need[$pk]) { [void]$restored.Remove($rel) }
+                }
+            }
+        } finally {
+            Remove-Item -LiteralPath $mtmp -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
     # files built from the player's own game files (recipes\*.dpr, tools/dadpatch.py): our script archive, the Edit
     # Skater file and the main menu scenes carry no THUG Pro / Kali bytes; each is rebuilt here, byte for byte
     $rdir = Join-Path (Split-Path -Parent $Here) 'recipes'
@@ -692,14 +866,18 @@ function Install($g, [bool]$repair = $false) {
         if ($failed.Count) {
             # only menu scenes missing (Noah 2026-11-22): dadmod works, those menu backgrounds show the skate shop instead
             $onlyScenes = -not ($failed | Where-Object { $_ -notmatch '^dadmod\\menulevels\\' })
-            if ($onlyScenes) {
+            if ($onlyScenes -and $missingPacks.Count -gt 0) {
+                # the menu scenes are built partly from the extra levels' script files (Noah 2026-11-23): with a map
+                # pack missing that's expected, not a problem to report
+                Say "$($failed.Count) main menu backgrounds use the missing maps, so the menu shows the skate shop in their place until the maps are there (Setup.bat > Repair)."
+            } elseif ($onlyScenes) {
                 Write-Problem $g @($failedRecipes) 'Why:'
                 Say "dadmod is installed and works. $($failed.Count) of the main menu background scenes couldn't be set up from your game files (another mod changed files they use); the menu shows the skate shop in their place:"
             } else {
                 Write-Problem $g @($failedRecipes)
                 Say "Couldn't build $($failed.Count) files from your game files (your THUG Pro version isn't one dadmod knows):"
             }
-            foreach ($t in $failed) { Say "  $t" }
+            if (-not ($onlyScenes -and $missingPacks.Count -gt 0)) { foreach ($t in $failed) { Say "  $t" } }
             if ($failed | Where-Object { $_ -match 'dadmod_qb\.prx$' }) { Fail 'dadmod needs its script file. Please report your THUG Pro version.' }
         }
     }
@@ -739,6 +917,16 @@ function Install($g, [bool]$repair = $false) {
     }
     if ($customToo.Count) {
         Say ('Also in your custom maps (Imported Levels): ' + ($customToo -join ', ') + '. dadmod''s built-in copy fills its level slot; you can keep or delete the custom one.')
+    }
+    if ($missingPacks.Count) {
+        Write-Host ''
+        foreach ($pk in $missingPacks) {
+            $an = $(if ($packs.ContainsKey($pk)) { $packs[$pk].asset } else { "dadmod-maps-$pk.zip" })
+            Write-Host ("Couldn't get the " + (Map-PackLabel $pk) + " ($an).") -ForegroundColor Yellow
+        }
+        Say 'dadmod is installed; those levels are greyed out in level select until their maps are there.'
+        Say 'To get them: run Setup.bat > Repair while online, or download the file named above from'
+        Say "  https://github.com/$UpdateRepo/releases, put it next to Setup.bat and run Setup.bat > Repair."
     }
     if ($repair) {
         if ($restored.Count) {

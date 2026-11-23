@@ -9859,7 +9859,7 @@ dadmod_gfx_lists = [
 { list = gfx_pixelate names = ["Off" "2x" "3x" "4x"] }
 { list = gfx_crt names = ["Off" "Scanlines" "Scanlines + curve"] }
 { list = gfx_galaxy names = ["Default" "Milky way" "Nebula" "Deep space" "Matrix" "Aurora" "Synthwave" "Storm" "Golden hour" "Vaporwave" "Hellfire" "Underwater" "Rainbow" "Black hole" "Cotton candy"] }
-{ list = gfx_tod names = ["Level / server" "Morning" "Day" "Sunset" "Night" "Evening, lights on" "Dawn"] }
+{ list = gfx_tod names = ["Level / server" "Morning" "Day" "Evening" "Night" "Evening, lights on" "Dawn"] }
 { list = gfx_weather names = ["Off" "Rain" "Thunderstorm" "Snow" "Random"] }
 { list = gfx_todfog names = ["Off" "Knee high" "Head high" "First floor" "Rooftops"] }
 { list = gfx_fireworks names = ["Off" "On wins" "Every 1 min" "Every 3 min" "Every 5 min" "Every 10 min"] }

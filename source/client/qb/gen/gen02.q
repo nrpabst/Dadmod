@@ -30,7 +30,7 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_grain key = "gfx_grain" label = "Film grain" kind = num min = 0 max = 10 def = 0 desc = "Light film noise that hides blocky textures and color banding. Changes show right away."
     dadmod_ui_item id = gfx_chroma key = "gfx_chroma" label = "Chromatic aberration" kind = num min = 0 max = 10 def = 0 desc = "A faint red and blue color fringe toward the screen edges, like a real lens. Changes show right away." pdesc = "A faint red and blue fringe toward the screen edges, like a real lens."
     dadmod_ui_item id = gfx_vignette key = "gfx_vignette" label = "Vignette" kind = num min = 0 max = 10 def = 0 desc = "Darkens the corners of the screen a little, like a camera lens. Changes show right away."
-    dadmod_ui_item id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap every level's sky: galaxies, Matrix, aurora, synthwave, storm, black hole and more."
+    dadmod_ui_item id = gfx_galaxy key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap the sky. Dark skies also darken the map unless you pick a Time of day."
     dadmod_ui_item id = gfx_tod key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_skypop key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
     dadmod_ui_item id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp."
@@ -349,6 +349,7 @@ script dadmod_ui_change
             dadmod_ui_effect_step value = <value>
         endif
     else
+        cur = <value>
         if GotParam left
             value = ( <value> - <step> )
         else
@@ -368,6 +369,32 @@ script dadmod_ui_change
             if (<value> < <min>)
                 value = <max>
             endif
+        endif
+        if (<key> = "gfx_tod")
+            order = [ 0 6 1 2 3 5 4 ]
+            i = 0
+            begin
+                if (<i> > 6)
+                    i = 0
+                    break
+                endif
+                if ( ( <order> [ <i> ] ) = <cur> )
+                    break
+                endif
+                i = ( <i> + 1 )
+            repeat
+            if GotParam left
+                i = ( <i> - 1 )
+            else
+                i = ( <i> + 1 )
+            endif
+            if (<i> < 0)
+                i = 6
+            endif
+            if (<i> > 6)
+                i = 0
+            endif
+            value = ( <order> [ <i> ] )
         endif
     endif
     THUGRECOMP_SettingSave key = <key> value = <value>
@@ -417,6 +444,9 @@ endscript
 
 script dadmod_gfx_reset
     THUGRECOMP_GfxReset
+    dadmod_tod_kali_follow tod = 0
+    Change dadmod_tod_last = 0
+    dadmod_tod_refresh
     if ScreenElementExists id = dadmod_gfx_menu
         dadmod_pause_graphics
         return

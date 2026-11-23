@@ -9,6 +9,9 @@ script dadmod_lamplights_level
     THUGRECOMP_SettingSave key = "gfx_keeplit" value = <keep>
     KillSpawnedScript Name = dadmod_lamp_night
     if GotParam level
+        if ScriptExists dadmod_lampedit_level_hook
+            dadmod_lampedit_level_hook level = <level>
+        endif
         FormatText ChecksumName = list "dadmod_lamps_%s" s = <level>
         if GlobalExists Name = <list> Type = array
             THUGRECOMP_SettingLoad key = "gfx_lampreach"
@@ -40,12 +43,20 @@ script dadmod_lamp_night
         THUGRECOMP_LampNight
         if not ( <night> = <last> )
             <last> = <night>
-            if ( <night> = 1 )
-                <pct> = 100.0
-            else
-                <pct> = 0.0
-            endif
-            ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+            <lampstep> = 1
+            begin
+                if ( <night> = 1 )
+                    <pct> = ( <lampstep> * 5.0 )
+                else
+                    <pct> = ( 100.0 - <lampstep> * 5.0 )
+                endif
+                ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+                <lampstep> = ( <lampstep> + 1 )
+                if ( <lampstep> > 20 )
+                    break
+                endif
+                wait 0.15 seconds
+            repeat
         endif
         wait 0.5 seconds
     repeat

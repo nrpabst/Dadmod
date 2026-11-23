@@ -1608,17 +1608,16 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
 // ---- lit windows (mods/lamplights, 2026-11-22). ps_window: drawn (ps_2_0, with the game's own fixed-function vertices)
 // over the game's window-texture draws into a separate target; glass = dark / bluish texels, every window cell on or off
 float4 ps_window(float2 uv : TEXCOORD0, float3 cp : TEXCOORD1) : COLOR {
-    float3 t = tex2D(s0, uv).rgb;
-    float lum = dot(t, float3(0.3, 0.5, 0.2));
-    float id = tex2D(s1, uv).r;  // px.z = 1: hand-marked pane mask (0 = wall, else which pane); else cells as a fallback
-    float2 cell = px.z > 0.5 ? floor(uv) + float2(id * 255.0, 0) : floor(uv * 12.0);
-    float h = frac(sin(dot(cell, float2(12.9898, 78.233))) * 43758.5453);
-    float k = frac(h * 7.13);
-    float lit = step(1.0 - px.y, h);
-    float3 col = k < 0.7 ? float3(1.0, 0.745, 0.47) : (k < 0.94 ? float3(0.6, 0.36, 0.17) : float3(0.3, 0.36, 0.5));
-    float fill = px.z > 0.5 ? step(0.002, id) * 0.9 : 1 - saturate((lum - 0.16) * 5.0);  // marked panes: an even warm fill (no glass detail)
-    float3 o = col * fill * lit * (0.6 + 0.4 * frac(h * 3.7)) * px.x * 0.6;
-    if (px.w > 0.5) o = px.z > 0.5 ? float3(0, step(0.002, id) * 0.8, 0) : float3(0, 0, fill * 0.8);  // gfx_windows 2: marked panes green, fallback blue
+    float4 pm = tex2D(s1, uv);  // px.z = 1: pane color map (rgb = this pane's lit color, a = pane), filtered + mipmapped
+    float tv = frac(sin(dot(floor(uv), float2(12.9898, 78.233))) * 43758.5453);  // a little brightness change per texture repeat
+    float3 o = pm.rgb * (0.85 + 0.15 * tv) * px.x * 0.6;
+    if (px.z < 0.5) {  // window texture without marked panes: dark glass cells (old fallback)
+        float3 t = tex2D(s0, uv).rgb;
+        float lum = dot(t, float3(0.3, 0.5, 0.2));
+        float h = frac(sin(dot(floor(uv * 12.0), float2(12.9898, 78.233))) * 43758.5453);
+        o = float3(1.0, 0.745, 0.47) * (1 - saturate((lum - 0.16) * 5.0)) * step(1.0 - px.y, h) * (0.6 + 0.4 * frac(h * 3.7)) * px.x * 0.6;
+    }
+    if (px.w > 0.5) o = px.z > 0.5 ? float3(0, pm.a * 0.8, 0) : float3(0, 0, 0.5);  // gfx_windows 2: marked panes green, unmarked blue
     return float4(o, abs(cp.z));  // alpha = view depth (camera-space z, stage 1 texcoord)
 }
 // ps_winvis: quarter-res copy of only the windows that are really visible (depth checked), the source of the spill:
@@ -3249,7 +3248,10 @@ static void WinCacheClear() {
     for (auto& m : g_winMask) if (m.second) m.second->Release();
     g_winMask.clear();
 }
+static int g_winShareLoaded = -1;  // gfx_windowshare the pane colors were made with (a change reloads them)
 static void WinLoadMask(IDirect3DTexture9* t, UINT w, UINT h, UINT hash) {
+    // 2026-11-23 (far towers shimmered): each pane's lit color is worked out here once, so the map holds colors, not
+    // pane numbers; its smaller levels are plain averages and far facades blend into an even glow instead of flipping
     char name[64];
     snprintf(name, sizeof name, "lampwindows\\%08x.raw", hash);
     std::string data;
@@ -3260,12 +3262,52 @@ static void WinLoadMask(IDirect3DTexture9* t, UINT w, UINT h, UINT hash) {
     IDirect3DDevice9* dev = nullptr;
     t->GetDevice(&dev);
     if (!dev) return;
+    float share = V("gfx_windowshare") / 10.0f;
+    g_winShareLoaded = V("gfx_windowshare");
+    DWORD pal[256];
+    for (int id = 0; id < 256; ++id) {
+        UINT hh = 0x811C9DC5;
+        for (UINT v : {hash, (UINT)id * 2654435761u}) for (int k = 0; k < 4; ++k) hh = (hh ^ ((v >> (k * 8)) & 0xFF)) * 0x01000193;
+        float a = (hh & 0xFFFF) / 65535.0f, kk = ((hh >> 16) & 0xFF) / 255.0f, lv = 0.6f + 0.4f * ((hh >> 24) & 0xFF) / 255.0f;
+        bool lit = id > 0 && a >= 1.0f - share;
+        float r = 1.0f, g = 0.745f, b = 0.47f;
+        if (kk >= 0.94f) { r = 0.3f; g = 0.36f; b = 0.5f; } else if (kk >= 0.7f) { r = 0.6f; g = 0.36f; b = 0.17f; }
+        float m = lit ? lv * 0.9f : 0.0f;
+        pal[id] = ((DWORD)(id ? 255 : 0) << 24) | ((DWORD)(r * m * 255) << 16) | ((DWORD)(g * m * 255) << 8) | (DWORD)(b * m * 255);
+    }
     IDirect3DTexture9* m = nullptr;
-    if (SUCCEEDED(dev->CreateTexture(w, h, 1, 0, D3DFMT_L8, D3DPOOL_MANAGED, &m, nullptr))) {
-        D3DLOCKED_RECT lr;
-        if (SUCCEEDED(m->LockRect(0, &lr, nullptr, 0))) {
-            for (UINT y = 0; y < h; ++y) memcpy((char*)lr.pBits + y * lr.Pitch, data.data() + y * w, w);
-            m->UnlockRect(0);
+    if (SUCCEEDED(dev->CreateTexture(w, h, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &m, nullptr))) {
+        std::vector<DWORD> cur(w * h);
+        for (UINT k = 0; k < w * h; ++k) cur[k] = pal[(unsigned char)data[k]];
+        UINT pw = w, ph = h;
+        bool ok = true;
+        for (DWORD lv = 0; lv < m->GetLevelCount() && ok; ++lv) {
+            if (lv) {  // average each 2x2 block, channel by channel
+                UINT nw = pw > 1 ? pw / 2 : 1, nh = ph > 1 ? ph / 2 : 1;
+                std::vector<DWORD> nx(nw * nh);
+                for (UINT y = 0; y < nh; ++y)
+                    for (UINT x = 0; x < nw; ++x) {
+                        UINT sum[4] = {0, 0, 0, 0}, n = 0;
+                        for (UINT k = 0; k < 4; ++k) {
+                            UINT sx = x * 2 + (k & 1), sy = y * 2 + (k >> 1);
+                            if (sx >= pw || sy >= ph) continue;
+                            DWORD c = cur[sy * pw + sx];
+                            for (int ch = 0; ch < 4; ++ch) sum[ch] += (c >> (ch * 8)) & 0xFF;
+                            ++n;
+                        }
+                        DWORD o = 0;
+                        for (int ch = 0; ch < 4; ++ch) o |= (DWORD)(sum[ch] / (n ? n : 1)) << (ch * 8);
+                        nx[y * nw + x] = o;
+                    }
+                cur.swap(nx); pw = nw; ph = nh;
+            }
+            D3DLOCKED_RECT lr;
+            if (SUCCEEDED(m->LockRect(lv, &lr, nullptr, 0))) {
+                for (UINT y = 0; y < ph; ++y) memcpy((char*)lr.pBits + y * lr.Pitch, cur.data() + y * pw, pw * 4);
+                m->UnlockRect(lv);
+            } else ok = false;
+        }
+        if (ok) {
             g_winMask[t] = m;
             mmenu::Log("gfx: lit windows: pane map %08x loaded (%ux%u)", hash, w, h);
         } else m->Release();
@@ -3325,6 +3367,7 @@ static bool MoonOn() { return V("gfx_moonlight") > 0 && g_bulbAmt > 0.01f && g_p
 static bool WinLayerReady() { return g_winTex && g_winFrame == g_presents; }
 static bool WindowsOn() { return V("gfx_windows") && g_bulbAmt > 0.01f && g_psWindow && !g_msaaOn && g_w && !g_mainMenu; }
 static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3DPRIMITIVETYPE pt, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
+    if (g_winShareLoaded >= 0 && g_winShareLoaded != V("gfx_windowshare")) { WinCacheClear(); g_winShareLoaded = -1; return; }  // share changed: remake the pane colors
     if (g_winW != g_w || g_winH != g_h || !g_winSurf) {
         if (g_winSurf) { g_winSurf->Release(); g_winSurf = nullptr; }
         if (g_winTex) { g_winTex->Release(); g_winTex = nullptr; }
@@ -3392,7 +3435,7 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     dev->GetSamplerState(1, D3DSAMP_MINFILTER, &s1min); dev->GetSamplerState(1, D3DSAMP_MAGFILTER, &s1mag); dev->GetSamplerState(1, D3DSAMP_MIPFILTER, &s1mip);
     dev->GetSamplerState(1, D3DSAMP_ADDRESSU, &s1u); dev->GetSamplerState(1, D3DSAMP_ADDRESSV, &s1v);
     dev->SetTexture(1, mask);
-    g_origSSS(dev, 1, D3DSAMP_MINFILTER, D3DTEXF_POINT); g_origSSS(dev, 1, D3DSAMP_MAGFILTER, D3DTEXF_POINT); g_origSSS(dev, 1, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    g_origSSS(dev, 1, D3DSAMP_MINFILTER, D3DTEXF_LINEAR); g_origSSS(dev, 1, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR); g_origSSS(dev, 1, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
     g_origSSS(dev, 1, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP); g_origSSS(dev, 1, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
     float c0[4] = {V("gfx_windowstr") / 10.0f, V("gfx_windowshare") / 10.0f, mask ? 1.0f : 0.0f, V("gfx_windows") == 2 ? 1.0f : 0.0f};
     ++g_winDraws;

@@ -1503,7 +1503,8 @@ static void CamKeysMouse(float* zin, float* zout, float* tilt, float* yaw, float
 // eases back to the normal camera. Returns wc_state 0 = normal camera, 1 = ours (cam_pos / cam_dir), 2 = just
 // finished easing back (QB gives the skater camera back).
 static bool __cdecl CF_WalkCam(void* params, void* script) {
-    static bool s_engaged, s_out, s_drag, s_btnWas = true, s_wasOn;
+    static bool s_engaged, s_out, s_drag, s_btnWas = true, s_wasOn, s_restSet;
+    static Vec s_rest;
     static float s_yaw, s_yawTo, s_el, s_elTo, s_dist, s_distTo, s_w;
     static POINT s_last;
     static DWORD s_at;
@@ -1518,6 +1519,7 @@ static bool __cdecl CF_WalkCam(void* params, void* script) {
         return true;
     }
     bool on = IntParam(params, "on", 0) != 0;
+    bool nc = IntParam(params, "nc", 0) != 0;
     Vec sk = V(FloatParam(params, "sx", 0), FloatParam(params, "sy", 0), FloatParam(params, "sz", 0));
     float hx = FloatParam(params, "hx", 0), hz = FloatParam(params, "hz", 1);
     Vec cp = V(FloatParam(params, "cpx", 0), FloatParam(params, "cpy", 0), FloatParam(params, "cpz", 0));
@@ -1547,6 +1549,7 @@ static bool __cdecl CF_WalkCam(void* params, void* script) {
         }
         if (s_drag && btn && GetCursorPos(&cpos) && (cpos.x != s_last.x || cpos.y != s_last.y)) start = true;
         if (!btn) s_drag = false;
+        if (padhub::g_padActive) start = false;   // a pad in use keeps the normal camera (Noah 2026-11-22)
         if (!start) return true;
         // take over from exactly where the normal camera is
         Vec off = Sub(cp, target);
@@ -1565,6 +1568,16 @@ static bool __cdecl CF_WalkCam(void* params, void* script) {
         if (!s_out) Log("walkcam: back to the skater camera%s", on ? " (middle click)" : "");
         s_out = true; s_drag = false;
     }
+    // the controller picked up again (Noah 2026-11-22: after a drag the pad was "bugged until you get back on the board":
+    // our camera follows his heading, so camera-relative stick steering kept turning him and the right stick did
+    // nothing): any pad button or stick past drift eases back to the normal skater camera.
+    if (!s_out && padhub::g_padActive) { Log("walkcam: back to the skater camera (controller)"); s_out = true; s_drag = false; }
+    // let go once he walks (Noah 2026-11-22: "it gets stuck behind the skater and you can't turn properly, it's like
+    // it doesn't let go"): with the button up, moving more than 20 units from where the drag ended eases back to the
+    // normal camera, which turns with him again. Noclip keeps it (flying follows the camera there).
+    if (s_drag || s_out || nc) s_restSet = false;
+    else if (!s_restSet) { s_rest = sk; s_restSet = true; }
+    else { Vec mv = Sub(sk, s_rest); if (mv.x * mv.x + mv.y * mv.y + mv.z * mv.z > 400.0f) { Log("walkcam: back to the skater camera (walked)"); s_out = true; s_restSet = false; } }
     if (!s_out && GameInFront(fw)) {
         bool btn = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0, fresh = btn && !s_btnWas;
         s_btnWas = btn;

@@ -128,7 +128,7 @@ script dadmod_wx_rain grid = 1
     Change dadmod_wx_on = 1
 endscript
 script dadmod_wx_snow amt = 5 grid = 1
-    rate = ( 1 + ( <amt> / 3 ) )
+    rate = ( 1 + ( <amt> / 2 ) )
     CastToInteger rate
     blend = ( 30 + ( <amt> * 3 ) )
     if (<grid> = 1)

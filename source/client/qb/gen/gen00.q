@@ -3274,6 +3274,168 @@ script dadmod_ui_title_match
     return e = 0
 endscript
 
+dadmod_wx_on = 0
+
+dadmod_wx_kind = -1
+
+dadmod_wx_amt = -1
+
+dadmod_wx_level = none
+
+script dadmod_wx_watch_start
+    if IsTrue dadmod_wx_watch_on
+        return
+    endif
+    Change dadmod_wx_watch_on = 1
+    SpawnScript dadmod_wx_watch NotSessionSpecific = 1
+endscript
+
+dadmod_wx_watch_on = 0
+
+dadmod_wx_server = 0
+
+script dadmod_wx_server_set kind = 0
+    Change dadmod_wx_server = <kind>
+    THUGRECOMP_SettingSave key = "gfx_wxsrv" value = <kind>
+endscript
+
+script dadmod_wx_wanted
+    kind = 0
+    if THUGRECOMP_SettingLoad key = "gfx_wxnow"
+        kind = <value>
+    endif
+    amt = 5
+    if THUGRECOMP_SettingLoad key = "gfx_wxamt"
+        amt = <value>
+    endif
+    if (<amt> < 1)
+        amt = 1
+    endif
+    if (<amt> > 10)
+        amt = 10
+    endif
+    if (dadmod_wx_server > 0)
+        if InNetGame
+            kind = 9
+        else
+            Change dadmod_wx_server = 0
+            THUGRECOMP_SettingSave key = "gfx_wxsrv" value = 0
+        endif
+    endif
+    if LevelIs Load_MainMenu
+        kind = 0
+    endif
+    return kind = <kind> amt = <amt>
+endscript
+
+script dadmod_wx_watch
+    begin
+        wait 30 gameframes
+        if ObjectExists id = skater
+            dadmod_wx_wanted
+            lvl = wxlvl_none
+            GetLevelStructureName
+            if GotParam level_structure_name
+                if StructureContains structure = ( <level_structure_name> ) level
+                    FormatText ChecksumName = lvl "wxlvl_%a" a = ( <level_structure_name> . level )
+                endif
+            endif
+            grid = 0
+            changed = 0
+            if not (<lvl> = dadmod_wx_level)
+                Change dadmod_wx_level = <lvl>
+                grid = 1
+                changed = 1
+            endif
+            if not (<kind> = dadmod_wx_kind)
+                grid = 1
+                changed = 1
+            endif
+            if not (<amt> = dadmod_wx_amt)
+                changed = 1
+            endif
+            if (<changed> = 1)
+                dadmod_wx_apply kind = <kind> amt = <amt> grid = <grid>
+            endif
+        endif
+    repeat
+endscript
+
+script dadmod_wx_apply grid = 1
+    Change dadmod_wx_kind = <kind>
+    Change dadmod_wx_amt = <amt>
+    switch <kind>
+    case 1
+        dadmod_wx_rain amt = <amt> storm = 0 grid = <grid>
+    case 2
+        dadmod_wx_rain amt = <amt> storm = 1 grid = <grid>
+    case 3
+        dadmod_wx_snow amt = <amt> grid = <grid>
+    case 9
+        Change dadmod_wx_on = 0
+    default
+        if (dadmod_wx_on = 1)
+            WeatherSetSplashRate 0
+            WeatherSetRainRate 0
+            WeatherSetSnowRate 0
+            Change dadmod_wx_on = 0
+        endif
+    endswitch
+    FormatText TextName = dbg "weather (local): kind %k intensity %a" k = <kind> a = <amt>
+    THUGRECOMP_Log text = <dbg>
+endscript
+
+script dadmod_wx_rain grid = 1
+    rate = ( 3 + <amt> )
+    blend = ( 4 + <amt> )
+    splash = ( <amt> / 2 )
+    CastToInteger splash
+    if (<storm> = 1)
+        rate = ( 4 + <amt> )
+        blend = ( 8 + <amt> )
+        splash = ( 1 + <amt> )
+    endif
+    if (<grid> = 1)
+        WeatherUpdateGrid
+    endif
+    WeatherSetSnowRate 0
+    WeatherSetSnowColor 0
+    WeatherSetRainActive
+    WeatherSetRainHeight 1000
+    WeatherSetRainFrames 80
+    WeatherSetRainLength 120
+    WeatherSetRainBlendMode fixadd <blend>
+    WeatherSetRainColor top = 285212671 bottom = 1073741823
+    WeatherSetSplashLife 8
+    WeatherSetSplashSize 12
+    WeatherSetSplashColor -1
+    WeatherSetSplashBlendMode fixadd 16
+    WeatherSetSplashRate <splash>
+    WeatherSetRainRate <rate>
+    Change dadmod_wx_on = 1
+endscript
+
+script dadmod_wx_snow amt = 5 grid = 1
+    rate = ( 1 + ( <amt> / 2 ) )
+    CastToInteger rate
+    blend = ( 30 + ( <amt> * 3 ) )
+    if (<grid> = 1)
+        WeatherUpdateGrid
+    endif
+    WeatherSetRainRate 0
+    WeatherSetSplashRate 0
+    WeatherSetRainColor top = 0 bottom = 0
+    WeatherSetSplashColor 0
+    WeatherSetSnowActive
+    WeatherSetSnowHeight 300
+    WeatherSetSnowFrames 255
+    WeatherSetSnowSize 4
+    WeatherSetSnowBlendMode fixadd <blend>
+    WeatherSetSnowColor -1
+    WeatherSetSnowRate <rate>
+    Change dadmod_wx_on = 1
+endscript
+
 script dadmod_tod_client_allowed
     return allowed = 1
 endscript
@@ -5115,7 +5277,7 @@ script dadmod_walkcam_tick
         skatercam0 : Obj_GetPosition
         wc_cp = <Pos>
         skatercam0 : Obj_GetOrientation
-        THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
+        THUGRECOMP_WalkCam on = <wc_on> sx = ( <wc_sp> . (1.0,0.0,0.0) ) sy = ( <wc_sp> . (0.0,1.0,0.0) ) sz = ( <wc_sp> . (0.0,0.0,1.0) ) hx = <wc_hx> hz = <wc_hz> nc = <wc_nc> cpx = ( <wc_cp> . (1.0,0.0,0.0) ) cpy = ( <wc_cp> . (0.0,1.0,0.0) ) cpz = ( <wc_cp> . (0.0,0.0,1.0) ) cdx = <x> cdy = <y> cdz = <z>
     endif
     wc_live = 0
     if GotParam wc_state
@@ -5226,6 +5388,9 @@ dadmod_item_catalog = [
 { name = "gfx_windowed" b = 1 p = { id = gfx_windowed key = "gfx_windowed" label = "Display mode" kind = dispmode min = 0 max = 0 def = 0 desc = "Play in a window or fullscreen (a borderless window that fills the screen). Pick it, then press Apply. Alt+Enter switches it anytime." pdesc = "Window or fullscreen. Pick, then press Apply. Alt+Enter switches anytime." } }
 { name = "gfx_res" b = 1 p = { id = gfx_res key = "gfx_res" label = "Resolution" kind = dispres min = 0 max = 0 def = 0 desc = "The window size the game draws at (the sizes that fit your screen). Fullscreen always uses your monitor's own size. Pick it, then press Apply." pdesc = "Window size. Fullscreen always uses your monitor's size. Pick, then Apply." } }
 { name = "gfx_dispapply" b = 1 p = { id = gfx_dispapply key = "none" label = "Apply" kind = dispapply min = 0 max = 0 def = 0 desc = "Makes the picked display mode and resolution happen now. Press it again within 15 seconds to keep them, or they go back." pdesc = "Apply the picks. Press again within 15 seconds to keep them." } }
+{ name = "gfx_clip" b = 1 p = { id = gfx_clip key = "gfx_clip" label = "Distance clipping" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_clip desc = "Stops drawing parts of the level that are far away, which can help on a slow computer. Set how far with Clip distance. The same setting as Enable Distance Clipping in the THUG Pro launcher." pdesc = "Stops drawing far-away parts of the level. Can help on a slow computer." } }
+{ name = "gfx_clipdist" b = 1 p = { id = gfx_clipdist key = "gfx_clipdist" label = "Clip distance" kind = num min = 5 max = 100 step = 5 def = 100 desc = "How far you can see while Distance clipping is on: 5 is close, 100 is far. The same setting as the Near/Far slider in the THUG Pro launcher." pdesc = "How far you see with Distance clipping on: 5 close, 100 far." } }
+{ name = "gfx_clipfog" b = 1 p = { id = gfx_clipfog key = "gfx_clipfog" label = "Distance fog" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_clipfog desc = "Fades the far-away edge into fog so the level does not just stop. Only works while Distance clipping is on. The same setting as Enable Fog in the THUG Pro launcher." pdesc = "Fades the clipping edge into fog. Only works with Distance clipping on." } }
 { name = "gfx_postfx" b = 1 p = { id = gfx_postfx key = "gfx_postfx" label = "Graphics effects" kind = reshade min = 0 max = 1 def = 0 list = gfx_postfx desc = "Shown only when ReShade is installed. dadmod uses dadmod's graphics effects; ReShade skips dadmod's screen effects so only ReShade's show." } }
 { name = "gfx_aniso" b = 1 p = { id = gfx_aniso key = "gfx_aniso" label = "Texture filtering" kind = gfxlist min = 0 max = 4 def = 4 list = gfx_aniso desc = "Anisotropic filtering: keeps floors, roads and walls seen at an angle sharp instead of blurry. 16x looks best and costs very little. Changes show right away." pdesc = "Keeps floors and walls seen at an angle sharp. 16x looks best and costs very little." } }
 { name = "gfx_lodbias" b = 1 p = { id = gfx_lodbias key = "gfx_lodbias" label = "Texture sharpness" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_lodbias desc = "Makes the game use more detailed texture copies at a distance. Higher is crisper but can shimmer when moving. Changes show right away." pdesc = "Uses more detailed textures at a distance. Higher is crisper but can shimmer." } }
@@ -5239,6 +5404,11 @@ dadmod_item_catalog = [
 { name = "gfx_dof" b = 1 p = { id = gfx_dof key = "gfx_dof" label = "Depth of field" kind = num min = 0 max = 10 def = 0 desc = "Blurs things far away like a camera lens, keeping you and the area around you sharp. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Blurs far-away things like a camera lens. Off while MSAA is on." } }
 { name = "gfx_outline" b = 1 p = { id = gfx_outline key = "gfx_outline" label = "Outlines" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_outline desc = "Dark outlines around shapes, or a full cartoon cel-shaded look. Needs the depth buffer, so it is off while MSAA is on. Changes show right away." pdesc = "Dark outlines, or a cartoon cel-shaded look. Off while MSAA is on." } }
 { name = "gfx_mblur" b = 1 p = { id = gfx_mblur key = "gfx_mblur" label = "Motion blur" kind = num min = 0 max = 10 def = 0 desc = "Blends in a little of the last frame for a smooth, fast feel. High values leave ghost trails. Changes show right away." pdesc = "Blends in a little of the last frame. High values leave ghost trails." } }
+{ name = "gfx_skshadow" b = 1 p = { id = gfx_skshadow key = "gfx_skshadow" label = "Skater shadow" kind = gfxlist min = 0 max = 3 def = 0 list = gfx_skshadow desc = "The shadow under your skater. Circle is a plain round spot. Full body is the shape of your skater, and the sharp ones show it in more detail. The same setting as Skater Shadow Quality in the THUG Pro launcher." pdesc = "A round spot, or your skater's full shape (sharper further right)." } }
+{ name = "gfx_particles" b = 1 p = { id = gfx_particles key = "gfx_particles" label = "Particles" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_particles desc = "Sparks, smoke, splashes and other particle effects. Off can help on a slow computer. The same setting as Disable Particles in the THUG Pro launcher. Takes effect after a restart." pdesc = "Sparks, smoke and splashes. Takes effect after a restart." } }
+{ name = "gfx_levellights" b = 1 p = { id = gfx_levellights key = "gfx_levellights" label = "Level lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_levellights desc = "The lights placed around levels, like street lamps, that light up your skater and things near them. Shows from the next level you load. The same setting as Disable Level Lights in the THUG Pro launcher." pdesc = "Lights placed around levels. Shows from the next level you load." } }
+{ name = "gfx_skaterlights" b = 1 p = { id = gfx_skaterlights key = "gfx_skaterlights" label = "Skater lights" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_skaterlights desc = "THUG Pro's own extra lighting on skaters. The same setting as Disable Skater Lights in the THUG Pro launcher. Takes effect after a restart." pdesc = "THUG Pro's extra lighting on skaters. Takes effect after a restart." } }
+{ name = "gfx_tpscreenfx" b = 1 p = { id = gfx_tpscreenfx key = "gfx_tpscreenfx" label = "THUG Pro screen effects" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_tpscreenfx desc = "THUG Pro's own full-screen shader effects, separate from the dadmod effects on this page. The same setting as Disable Screen Effects in the THUG Pro launcher. Takes effect after a restart." pdesc = "THUG Pro's own screen shader effects. Takes effect after a restart." } }
 { name = "gfx_preset" b = 1 p = { id = gfx_preset key = "gfx_preset" label = "Color look" kind = gfxlist min = 0 max = 10 def = 0 list = gfx_preset desc = "A one-click color grade on top of the sliders. None leaves the colors as the game made them. Changes show right away." pdesc = "A one-click color grade on top of the sliders. None leaves the colors alone." } }
 { name = "gfx_bright" b = 1 p = { id = gfx_bright key = "gfx_bright" label = "Brightness" kind = num min = -10 max = 10 def = 0 desc = "Lifts or lowers the whole picture. 0 is normal. Changes show right away." } }
 { name = "gfx_contrast" b = 1 p = { id = gfx_contrast key = "gfx_contrast" label = "Contrast" kind = num min = -10 max = 10 def = 0 desc = "Difference between darks and lights. 0 is normal. Changes show right away." } }
@@ -5258,10 +5428,8 @@ dadmod_item_catalog = [
 { name = "gfx_lampadd" b = 1 p = { id = gfx_lampadd key = "gfx_lampadd" label = "Add street light here" kind = gfxact min = 0 max = 0 def = 0 desc = "Adds a street light at the camera. Use the free camera to put it right at a lamp." } }
 { name = "gfx_lampdel" b = 1 p = { id = gfx_lampdel key = "gfx_lampdel" label = "Remove nearest street light" kind = gfxact min = 0 max = 0 def = 0 desc = "Removes the street light closest to the camera." } }
 { name = "gfx_skydef" b = 1 p = { id = gfx_skydef key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default." } }
-{ name = "gfx_weather" b = 1 p = { id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)." } }
-{ name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is." } }
-{ name = "gfx_todfog" b = 1 p = { id = gfx_todfog key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default." } }
-{ name = "gfx_fogamt" b = 1 p = { id = gfx_fogamt key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is." } }
+{ name = "gfx_weather" b = 1 p = { id = gfx_weather key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_weather desc = "Rain, a thunderstorm, snow or fog over every level, or Random (changes every few minutes). Set how heavy with Intensity." } }
+{ name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up." } }
 { name = "gfx_fireworks" b = 1 p = { id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes." } }
 { name = "gfx_fwnow" b = 1 p = { id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now." } }
 { name = "gfx_fps" b = 1 p = { id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number." } }
@@ -5478,7 +5646,7 @@ script dadmod_bail_reform
     dadmod_abcsnd_get
     if ( <abcsnd_on> = 0 )
         unhide
-        Obj_ShadowOn ShadowType = Detailed
+        dadmod_shadow_restore
         return
     endif
     hide
@@ -5502,7 +5670,7 @@ script dadmod_bail_reform
         endif
     repeat
     unhide
-    Obj_ShadowOn ShadowType = Detailed
+    dadmod_shadow_restore
 endscript
 
 dadmod_abc_particle_params = {
@@ -5637,6 +5805,38 @@ script dadmod_abcsnd_unlock
     if ScreenElementExists id = dadmod_abcsnd_item
         dadmod_abcsnd_item : SetTags abcsnd_lock = 0
     endif
+endscript
+
+script dadmod_shadow_restore
+    if THUGRECOMP_SettingLoad key = "gfx_shadowdetail"
+        if (<value> = 1)
+            Obj_ShadowOn ShadowType = Detailed
+            return
+        endif
+    endif
+    Obj_ShadowOn ShadowType = Simple
+endscript
+
+script dadmod_shadow_refresh
+    if LevelIs Load_MainMenu
+        return
+    endif
+    if not ObjectExists id = Skater
+        return
+    endif
+    if Skater : Driving
+        return
+    endif
+    if IsObserving
+        return
+    endif
+    if THUGRECOMP_SettingLoad key = "gfx_shadowdetail"
+        if (<value> = 1)
+            Skater : Obj_ShadowOn ShadowType = Detailed
+            return
+        endif
+    endif
+    Skater : Obj_ShadowOn ShadowType = Simple
 endscript
 
 script dadmod_tsfx_get
@@ -7684,6 +7884,8 @@ script dadmod_menu
     description_text = "Drive a car. Everyone on the server sees it, even players without dadmod"
     pad_choose_script = dadmod_cars_menu
     }
+    if ScriptExists dadmod_lampedit_menu_start
+    endif
     make_thugpro_menu_item {
     text = "Sky & weather  >"
     sub_label = "Sky & weather"
@@ -7855,11 +8057,9 @@ script dadmod_pause_skywx_menu
     dadmod_pause_sub_create name = dadmod_skywx title = "sky & weather" back_id = dadmod_pause_skywx
     dadmod_ui_item id = gfx_tod_pause key = "gfx_tod" label = "Time of day" kind = gfxlist min = 0 max = 6 def = 0 list = gfx_tod desc = "Level / server follows the level, or the server when one runs a day/night fade. Pick a time to use your own, even when the server changes it."
     dadmod_ui_item id = gfx_galaxy_pause key = "gfx_galaxy" label = "Sky" kind = gfxlist min = 0 max = 14 def = 0 list = gfx_galaxy desc = "Swap the sky. Dark skies also darken the map unless you pick a Time of day."
-    dadmod_ui_item id = gfx_todfog_pause key = "gfx_todfog" label = "Fog" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_todfog desc = "Low mist lying over the ground around you and the buildings: knee high, head high, up to the first floor or up to the rooftops. Its color follows the time of day. Off by default."
-    dadmod_ui_item id = gfx_fogamt_pause key = "gfx_fogamt" label = "Fog intensity" kind = num min = 1 max = 10 def = 5 desc = "How thick the ground mist is."
     dadmod_ui_item id = gfx_skypop_pause key = "gfx_skypop" label = "Sky boost" kind = num min = 0 max = 10 def = 0 desc = "Richer sky colors that match the time of day: deep blue days, orange sunsets, stars at night. 0 leaves the sky as the game draws it." pdesc = "Richer sky colors for the time of day, with stars at night. 0 is off."
-    dadmod_ui_item id = gfx_weather_pause key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 4 def = 0 list = gfx_weather desc = "Rain, a thunderstorm or snow over every level, or Random (changes every few minutes)."
-    dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Weather intensity" kind = num min = 1 max = 10 def = 6 desc = "How heavy the rain or snow is."
+    dadmod_ui_item id = gfx_weather_pause key = "gfx_weather" label = "Weather" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_weather desc = "Rain, a thunderstorm, snow or fog over every level, or Random (changes every few minutes). Set how heavy with Intensity."
+    dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up."
     dadmod_ui_item id = gfx_fireworks_pause key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
     dadmod_ui_item id = gfx_fwnow_pause key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
     dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
@@ -7907,10 +8107,10 @@ script dadmod_pause_controls_menu
 endscript
 
 dadmod_pause_gfx_groups = [
-{ title = "Display" desc = "Windowed or fullscreen, the resolution and v-sync, applied with Apply" items = [ "gfx_windowed" "gfx_res" "gfx_vsync" "gfx_dispapply" ] }
+{ title = "Display" desc = "Windowed or fullscreen, resolution, v-sync and how far you can see" items = [ "gfx_windowed" "gfx_res" "gfx_vsync" "gfx_dispapply" "gfx_clip" "gfx_clipdist" "gfx_clipfog" ] }
 { title = "Textures" desc = "Texture filtering and sharpness" items = [ "gfx_aniso" "gfx_lodbias" "gfx_uismooth" ] }
 { title = "Anti-aliasing" desc = "Smooth jagged edges" items = [ "gfx_fxaa" "gfx_msaa" ] }
-{ title = "Effects" desc = "Sharpening, bloom, ambient occlusion, haze, depth of field, outlines and motion blur" items = [ "gfx_sharpen" "gfx_bloom" "gfx_ssao" "gfx_fog" "gfx_dof" "gfx_outline" "gfx_mblur" ] }
+{ title = "Effects" desc = "Sharpening, bloom, haze, blur and more, plus skater shadow, particles and lights" items = [ "gfx_sharpen" "gfx_bloom" "gfx_ssao" "gfx_fog" "gfx_dof" "gfx_outline" "gfx_mblur" "gfx_skshadow" "gfx_particles" "gfx_levellights" "gfx_skaterlights" "gfx_tpscreenfx" ] }
 { title = "Color" desc = "A color look plus brightness, contrast, saturation, vibrance, gamma, temperature and tint" items = [ "gfx_preset" "gfx_bright" "gfx_contrast" "gfx_sat" "gfx_vibrance" "gfx_gamma" "gfx_temp" "gfx_tint" ] }
 { title = "Retro" desc = "Pixelate, CRT TV, film grain, chromatic aberration and vignette" items = [ "gfx_pixelate" "gfx_crt" "gfx_grain" "gfx_chroma" "gfx_vignette" ] }
 { title = "Extras" desc = "FPS counter, screenshots and frame generation" items = [ "gfx_fps" "gfx_shotkey" "gfx_shothud" "gfx_framegen" ] }
@@ -7996,7 +8196,7 @@ script dadmod_pause_gfx_group
     thugpro_menu_finalize
 endscript
 
-dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_todfog" "gfx_fogamt" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
+dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
 
 script dadmod_pause_weather
     dadmod_pause_skywx_menu
@@ -8042,315 +8242,4 @@ script dadmod_free_cam_on
         ToggleViewMode
     endif
 endscript
-
-script thugpro_mark_save
-    index = 0
-    mark_level = "east_la"
-    GetLevelStructureName
-    if StructureContains structure = ( <level_structure_name> ) level
-        mark_level = ( <level_structure_name> . level )
-    endif
-    THUGRECOMP_MenuMark {
-    kind = <kind>
-    level = <mark_level>
-    px = ( <Pos> . (1.0,0.0,0.0) )
-    py = ( <Pos> . (0.0,1.0,0.0) )
-    pz = ( <Pos> . (0.0,0.0,1.0) )
-    dx = ( <dir> . (1.0,0.0,0.0) )
-    dy = ( <dir> . (0.0,1.0,0.0) )
-    dz = ( <dir> . (0.0,0.0,1.0) )
-    }
-    thugpro_mark_vec_text v = <Pos>
-    if (<index> = 0)
-        FormatText TextName = text "%w NOT SAVED  pos %p" w = <what> p = <vec_text>
-    else
-        FormatText TextName = text "%w saved as %k %i in mainmenu.ini  pos %p" w = <what> k = <kind> i = <index> p = <vec_text>
-    endif
-    KillSpawnedScript Name = thugpro_mark_show
-    SpawnScript thugpro_mark_show params = { text = <text> }
-endscript
-
-level_Mainmenu_EL = {
-game = thug1
-structure_name = level_Mainmenu_EL
-load_script = Load_MainMenu
-Name = "Skate Shop"
-loading_time = 8.5
-loading_time_xbox = 11.0
-level_name = "skateshop"
-level = "z_el"
-sky = "thaw_Sky"
-scnpre = "z_elscn.pre"
-colpre = "z_elcol.pre"
-pre = "z_el_scripts.pre"
-thugpro_prx = "mainmenu_el_scripts.pre"
-qb = "levels\\mainmenu_el\\z_el.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-level_sfx_qb = "levels\\z_el\\z_el_sfx_scripts.qb"
-more_level_qbs = [
-"levels\\z_el\\z_el_scripts.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-num_m_heads = 4
-num_m_torsos = 4
-num_m_legs = 4
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-script thugpro_mainmenu_el_startup
-    skateshop_startup
-    PreloadPedestrians
-endscript
-
-dadmod_menu_levels_block = "Main menu levels (generated by mods/mainmenu/gen_menulevels.py)"
-
-level_Mainmenu_toystory_bedroom = {
-structure_name = level_Mainmenu_toystory_bedroom
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = DESA
-loading_time = 8.5
-level = "toystory_bedroom"
-sky = "default_sky"
-nosun
-pre = "toystory_bedroom_scripts.pre"
-scnpre = "toystory_bedroomscn.pre"
-colpre = "toystory_bedroomcol.pre"
-default_level_stuff
-indoor
-wallride_hack
-DisableGoalEditor
-DisableGoalAttack
-overview_cam_angle = -45
-overview_cam_zoom = (-1e+03,5e+04,5e+03)
-thugpro_prx = "mainmenu_toystory_bedroom_scripts.pre"
-qb = "levels\\mainmenu_toystory_bedroom\\toystory_bedroom.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\toystory_bedroom\\toystory_bedroom_scripts.qb"
-"levels\\toystory_bedroom\\toystory_bedroom_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_tr = {
-structure_name = level_Mainmenu_tr
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-DisableBackfacePatch
-loading_time = 9.35
-tod_manager_active = 0
-COIM_size = 614400
-pre = "TR_scripts.pre"
-thugpro_scn_pre
-level = "TR"
-sky = "TR_Sky"
-thugpro_col_pre
-pedpre = "TRped.pre"
-level_sfx_qb = "levels\\TR\\TR_sfx.qb"
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0.0
-mod_factor_0_hi = 0.0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-indoor
-nosun
-overview_cam_pos = (-1473.69,4401.08,-2635.701)
-overview_cam_angle = 180
-thugpro_prx = "mainmenu_tr_scripts.pre"
-qb = "levels\\mainmenu_tr\\tr.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\TR\\TR_scripts.qb"
-"levels\\TR\\TR_cutscene_particle_data.qb"
-"levels\\TR\\TR_level_particle_data.qb"
-"levels\\TR\\TR_cutscene_fast_particle_data.qb"
-"levels\\TR\\TR_level_fast_particle_data.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_bo = {
-structure_name = level_Mainmenu_bo
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-DisableBackfacePatch
-loading_time = 12.4
-tod_manager_active = 1
-COIM_size = 768000
-pre = "BO_scripts.pre"
-scnpre = "BOscn.pre"
-level = "BO"
-sky = "BO_Sky"
-colpre = "BOcol.pre"
-pedpre = "BOped.pre"
-level_sfx_qb = "levels\\BO\\BO_sfx.qb"
-special_ped_info = [
-{ Type = pro flag = PRO_FOUND_01 }
-{ Type = guest Name = benfranklin }
-{ Type = flavor Name = segwayrider }
-]
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0.0
-mod_factor_0_hi = 0.0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 0
-fog_blue = 0
-fog_green = 0
-fog_alpha = 0
-fog_dist = 0
-num_m_heads = 6
-num_m_torsos = 6
-num_m_legs = 4
-overview_cam_angle = 180
-overview_cam_zoom = (0.0,4e+03,5e+02)
-thugpro_prx = "mainmenu_bo_scripts.pre"
-qb = "levels\\mainmenu_bo\\bo.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\BO\\BO_scripts.qb"
-"levels\\BO\\BO_cutscene_particle_data.qb"
-"levels\\BO\\BO_level_particle_data.qb"
-"levels\\BO\\BO_cutscene_fast_particle_data.qb"
-"levels\\BO\\BO_level_fast_particle_data.qb"
-"levels\\bo\\bo_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
-
-level_Mainmenu_ba = {
-structure_name = level_Mainmenu_ba
-load_script = Load_MainMenu
-Name = "Skate Shop"
-level_name = "skateshop"
-game = thug2
-loading_time = 13.39
-COIM_size = 1536000
-tod_manager_active = 1
-pre = "BA_scripts.pre"
-scnpre = "BAscn.pre"
-level = "BA"
-sky = "BA_Sky"
-colpre = "BAcol.pre"
-pedpre = "BAped.pre"
-level_sfx_qb = "levels\\BA\\BA_sfx.qb"
-tod_script = BA_TOD
-ambient_red = 54
-ambient_green = 63
-ambient_blue = 64
-ambient_mod_factor_lo = 1.1
-ambient_mod_factor_hi = 0.0
-heading_0 = 159
-pitch_0 = 308
-red_0 = 136
-green_0 = 120
-blue_0 = 110
-mod_factor_0_lo = 0
-mod_factor_0_hi = 0
-heading_1 = 305
-pitch_1 = 37
-red_1 = 72
-green_1 = 70
-blue_1 = 66
-mod_factor_1_lo = 1.3
-mod_factor_1_hi = 0.0
-fog_red = 100
-fog_blue = 150
-fog_green = 120
-fog_alpha = 50
-fog_dist = 1000
-num_m_heads = 8
-num_m_torsos = 8
-num_m_legs = 6
-overview_cam_angle = -63
-overview_cam_zoom = (1e+03,7.5e+03,1e+03)
-thugpro_prx = "mainmenu_ba_scripts.pre"
-qb = "levels\\mainmenu_ba\\ba.qb"
-level_qb = "levels\\skateshop\\skateshop_scripts.qb"
-more_level_qbs = [
-"levels\\BA\\BA_scripts.qb"
-"levels\\BA\\BA_cutscene_particle_data.qb"
-"levels\\BA\\BA_level_particle_data.qb"
-"levels\\BA\\BA_cutscene_fast_particle_data.qb"
-"levels\\BA\\BA_level_fast_particle_data.qb"
-"levels\\ba\\ba_thugpro.qb"
-"levels\\skateshop\\skateshop.qb"
-"levels\\skateshop\\skateshop_cas.qb"
-"levels\\skateshop\\colormenu.qb"
-]
-startup_script = skateshop_startup
-default_stats = 8
-level_number = LevelNum_Skateshop
-frontend_level = 1
-skip_teammate_pro
-}
 

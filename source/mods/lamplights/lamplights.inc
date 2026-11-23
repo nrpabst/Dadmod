@@ -39,9 +39,14 @@ static bool __cdecl CF_AddLevelLight(void* params, void* script) {
 }
 
 // THUGRECOMP_LampBulbsClear: forget the lamp bulbs of the last level (gfx.inc draws them: glow at the head + warm pool)
+// [loading = 1]: a level load is starting (lit windows off until it is done); [level = "hof"]: the level that just loaded
 static bool __cdecl CF_LampBulbsClear(void* params, void* script) {
-    (void)params; (void)script;
+    (void)script;
     gfx::BulbClear();
+    const char* lv = nullptr;
+    bool loading = params && IntParam(params, "loading", 0) != 0;
+    if (params && !loading) GetStringParam(params, "level", &lv);
+    gfx::WinLevelHook(lv, loading);
     return true;
 }
 // THUGRECOMP_LampBulb Pos = (x,y,z) [pool = 450] [drop = 440] [r = 255 g = 176 b = 80]   (game coordinates of the bulb)

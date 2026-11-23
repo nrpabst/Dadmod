@@ -112,6 +112,10 @@ static volatile LONG g_xconn[4];  // XInput slot connected
 static volatile LONG g_xlost[4];  // game thread saw the slot drop (logged by the worker)
 static char* g_db;                // gamecontrollerdb.txt contents, or null
 static volatile LONG g_padButtons;
+// Lamp Editor (dev build, 2026-11-23): while it is open the D-pad (and the arrow keys, fullscreen.inc) pick lamps
+// and maps, so the game's own camera stops seeing them; the editor refreshes this tick every frame (300 ms timeout)
+static volatile LONG g_hideDpadTick = 0;
+static bool HideDpad() { LONG t = g_hideDpadTick; return t && GetTickCount() - (DWORD)t < 300; }
 static volatile LONG g_padActive;   // a pad button is down or a stick/trigger is pushed past 60% (button prompts)  // merged buttons last frame (Xbox layout bits), for THUGRECOMP_PadPressed
 // Dadmod > Controls (gfx.ini, kept in step by gfx.inc SyncInput, Noah 2026-11-16)
 static volatile LONG g_deadzone;  // Stick dead zone: 0 off, 1..10 = 3%..30% radial dead zone on both sticks
@@ -761,6 +765,7 @@ static bool ReadAll(DIJOYSTATE2* st) {
     bool left = (acc.buttons >> B_LEFT) & 1, right = (acc.buttons >> B_RIGHT) & 1;
     if (up && down) up = down = false;
     if (left && right) left = right = false;
+    if (HideDpad()) up = down = left = right = false;
     static const DWORD kPov[3][3] = { { 31500, 0, 4500 }, { 27000, 0xFFFFFFFF, 9000 }, { 22500, 18000, 13500 } };
     st->rgdwPOV[0] = kPov[up ? 0 : down ? 2 : 1][left ? 0 : right ? 2 : 1];
     st->rgdwPOV[1] = st->rgdwPOV[2] = st->rgdwPOV[3] = 0xFFFFFFFF;

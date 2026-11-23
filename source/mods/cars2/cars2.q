@@ -313,6 +313,9 @@ script dadmod_cars_exit_now
         dadmod_c2_pos = <Pos>
         if ObjectExists id = PlayerVehicleCamera
             ToggleUserControlledVehicleMode
+            if ObjectExists id = skater
+                Skater : dadmod_shadow_restore
+            endif
         else
             PlayerVehicle : Die
             dadmod_cars_cleanup
@@ -346,7 +349,7 @@ script dadmod_cars_cleanup
     Skater : UnsetDriving
     Skater : unhide
     Skater : ReturnBoardToSkater
-    Skater : Obj_ShadowOn ShadowType = Detailed
+    Skater : dadmod_shadow_restore
     Skater : ResetRigidBodyCollisionRadiusBoost
     GoalManager_HideAllGoalPeds 0
     Change driving_parked_car = 0

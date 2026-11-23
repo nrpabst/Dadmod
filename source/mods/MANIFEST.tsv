@@ -67,3 +67,4 @@ skatercopy	client	yes	prx:ButtonScripts.q prx:procrastination.q(thugpro_menu_fin
 levelfix	client	yes	data:dadmod_levelfix.qb prx:Levels.q(load_level)	Stock level script fixes loaded after each level's own qbs: New Orleans "Into the Underworld" manhole scream off (Noah 2026-11-21)
 fullscreen	client	yes	dll:fullscreen.inc prx:ButtonScripts.q(display.q)	Alt+Enter fullscreen + Graphics > Display applies live (Apply / Keep); in the player build since 0.9.18
 lamplights	client	yes	dll:lamplights.inc+gfx.inc dadmod:dadmod_cars.qb(lamplights.q data/lamps_hof.q) load_level call (procrastination.q / client menus.q) dadmod:lampwindows.txt+lampwindows\*.raw	Chicago (hof) night street lamps + lit windows; always on, no menu row (2026-11-22)
+shadow	client	yes	prx:ButtonScripts.q	Skater shadow: dadmod_shadow_restore/refresh pick Detailed or Simple from the THUG Pro launcher setting (Graphics > Effects > Skater shadow, gfx.inc tp::)

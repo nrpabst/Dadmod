@@ -184,7 +184,7 @@ script dadmod_bail_reform
     dadmod_abcsnd_get
     if ( <abcsnd_on> = 0 )
         unhide
-        Obj_ShadowOn ShadowType = Detailed
+        dadmod_shadow_restore
         return
     endif
     hide
@@ -208,7 +208,7 @@ script dadmod_bail_reform
         endif
     repeat
     unhide
-    Obj_ShadowOn ShadowType = Detailed
+    dadmod_shadow_restore
 endscript
 dadmod_abc_particle_params = {
 bone = Bone_Pelvis

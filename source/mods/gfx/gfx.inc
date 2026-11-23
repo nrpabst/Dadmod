@@ -398,6 +398,7 @@ static bool g_mainMenu = true;
 static int g_keepLit = 1;  // night tint spares bright / colored pixels (THUG2-era maps' own lights); QB sends 0 for THPS1-4 maps (lamplights.q)
 static void FireworksShow(double seconds, const char* why);
 static void SetLevel(const char* name);
+static void WinPollLevel(const char* lv);  // lit windows follow the level (2026-11-23)
 static void LampMark(bool add);
 // THUGRECOMP_SettingSave/Load redirect for gfx_ keys (declared in modes.inc)
 bool SetKey(const char* key, int value) {
@@ -1985,6 +1986,7 @@ static void SetLevel(const char* name) {
     for (auto& ch : lv) ch = (char)tolower((unsigned char)ch);
     if (lv == g_level) return;
     g_level = lv;
+    WinPollLevel(lv.c_str());
     g_lamps.clear();
     std::string data, mine;
     ReadWholeFile(ExeDirFile("levellights.txt"), data);
@@ -2049,6 +2051,9 @@ static float g_bulbC[2 + 2 * kBulbMax][4];
 static int g_bulbN = 0;
 static void WinCacheClear();
 static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); WinCacheClear(); }
+// lamplights' level hook (2026-11-23): loading = a level load is starting (windows off until the level is known),
+// else the level that just loaded (nullptr = the last level SetLevel saw)
+static void WinLevelHook(const char* lv, bool loading);
 static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b) {
     if (g_bulbs.size() >= 1024) return;
     g_bulbDrop.push_back(drop);
@@ -3042,16 +3047,41 @@ static HRESULT STDMETHODCALLTYPE HookRS(IDirect3DDevice9* dev, D3DRENDERSTATETYP
 }
 
 // ---- lit windows: the game's own window-texture draws are drawn a second time into g_winTex with ps_window
-struct WinTex { UINT w, h, dxt, hash; };
+struct WinTex { UINT w, h, dxt, hash; std::string lvl; };
 static std::vector<WinTex> g_winList;
 static bool g_winListRead = false;
 static std::map<void*, bool> g_winSeen;  // texture -> is a window texture (cleared at every level load)
 static std::map<void*, IDirect3DTexture9*> g_winMask;  // window texture -> its pane mask (dadmod\lampwindows\<hash>.raw, L8)
-static void WinCacheClear() {
-    g_winSeen.clear(); g_winListRead = false;
+static std::map<void*, UINT> g_winHash;  // window texture -> its hash (the pane maps are remade from it when the share changes)
+// the level the windows are matched for (lampwindows.txt column 1; 2026-11-23): set by lamplights' level hook at the end of
+// load_level, empty (= windows off, nothing gets cached) from the start of a level load until then
+static std::string g_winLevel;
+static bool g_winLoading = false;
+static void WinMasksRelease() {
     for (auto& m : g_winMask) if (m.second) m.second->Release();
     g_winMask.clear();
 }
+static void WinCacheClear() {
+    g_winSeen.clear(); g_winHash.clear(); g_winListRead = false;
+    WinMasksRelease();
+}
+static void WinSetLevelNow(const std::string& lv) {
+    if (lv == g_winLevel) return;
+    g_winLevel = lv;
+    WinCacheClear();
+    mmenu::Log("gfx: lit windows: level \"%s\"", lv.c_str());
+}
+static std::string WinLower(const char* lv) {
+    std::string o = lv ? lv : "";
+    for (auto& ch : o) ch = (char)tolower((unsigned char)ch);
+    return o;
+}
+static void WinLevelHook(const char* lv, bool loading) {
+    g_winLoading = loading;
+    if (loading) { g_winLevel.clear(); WinCacheClear(); return; }
+    WinSetLevelNow(WinLower(lv && *lv ? lv : g_level.c_str()));
+}
+static void WinPollLevel(const char* lv) { if (!g_winLoading) WinSetLevelNow(WinLower(lv)); }  // fallback: the 30-frame level poll
 static int g_winShareLoaded = -1;  // gfx_windowshare the pane colors were made with (a change reloads them)
 static void WinLoadMask(IDirect3DTexture9* t, UINT w, UINT h, UINT hash) {
     // 2026-11-23 (far towers shimmered): each pane's lit color is worked out here once, so the map holds colors, not
@@ -3130,7 +3160,7 @@ static void WinReadList() {
         s0 = e == std::string::npos ? data.size() : e + 1;
         char lvl[64]; WinTex t;
         if (line.empty() || line[0] == ';') continue;
-        if (sscanf(line.c_str(), "%63s %u %u %u %x", lvl, &t.w, &t.h, &t.dxt, &t.hash) == 5) g_winList.push_back(t);
+        if (sscanf(line.c_str(), "%63s %u %u %u %x", lvl, &t.w, &t.h, &t.dxt, &t.hash) == 5) { t.lvl = WinLower(lvl); g_winList.push_back(t); }
     }
     mmenu::Log("gfx: lit windows: %d window textures listed", (int)g_winList.size());
 }
@@ -3145,7 +3175,7 @@ static bool IsWindowTex(IDirect3DBaseTexture9* bt) {
         if (SUCCEEDED(t->GetLevelDesc(0, &d))) {
             dxt = d.Format == D3DFMT_DXT1 ? 1 : d.Format == D3DFMT_DXT2 ? 2 : d.Format == D3DFMT_DXT3 ? 3 : d.Format == D3DFMT_DXT4 ? 4 : d.Format == D3DFMT_DXT5 ? 5 : 0;
             bool cand = false;
-            for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt) cand = true;
+            for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt && w.lvl == g_winLevel) cand = true;  // this level's rows only
             D3DLOCKED_RECT lr;
             if (cand && dxt && SUCCEEDED(t->LockRect(0, &lr, nullptr, D3DLOCK_READONLY))) {
                 UINT rowBytes = (d.Width / 4 ? d.Width / 4 : 1) * (dxt == 1 ? 8 : 16), rows = d.Height / 4 ? d.Height / 4 : 1;
@@ -3155,8 +3185,8 @@ static bool IsWindowTex(IDirect3DBaseTexture9* bt) {
                     for (UINT i = 0; i < rowBytes; ++i, ++n) h = (h ^ p[i]) * 0x01000193;
                 }
                 t->UnlockRect(0);
-                for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt && w.hash == h) yes = true;
-                if (yes) WinLoadMask(t, d.Width, d.Height, h);
+                for (const auto& w : g_winList) if (w.w == d.Width && w.h == d.Height && w.dxt == dxt && w.hash == h && w.lvl == g_winLevel) yes = true;
+                if (yes) { g_winHash[t] = h; WinLoadMask(t, d.Width, d.Height, h); }
             }
         }
     }
@@ -3169,9 +3199,22 @@ static bool IsWindowTex(IDirect3DBaseTexture9* bt) {
 }
 static bool MoonOn() { return V("gfx_moonlight") > 0 && g_bulbAmt > 0.01f && g_psMoon && !g_mainMenu; }
 static bool WinLayerReady() { return g_winTex && g_winFrame == g_presents; }
-static bool WindowsOn() { return V("gfx_windows") && g_bulbAmt > 0.01f && g_psWindow && !g_msaaOn && g_w && !g_mainMenu; }
-static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3DPRIMITIVETYPE pt, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
-    if (g_winShareLoaded >= 0 && g_winShareLoaded != V("gfx_windowshare")) { WinCacheClear(); g_winShareLoaded = -1; return; }  // share changed: remake the pane colors
+static bool WindowsOn() { return V("gfx_windows") && g_bulbAmt > 0.01f && g_psWindow && !g_msaaOn && g_w && !g_mainMenu && !g_winLevel.empty(); }
+// share changed (2026-11-23): remake only the pane color maps; which textures are windows stays known
+static void WinRemakeMasks() {
+    WinMasksRelease();
+    g_winShareLoaded = -1;
+    for (const auto& e : g_winHash) {
+        IDirect3DTexture9* t = (IDirect3DTexture9*)e.first;
+        D3DSURFACE_DESC d;
+        if (SUCCEEDED(t->GetLevelDesc(0, &d))) WinLoadMask(t, d.Width, d.Height, e.second);
+    }
+    g_winShareLoaded = V("gfx_windowshare");
+}
+// the game's draw this window texture came from: indexed (DrawIndexedPrimitive), plain (DrawPrimitive) or user pointer (DrawPrimitiveUP)
+struct WinDraw { int kind; D3DPRIMITIVETYPE pt; INT b; UINT mi, nv, si, pc; const void* up; UINT upst; };
+static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, const WinDraw& wd) {
+    if (g_winShareLoaded >= 0 && g_winShareLoaded != V("gfx_windowshare")) WinRemakeMasks();
     auto mk = g_winMask.find(tex);
     IDirect3DTexture9* mask = mk == g_winMask.end() ? nullptr : mk->second;
     if (!mask && V("gfx_windows") != 2) return;  // no pane map: no light at all (check mode still shows it blue)
@@ -3250,7 +3293,9 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     ++g_winDraws;
     dev->SetPixelShaderConstantF(0, c0, 1);
     dev->SetPixelShader(g_psWindow);
-    g_origDIP(dev, pt, b, mi, nv, si, pc);
+    if (wd.kind == 0) g_origDIP(dev, wd.pt, wd.b, wd.mi, wd.nv, wd.si, wd.pc);
+    else if (wd.kind == 1) g_origDP(dev, wd.pt, wd.si, wd.pc);
+    else g_origDPUP(dev, wd.pt, wd.pc, wd.up, wd.upst);
     dev->SetPixelShader(oldPS);
     if (oldPS) oldPS->Release();
     dev->SetPixelShaderConstantF(0, oldC0, 1);
@@ -3269,25 +3314,30 @@ static void DrawWindowGlow(IDirect3DDevice9* dev, IDirect3DBaseTexture9* tex, D3
     rt->Release();
 }
 static bool ScreenSpaceDraw(IDirect3DDevice9* dev);
+// after each game draw of the 3D scene: a window texture is drawn again into the lit windows layer (all three draw calls, 2026-11-23)
+static void WinAfterDraw(IDirect3DDevice9* dev, const WinDraw& wd) {
+    if (g_inPost || g_sceneDone || g_skyPass || !WindowsOn()) return;
+    if (!g_winListRead) WinReadList();
+    IDirect3DBaseTexture9* tex = nullptr;
+    if (!g_winList.empty() && SUCCEEDED(dev->GetTexture(0, &tex)) && tex) {
+        if (IsWindowTex(tex)) DrawWindowGlow(dev, tex, wd);
+        tex->Release();
+    }
+}
 static HRESULT STDMETHODCALLTYPE HookDIP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, INT b, UINT mi, UINT nv, UINT si, UINT pc) {
     if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;  // the galaxy replaces the game's sky
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
     HRESULT hr = g_origDIP(dev, t, b, mi, nv, si, pc);
-    if (!g_inPost && !g_sceneDone && !g_skyPass && WindowsOn()) {
-        if (!g_winListRead) WinReadList();
-        IDirect3DBaseTexture9* tex = nullptr;
-        if (!g_winList.empty() && SUCCEEDED(dev->GetTexture(0, &tex)) && tex) {
-            if (IsWindowTex(tex)) DrawWindowGlow(dev, tex, t, b, mi, nv, si, pc);
-            tex->Release();
-        }
-    }
+    WinAfterDraw(dev, {0, t, b, mi, nv, si, pc, nullptr, 0});
     return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE HookDP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE t, UINT sv, UINT pc) {
     if (g_skyPass && !g_inPost && GalaxyOn()) return D3D_OK;
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
-    return g_origDP(dev, t, sv, pc);
+    HRESULT hr = g_origDP(dev, t, sv, pc);
+    WinAfterDraw(dev, {1, t, 0, 0, 0, sv, pc, nullptr, 0});
+    return hr;
 }
 
 // true if the next draw uses screen-space (pre-transformed) vertices: HUD, menus, text
@@ -3310,7 +3360,9 @@ static HRESULT STDMETHODCALLTYPE HookDPUP(IDirect3DDevice9* dev, D3DPRIMITIVETYP
     // Noah 2026-10-20 (mirror mode showed unflipped bits): the game also draws 3D effects (shadows,
     // particles, trails) with DrawPrimitiveUP, so only a screen-space draw ends the 3D scene.
     if (!g_inPost && !g_sceneDone && ScreenSpaceDraw(dev)) RunScene(dev);
-    return g_origDPUP(dev, t, n, v, st);
+    HRESULT hr = g_origDPUP(dev, t, n, v, st);
+    WinAfterDraw(dev, {2, t, 0, 0, 0, 0, n, v, st});
+    return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE HookFVF(IDirect3DDevice9* dev, DWORD f) {

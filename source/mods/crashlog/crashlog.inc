@@ -645,6 +645,82 @@ static void PatchModelGeometryNull() {
     DebugLog("crashlog: model geometry null guard applied (0x45D3B5)");
 }
 
+// The other screen-element CFuncs (2026-11-23, Noah's go): like DoScreenElementMorph, these resolve the element id with
+// 0x4AD1E0 into a local smart pointer and then use it without a NULL check, so a missing id crashes. Each one gets a
+// jump right after the lookup to a stub that checks the pointer: when it is NULL the stub leaves through the function's
+// own cleanup (same stack and SEH state as the original exit; "true" for setters/getters, "false" where the stock
+// function already has a false exit); otherwise it runs the moved instructions and jumps back. Offsets were checked
+// against each function's disassembly (stack at the patch point, pushed registers the exit pops).
+struct ScreenGuard {
+    DWORD at; const char* orig; const char* check; const char* fail; DWORD failTo; DWORD back; const char* name;
+};
+
+static int HexBytes(const char* hex, BYTE* out) {
+    int n = 0;
+    auto val = [](char c) -> int { return c <= '9' ? c - '0' : (c | 0x20) - 'a' + 10; };
+    for (const char* h = hex; h[0] && h[1]; ) {
+        if (*h == ' ') { ++h; continue; }
+        out[n++] = (BYTE)(val(h[0]) * 16 + val(h[1]));
+        h += 2;
+    }
+    return n;
+}
+
+static void PatchScreenElementGuards() {
+    static const ScreenGuard g[] = {
+        // RunScriptOnScreenElement, CFunc-callback branch: mov ecx,[esp+0x18]; mov eax,[ecx]
+        { 0x4AD418, "8b4c2418 8b01",        "837c241800", "",     0x4AD48B, 0x4AD41E, "RunScriptOnScreenElement" },
+        // SetScreenElementLock: push 0xD443A2BC (exit pops esi first)
+        { 0x4AD5F5, "68bca243d4",           "837c240400", "5e",   0x4AD61D, 0x4AD5FA, "SetScreenElementLock" },
+        // GetScreenElementDims: mov esi,[esp+0xC]; fld dword [esi+0x160]
+        { 0x4AD687, "8b74240c d98660010000", "837c240c00", "",     0x4AD6E1, 0x4AD691, "GetScreenElementDims" },
+        // TextElementConcatenate: push 1; lea ecx,[esp+0xC] (exit returns al)
+        { 0x4AD746, "6a01 8d4c240c",        "837c240c00", "33c0", 0x4AD7A9, 0x4AD74C, "TextElementConcatenate" },
+        // TextElementBackspace: mov ecx,[esp+4]; mov eax,[ecx+0x18] (exit returns al)
+        { 0x4AD835, "8b4c2404 8b4118",      "837c240400", "33c0", 0x4AD899, 0x4AD83C, "TextElementBackspace" },
+        // GetTextElementString: mov ecx,[esp]; mov eax,[ecx+0x18]
+        { 0x4AD916, "8b0c24 8b4118",        "833c2400",   "",     0x4AD978, 0x4AD91C, "GetTextElementString" },
+        // GetTextElementLength: mov ecx,[esp]; mov eax,[ecx+0x18]
+        { 0x4AD9F4, "8b0c24 8b4118",        "833c2400",   "",     0x4ADA50, 0x4AD9FA, "GetTextElementLength" },
+        // GetScreenElementPosition: mov ecx,[esp+8]; lea edx,[esp]
+        { 0x4ADAB4, "8b4c2408 8d1424",      "837c240800", "",     0x4ADAE8, 0x4ADABB, "GetScreenElementPosition" },
+        // MenuSelectedIndexIs: mov ecx,[esp+0x10]; mov esi,[ecx+0x178]
+        { 0x4ADB57, "8b4c2410 8bb178010000", "837c241000", "",     0x4ADB7E, 0x4ADB61, "MenuSelectedIndexIs" },
+    };
+    BYTE* mem = (BYTE*)VirtualAlloc(nullptr, 64 * (sizeof g / sizeof g[0]), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!mem) return;
+    int applied = 0;
+    char msg[160];
+    for (int i = 0; i < (int)(sizeof g / sizeof g[0]); ++i) {
+        BYTE orig[16], check[8], fail[8];
+        int no = HexBytes(g[i].orig, orig), nc = HexBytes(g[i].check, check), nf = HexBytes(g[i].fail, fail);
+        BYTE* at = (BYTE*)g[i].at;
+        if (no < 5 || memcmp(at, orig, no) != 0) {
+            snprintf(msg, sizeof msg, "crashlog: %s null guard skipped, bytes at 0x%06lX differ", g[i].name, g[i].at);
+            DebugLog(msg);
+            continue;
+        }
+        BYTE* stub = mem + i * 64;
+        BYTE* s = stub;
+        memcpy(s, check, nc); s += nc;                                           // cmp dword [esp+N],0
+        *s++ = 0x75; *s++ = (BYTE)(nf + 5);                                      // jne OK
+        memcpy(s, fail, nf); s += nf;                                            // (pop esi / xor eax,eax)
+        *s = 0xE9; *(DWORD*)(s + 1) = g[i].failTo - (DWORD)(s + 5); s += 5;      // jmp the function's cleanup
+        memcpy(s, orig, no); s += no;                                            // OK: the moved instructions
+        *s = 0xE9; *(DWORD*)(s + 1) = g[i].back - (DWORD)(s + 5); s += 5;        // jmp back
+        DWORD old;
+        if (!VirtualProtect(at, no, PAGE_EXECUTE_READWRITE, &old)) continue;
+        at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (g[i].at + 5);
+        for (int k = 5; k < no; ++k) at[k] = 0x90;
+        VirtualProtect(at, no, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), at, no);
+        ++applied;
+    }
+    FlushInstructionCache(GetCurrentProcess(), mem, 64 * (sizeof g / sizeof g[0]));
+    snprintf(msg, sizeof msg, "crashlog: screen element null guards applied (%d of %d)", applied, (int)(sizeof g / sizeof g[0]));
+    DebugLog(msg);
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -662,6 +738,7 @@ static void Install() {
     PatchGetParamNullThis();
     PatchGotParamNullThis();
     PatchModelGeometryNull();
+    PatchScreenElementGuards();
 }
 
 }  // namespace crashlog

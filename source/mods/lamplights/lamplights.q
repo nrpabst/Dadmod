@@ -40,12 +40,20 @@ script dadmod_lamp_night
         THUGRECOMP_LampNight
         if not ( <night> = <last> )
             <last> = <night>
-            if ( <night> = 1 )
-                <pct> = 100.0
-            else
-                <pct> = 0.0
-            endif
-            ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+            <lampstep> = 1
+            begin
+                if ( <night> = 1 )
+                    <pct> = ( <lampstep> * 20.0 )
+                else
+                    <pct> = ( 100.0 - <lampstep> * 20.0 )
+                endif
+                ForEachIn <list> Do = dadmod_lamp_pct params = { level = <level> pct = <pct> }
+                <lampstep> = ( <lampstep> + 1 )
+                if ( <lampstep> > 5 )
+                    break
+                endif
+                wait 0.6 seconds
+            repeat
         endif
         wait 0.5 seconds
     repeat

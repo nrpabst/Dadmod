@@ -104,9 +104,9 @@ script dadmod_wx_rain grid = 1
     splash = ( <amt> / 2 )
     CastToInteger splash
     if (<storm> = 1)
-        rate = 12
+        rate = ( 4 + <amt> )
         blend = ( 8 + <amt> )
-        splash = ( 2 + <amt> )
+        splash = ( 1 + <amt> )
     endif
     if (<grid> = 1)
         WeatherUpdateGrid

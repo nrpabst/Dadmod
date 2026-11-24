@@ -46,6 +46,7 @@ function Say($t) {
         Ui-Pump
     }
 }
+function Log-Only($t) { if ($script:UpdLog) { try { Add-Content -LiteralPath $script:UpdLog -Value ((Get-Date).ToString('HH:mm:ss') + '  ' + $t) } catch { } } }
 function Ui-Pump { if ($script:UiForm) { try { [Windows.Forms.Application]::DoEvents() } catch { } } }
 function Fail($t) { Write-Host ''; Write-Host "Stopped: $t" -ForegroundColor Red; exit 1 }
 
@@ -1167,24 +1168,25 @@ function Game-Update($g) {
     $mtx = New-Object Threading.Mutex($false, "Local\dadmod_updater_$id")
     $mine = $false
     try { $mine = $mtx.WaitOne(0) } catch [Threading.AbandonedMutexException] { $mine = $true }
-    if (-not $mine) { Say 'Another dadmod updater is already waiting for this game. This one stops.'; exit 0 }
-    Say ("dadmod updater: " + $(if ($OnQuit) { 'installs when THUG Pro closes' } else { 'restart now' }) + " (zip: $Zip, version $Version)")
+    if (-not $mine) { Log-Only 'Another dadmod updater is already waiting for this game. This one stops.'; exit 0 }
+    Log-Only ("updater started: " + $(if ($OnQuit) { 'install on quit' } else { 'restart now' }) + " (zip: $Zip, version $Version)")
     if ($WaitPid) {
         try { $gp = Get-Process -Id $WaitPid -ErrorAction Stop; if ($OnQuit) { $gp.WaitForExit() } else { [void]$gp.WaitForExit(60000) } } catch { }
     }
     if ($OnQuit) {
         while (Game-Running $g) { Start-Sleep -Seconds 2 }
         # the download may be gone (Setup.bat updated meanwhile) or for a version that's already installed
-        if (-not ($Zip -and (Test-Path -LiteralPath $Zip))) { Say 'The game''s download is gone. Nothing to do.'; exit 0 }
+        if (-not ($Zip -and (Test-Path -LiteralPath $Zip))) { Log-Only 'The game''s download is gone. Nothing to do.'; exit 0 }
         $have = Version-Of (Have-Version $g '')
         $want = Version-Of $Version
-        if ($have -and $want -and $have -ge $want) { Say "dadmod $Version is already installed. Nothing to do."; exit 0 }
+        if ($have -and $want -and $have -ge $want) { Log-Only "dadmod $Version is already installed. Nothing to do."; exit 0 }
     } else {
         for ($n = 0; (Game-Running $g) -and $n -lt 30; $n++) { Start-Sleep -Seconds 1 }
     }
     $restart = (-not $OnQuit) -or (Test-Path -LiteralPath $restartFile)
     $exe = Join-Path $g 'THUGPro.exe'
     Show-UpdateWindow 'dadmod updater'
+    if ($Version) { Say "Updating dadmod to $Version..." } else { Say 'Updating dadmod...' }
     if (Game-Running $g) {
         Update-Message 'THUG Pro is still open, so nothing was changed. Close it and pick Restart and install in Dadmod > Updates again.' $true
         exit 1

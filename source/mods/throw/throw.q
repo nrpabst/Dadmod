@@ -161,6 +161,7 @@ script dadmod_throw_go
         dadmod_throw_msg_clear
         return
     endif
+    dadmod_throw_stock_register
     dadmod_throw_random_go a = <a> t = <t>
     skater : SetAmmo 0
     skater : give_skater_ammo Type = <a> num = 99
@@ -325,7 +326,7 @@ script dadmod_throw_stock_row
     endif
     make_thugpro_menu_item {
     text = <dadmod_tst>
-    description_text = "When you host: players without dadmod see the real thing thrown, not a COMBO O (or nothing)"
+    description_text = "Players without dadmod see the real thing thrown, not a COMBO O (or nothing): on your host and on hosts without dadmod"
     pad_choose_script = dadmod_throw_stock_toggle
     }
 endscript
@@ -348,6 +349,48 @@ script dadmod_throw_stock_register
         THUGRECOMP_ThrowStockType type = ( <dadmod_ta> [ <dadmod_ti> ] )
         dadmod_ti = ( <dadmod_ti> + 1 )
     repeat <array_size>
+endscript
+script dadmod_throw_cstock_send
+    if not InNetGame
+        return
+    endif
+    if OnServer
+        return
+    endif
+    if not THUGRECOMP_ThrowStockOn
+        return
+    endif
+    if not THUGRECOMP_ThrowHostStock
+        return
+    endif
+    if not GotParam vel
+        return
+    endif
+    if not GotParam owner_id
+        return
+    endif
+    if not GotParam model
+        return
+    endif
+    if not ObjectExists id = skater
+        return
+    endif
+    skater : Obj_GetId
+    if not ( <objID> = <owner_id> )
+        return
+    endif
+    if GotParam skater_pos
+        dadmod_sp = <skater_pos>
+    else
+        if not GotParam Pos
+            return
+        endif
+        dadmod_sp = <Pos>
+    endif
+    FormatText ChecksumName = dadmod_tqname "dadmod_tq_%a_%b" a = <owner_id> b = <dadmod_tsn>
+    dadmod_tsc = ( client_projectile_composite_structure + <model> )
+    THUGRECOMP_ThrowSendToServer run = CreateCompositeObject params = { Components = <dadmod_tsc> params = { Name = <dadmod_tqname> owner_id = <owner_id> Pos = <dadmod_sp> vel = <vel> radius = 24 scale = 1.0 orient_to_vel NeverSuspend SystemLifetime = 1 DieUponSettling death_script = projectile_die } }
+    THUGRECOMP_ThrowSendToServer run = create_panel_block params = { id = dadmod_tqs_wake text = " " Pos = (-1000.0,-1000.0) style = generic_menu_pad_choose params = { callback = RunScriptOnObject id = <dadmod_tqname> generic_menu_pad_choose params = { callback = RigidBody_Wake } } }
 endscript
 script dadmod_throw_stock_send
     if not InNetGame

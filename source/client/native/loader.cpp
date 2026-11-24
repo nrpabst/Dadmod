@@ -429,6 +429,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "menulevels.inc"                        // main menu scenes put together from the player's own files
 #include "../../mods/balance/balancelock.inc"   // infinite balance (gfx.inc forwards gfx_balancelock); client build: offline only, enforced by the client menu scripts
 #include "../../mods/skinsync/skinsync.inc"      // live skater looks online after Load Skater (dadmod to dadmod)
+#include "../../mods/throw/throwsend.inc"        // thrown props reach players without dadmod on a host without dadmod (0x48 via the host)
 #include "../../mods/cars2/cars2.inc"        // Cars: while driving, up/down also press gas/brake (gfx.inc ReadControlsHook calls it)
 #include "../../mods/gfx/gfx.inc"                // graphics settings (dadmod\gfx.ini)
 #define SOUNDLOG_NO_LOGGER   // no sound logger in the player build (Noah 2026-11-21)
@@ -526,6 +527,10 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_LampBulbsClear", lamplights::CF_LampBulbsClear },
     { "THUGRECOMP_LampBulb", lamplights::CF_LampBulb },
     { "THUGRECOMP_LampNight", lamplights::CF_LampNight },
+    { "THUGRECOMP_ThrowSendToServer", throwsend::CF_ThrowSendToServer },
+    { "THUGRECOMP_ThrowHostStock", throwsend::CF_ThrowHostStock },
+    { "THUGRECOMP_ThrowStockOn", throwsend::CF_ClientStockOn },
+    { "THUGRECOMP_ThrowStockType", throwsend::CF_ClientStockType },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },

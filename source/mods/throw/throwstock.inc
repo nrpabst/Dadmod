@@ -94,6 +94,8 @@ static bool __cdecl CF_ThrowStockType(void* params, void*) {
     DWORD t = 0;
     if (!((SumFn)kStructGetChecksum)(params, QbKey("type"), &t, false) || !t) return g_typeCount > 0;
     if (!OurType(t) && g_typeCount < 128) g_types[g_typeCount++] = t;
+    throwsend::AddType(t);   // the client-side hook (throwsend.inc) needs the same list
+    throwsend::Patch();
     return true;
 }
 
@@ -103,6 +105,7 @@ static bool __cdecl CF_ThrowStockOn(void* params, void* script) {
     int set = IntParam(params, "set", -1);
     if (set == 0 || set == 1) {
         g_on = set;
+        throwsend::SetOn(set);
         WriteWholeFile(ExeDirFile("throwstock.txt"), set ? "1\r\n" : "0\r\n");
         TLog(set ? "option on" : "option off");
     }

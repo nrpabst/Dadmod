@@ -125,23 +125,16 @@ script dadmod_throw_menu
     text = "DadMod players see these"
     not_focusable
     }
-    dadmod_throw_item t = "Cars" a = dadmod_throw_cars d = "Throw cars, a different one each time. DadMod players see the car, others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Random Animal" a = dadmod_throw_animals d = "Throw animals, a different one each time. Others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Random Pedestrian" a = dadmod_throw_peds d = "Throw people, a different one each time. Others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Random Junk" a = dadmod_throw_junk d = "Throw junk, a different thing each time. Others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Skateboard" a = dadmod_throw_board d = "Throw skateboards. DadMod players see the board, others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Bowling Ball" a = dadmod_throw_ball d = "Throw a heavy ball. DadMod players see it, others see it when a dadmod player hosts"
-    dadmod_throw_item t = "Mystery Box" a = dadmod_throw_mystery d = "Every throw is a surprise: cars, animals, people, junk. Others see it when a dadmod player hosts"
-    if THUGRECOMP_ThrowStockOn
-        dadmod_tst = "Show to players without dadmod: On"
-    else
-        dadmod_tst = "Show to players without dadmod: Off"
+    dadmod_throw_item t = "Cars" a = dadmod_throw_cars d = "Throw cars, a different one each time. DadMod players see the car, others see it on a dadmod server"
+    dadmod_throw_item t = "Random Animal" a = dadmod_throw_animals d = "Throw animals, a different one each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Random Pedestrian" a = dadmod_throw_peds d = "Throw people, a different one each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Random Junk" a = dadmod_throw_junk d = "Throw junk, a different thing each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Skateboard" a = dadmod_throw_board d = "Throw skateboards. DadMod players see the board, others see it on a dadmod server"
+    dadmod_throw_item t = "Bowling Ball" a = dadmod_throw_ball d = "Throw a heavy ball. DadMod players see it, others see it on a dadmod server"
+    dadmod_throw_item t = "Mystery Box" a = dadmod_throw_mystery d = "Every throw is a surprise: cars, animals, people, junk. Others see it on a dadmod server"
+    if ScriptExists dadmod_throw_stock_row
+        dadmod_throw_stock_row
     endif
-    make_thugpro_menu_item {
-    text = <dadmod_tst>
-    description_text = "When you host: players without dadmod see the real thing thrown, not a COMBO O (or nothing)"
-    pad_choose_script = dadmod_throw_stock_toggle
-    }
     thugpro_menu_finalize
 endscript
 script dadmod_throw_item
@@ -323,6 +316,18 @@ script dadmod_throw_next_car
     endif
     dadmod_throw_random_car dadmod_tlast = <ammo_type> dadmod_tr = <dadmod_throw_rand>
     skater : SetAmmoType <dadmod_tc>
+endscript
+script dadmod_throw_stock_row
+    if THUGRECOMP_ThrowStockOn
+        dadmod_tst = "Show to players without dadmod: On"
+    else
+        dadmod_tst = "Show to players without dadmod: Off"
+    endif
+    make_thugpro_menu_item {
+    text = <dadmod_tst>
+    description_text = "When you host: players without dadmod see the real thing thrown, not a COMBO O (or nothing)"
+    pad_choose_script = dadmod_throw_stock_toggle
+    }
 endscript
 script dadmod_throw_stock_toggle
     if THUGRECOMP_ThrowStockOn

@@ -7,13 +7,15 @@ below is renamed to <name>_orig, and menukeep.q (our wrappers, which call <name>
 qb/dadmod/dadmod_cars.qb. Files that only exist in the base prx (gamemode.q, keyboard.q) are copied in from the
 decompiled Kali Original first, so no unrenamed copy is left behind.
 client/qb/dadmod/menukeep.q must be the same file (the client build loads it from there).
+menukeep_server.q (server build only) wraps exit_pause_menu; the client build has its own exit_pause_menu wrapper in
+client/qb/dadmod/menus.q, which does the same dadmod_mk_keeping check.
 """
 import os, re, shutil, sys
 
 WRAP = ['create_rankings', 'create_console_message', 'create_onscreen_keyboard', 'enter_kb_chat',
         'launch_chat_keyboard', 'launch_quick_menu_keyboard', 'entered_chat_message', 'cancel_enter_chat_menu',
-        'cancel_chat_menu']
-COPY_IN = ['gamemodes/gamemode.q', 'engine/menu/keyboard.q']
+        'cancel_chat_menu', 'sound_options_exit', 'edit_tricks_menu_exit', 'exit_pause_menu']
+COPY_IN = ['gamemodes/gamemode.q', 'engine/menu/keyboard.q', 'game/menu/soundoptions.q', 'game/menu/edit_tricks_menu.q']
 KALI = 'decompiled/thugpro_qb/qb'
 
 
@@ -53,8 +55,9 @@ def main(root):
     if not os.path.isfile(out):
         print('menukeep: %s missing (cars2 step must run first)' % out)
         return 1
+    srv = open(os.path.join(here, 'menukeep_server.q'), encoding='latin-1').read().replace('\r\n', '\n')
     with open(out, 'a', encoding='latin-1', newline='') as fh:
-        fh.write('\n' + a)
+        fh.write('\n' + a + '\n' + srv)
     print('menukeep: wrapped %s' % ', '.join('%s x%d' % (n, c) for n, c in found.items()))
     return 0
 

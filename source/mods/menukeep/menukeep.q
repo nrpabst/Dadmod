@@ -1,7 +1,79 @@
 dadmod_mk_chat = 0
 dadmod_mk_game = 0
+dadmod_mk_keep = 0
 script dadmod_chatkeep_save
     Change dadmod_mk_game = ( dadmod_mk_game + 1 )
+    Change dadmod_mk_keep = 0
+    dadmod_mk_pause_open
+    if ( <mk_po> = 1 )
+        Change dadmod_mk_keep = 1
+        KillSpawnedScript Name = dadmod_mk_keep_clear
+        SpawnScript dadmod_mk_keep_clear NotSessionSpecific = 1
+    endif
+endscript
+script dadmod_mk_keep_clear
+    wait 1 gameframe
+    Change dadmod_mk_keep = 0
+endscript
+script dadmod_mk_pause_open
+    mk_p = 0
+    if InNetGame
+        if not LevelIs Load_MainMenu
+            if not IsTrue is_changing_levels
+                if not IsObserving
+                    if ScreenElementExists id = current_menu_anchor
+                        dadmod_mk_menu_state
+                        if ( <mk_menu_state> = on )
+                            mk_p = 1
+                        endif
+                    endif
+                endif
+            endif
+        endif
+    endif
+    if ScreenElementExists id = keyboard_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = dialog_box_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = quit_dialog_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = rankings_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = view_goals_menu
+        mk_p = 0
+    endif
+    return mk_po = <mk_p>
+endscript
+script dadmod_mk_keeping
+    mk_k = 0
+    if ( dadmod_mk_keep = 1 )
+        if ScreenElementExists id = current_menu_anchor
+            mk_k = 1
+        endif
+    endif
+    return mk_keeping = <mk_k>
+endscript
+script sound_options_exit
+    if GotParam just_remove
+        dadmod_mk_keeping
+        if ( <mk_keeping> = 1 )
+            return
+        endif
+    endif
+    sound_options_exit_orig <...>
+endscript
+script edit_tricks_menu_exit
+    if GotParam just_remove
+        dadmod_mk_keeping
+        if ( <mk_keeping> = 1 )
+            return
+        endif
+    endif
+    edit_tricks_menu_exit_orig <...>
 endscript
 script dadmod_mk_menu_state
     menu_state = off

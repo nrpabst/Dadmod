@@ -94,6 +94,10 @@ script thugpro_show_quick_menu
 endscript
 
 script exit_pause_menu
+    dadmod_mk_keeping
+    if ( <mk_keeping> = 1 )
+        return
+    endif
     exit_pause_menu_orig <...>
     if not InNetGame
         if ObjectExists id = Skater

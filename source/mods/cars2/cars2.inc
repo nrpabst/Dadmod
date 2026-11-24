@@ -181,7 +181,8 @@ static void __fastcall SteerHook(BYTE* comp) {
 }
 
 // 2026-11-21 (Noah: "ok nvm lets just use thugpro stock handling"): the GTA 3 steering hook is no longer installed
-// (SteerHook stays as reference, unused). Install() only adds the wheel-bone guard below.
+// (SteerHook stays as reference, unused). 2026-11-24: the same call site 0x43C1E9 now goes to TrackHook (stock input step,
+// then the respawn / flip-back tracker below); Install() also adds the wheel-bone guard.
 //
 // Wheel-bone guard (props crashed at 0x43BA80 reading 0x1D0): the vehicle's finalize step 0x43BA20 asks the body
 // model for its bone list (call 0x493040 at 0x43BA62, ECX = model's skeleton data) and reads the four wheel
@@ -200,7 +201,169 @@ static void* __fastcall BonesGuard(void* ecx, void* /*edx*/) {
     return r;
 }
 
+// ---- Respawn at the last safe spot + flip back (Noah 2026-11-24: "i drove into the water and my car respawned face
+// down in a ramp") ----
+// Stock recovery is all QB: a water / kill trigger runs SK3_KillSkater(_Water) -> SK3_Killskater_Finish (hides the car
+// 0.5 s for water) -> SK3_Killskater_Finish3, which while Driving does PlayerVehicle : Vehicle_MoveToRestart <node>
+// (the trigger's restart node, else trg_playerrestart: skater restart points, often on or next to ramps) and
+// PlayerVehicleCamera : VehicleCamera_Reset. The car is dropped there with whatever spin it had.
+// Vehicle component (ECX of the input step 0x4376B0, called first thing in the update 0x43C1D0 at 0x43C1E9):
+//   +0x18 pos, +0x28 momentum, +0x38 orientation quaternion (x y z w), +0x48 angular momentum, +0x58 awake (1),
+//   +0x5C sleep timer, +0x64 matrix rows right / up (+0x74, up.y = +0x78) / forward (+0x84) / +0x94 (0 0 0 1),
+//   +0xA4 velocity, +0xB4 angular velocity, +0x114 wheels touching, +0x190 wheel count, +0x11A stock self-right state.
+//   Quaternion <-> matrix: 0x42E1F0 (thiscall, ECX = quat out, arg = matrix), 0x42BC40 (ECX = quat, arg = matrix out),
+//   both used by the stock self-righting 0x438770 (which builds the upright matrix right = (fz,0,-fx), up = (0,1,0),
+//   forward = (fx,0,fz) the same way as below).
+// What we do, only on the local player's car (object id PlayerVehicle) while the driving beat runs:
+//   - every 0.5 s with all wheels down, up.y > 0.9 and not dropping fast: remember pos + heading (4 kept)
+//   - the car jumps (stock recovery teleport: > 300 units at > 6000 units/s) or has had no wheel down for 4 s and is
+//     2500 below the best spot: put it back at the newest spot at least 1 s old (else the newest, else where you got
+//     in), lifted a bit, upright, facing that heading, no speed or spin; the QB beat then resets the car camera
+//   - tipped (up.y < 0.3), nearly still for 3 s: stand it up at the same spot, lifted, same heading
+static const DWORD kSafeSampleMs = 500, kFallMs = 4000, kTipMs = 3000;
+struct Spot { float p[3]; float fx, fz; DWORD t; };
+static Spot g_spots[4];
+static int g_nSpots;
+static Spot g_entry;
+static BYTE* g_tComp;
+static DWORD g_tSeen, g_sampleAt, g_airSince, g_tipSince, g_ignoreUntil;
+static float g_tLast[3];
+static LARGE_INTEGER g_tT;
+static volatile LONG g_camReset;
+static DWORD g_pvId;
+static bool g_idWarned;
+
+static DWORD QbKey(const char* s) {
+    DWORD c = 0xFFFFFFFF;
+    for (; *s; ++s) {
+        BYTE b = (BYTE)*s; if (b >= 'A' && b <= 'Z') b += 32;
+        c ^= b;
+        for (int k = 0; k < 8; ++k) c = (c >> 1) ^ (0xEDB88320 & (0 - (c & 1)));
+    }
+    return c;
+}
+static bool IsPlayerVehicle(BYTE* comp) {
+    if (!g_pvId) g_pvId = QbKey("PlayerVehicle");
+    BYTE* obj = *(BYTE**)(comp + 0xC);
+    if (!obj || IsBadReadPtr(obj, 0x40)) return false;
+    for (int o = 4; o < 0x40; o += 4) if (*(DWORD*)(obj + o) == g_pvId) return true;
+    if (!g_idWarned) { g_idWarned = true; mmenu::Log("cars2: car object has no PlayerVehicle id, respawn tracker idle for it"); }
+    return false;
+}
+static void Heading(BYTE* comp, float& fx, float& fz) {
+    const float* m = (const float*)(comp + 0x64);
+    fx = m[8]; fz = m[10];
+    float l = sqrtf(fx * fx + fz * fz);
+    if (l < 0.3f) { fx = m[4]; fz = m[6]; l = sqrtf(fx * fx + fz * fz); }   // standing on its nose: use the roof
+    if (l < 0.01f) { fx = 0.f; fz = 1.f; return; }
+    fx /= l; fz /= l;
+}
+static void PlaceUpright(BYTE* comp, const float p[3], float lift, float fx, float fz) {
+    float l = sqrtf(fx * fx + fz * fz);
+    if (l < 0.01f) { fx = 0.f; fz = 1.f; } else { fx /= l; fz /= l; }
+    float m[16] = { fz, 0.f, -fx, 0.f,  0.f, 1.f, 0.f, 0.f,  fx, 0.f, fz, 0.f,  0.f, 0.f, 0.f, 1.f };
+    float q[4] = { 0.f, 0.f, 0.f, 1.f };
+    ((void(__thiscall*)(float*, float*))0x42E1F0)(q, m);
+    float* f = (float*)comp;
+    f[0x18 / 4] = p[0]; f[0x1C / 4] = p[1] + lift; f[0x20 / 4] = p[2];
+    for (int i = 0; i < 3; ++i) { f[0x28 / 4 + i] = 0.f; f[0x48 / 4 + i] = 0.f; f[0xA4 / 4 + i] = 0.f; f[0xB4 / 4 + i] = 0.f; }
+    for (int i = 0; i < 4; ++i) f[0x38 / 4 + i] = q[i];
+    ((void(__thiscall*)(float*, float*))0x42BC40)(f + 0x38 / 4, f + 0x64 / 4);
+    f[0x94 / 4] = 0.f; f[0x98 / 4] = 0.f; f[0x9C / 4] = 0.f; f[0xA0 / 4] = 1.f;
+    comp[0x11A] = 0;
+    *(int*)(comp + 0x58) = 1; *(int*)(comp + 0x5C) = 0;
+    g_tLast[0] = p[0]; g_tLast[1] = p[1] + lift; g_tLast[2] = p[2];
+    g_ignoreUntil = GetTickCount() + 1000;
+    g_airSince = 0; g_tipSince = 0;
+    InterlockedExchange(&g_camReset, 1);
+}
+static const Spot& BestSpot() {
+    DWORD now = GetTickCount();
+    for (int i = g_nSpots - 1; i >= 0; --i) if (now - g_spots[i].t >= 1000) return g_spots[i];
+    if (g_nSpots) return g_spots[g_nSpots - 1];
+    return g_entry;
+}
+static void Respawn(BYTE* comp, const char* why) {
+    const Spot& s = BestSpot();
+    char line[200];
+    _snprintf(line, sizeof line, "cars2: respawn at last safe spot (%s) %.0f %.0f %.0f%s", why, s.p[0], s.p[1], s.p[2],
+              g_nSpots ? "" : " (where you got in)");
+    line[sizeof line - 1] = 0;
+    Spot c = s;
+    PlaceUpright(comp, c.p, 15.f, c.fx, c.fz);
+    ::DebugLog(line);
+}
+static void Track(BYTE* comp) {
+    DWORD now = GetTickCount();
+    if (*(volatile BYTE*)kPausedByte || now - g_beat > 5000 || !IsPlayerVehicle(comp)) return;
+    const float* f = (const float*)comp;
+    const float* pos = f + 0x18 / 4;
+    LARGE_INTEGER t; QueryPerformanceCounter(&t);
+    if (!g_freq.QuadPart) QueryPerformanceFrequency(&g_freq);
+    if (comp != g_tComp || now - g_tSeen > 1000) {
+        g_tComp = comp; g_nSpots = 0; g_airSince = 0; g_tipSince = 0; g_sampleAt = now;
+        g_entry.p[0] = pos[0]; g_entry.p[1] = pos[1]; g_entry.p[2] = pos[2]; g_entry.t = now;
+        Heading(comp, g_entry.fx, g_entry.fz);
+        g_ignoreUntil = now + 1500;
+        g_tLast[0] = pos[0]; g_tLast[1] = pos[1]; g_tLast[2] = pos[2]; g_tT = t; g_tSeen = now;
+        return;
+    }
+    g_tSeen = now;
+    float dt = (float)((double)(t.QuadPart - g_tT.QuadPart) / (double)g_freq.QuadPart);
+    g_tT = t;
+    float dx = pos[0] - g_tLast[0], dy = pos[1] - g_tLast[1], dz = pos[2] - g_tLast[2];
+    float d = sqrtf(dx * dx + dy * dy + dz * dz);
+    g_tLast[0] = pos[0]; g_tLast[1] = pos[1]; g_tLast[2] = pos[2];
+    bool ignore = (LONG)(now - g_ignoreUntil) < 0;
+    if (!ignore && dt > 0.f && d > 300.f && d / dt > 6000.f) { Respawn(comp, "stock recovery moved the car"); return; }
+
+    float upY = f[0x78 / 4];
+    const float* vel = f + 0xA4 / 4;
+    float sp = sqrtf(vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]);
+    int touch = *(const int*)(comp + 0x114), wheels = *(const int*)(comp + 0x190);
+    if (touch == 0) {
+        if (!g_airSince) g_airSince = now;
+        const Spot& b = BestSpot();
+        if (!ignore && now - g_airSince > kFallMs && pos[1] < b.p[1] - 2500.f) { Respawn(comp, "fell under the level"); return; }
+    } else g_airSince = 0;
+
+    if (wheels > 0 && touch >= wheels && upY > 0.9f && vel[1] > -300.f && now - g_sampleAt >= kSafeSampleMs) {
+        g_sampleAt = now;
+        if (g_nSpots == 4) { memmove(g_spots, g_spots + 1, 3 * sizeof(Spot)); g_nSpots = 3; }
+        Spot& s = g_spots[g_nSpots++];
+        s.p[0] = pos[0]; s.p[1] = pos[1]; s.p[2] = pos[2]; s.t = now;
+        Heading(comp, s.fx, s.fz);
+    }
+
+    if (upY < 0.3f && sp < 150.f) {
+        if (!g_tipSince) g_tipSince = now;
+        if (now - g_tipSince > kTipMs) {
+            float fx, fz; Heading(comp, fx, fz);
+            float p[3] = { pos[0], pos[1], pos[2] };
+            PlaceUpright(comp, p, 40.f, fx, fz);
+            char line[160];
+            _snprintf(line, sizeof line, "cars2: flipped back (up %.2f) %.0f %.0f %.0f", upY, p[0], p[1], p[2]);
+            line[sizeof line - 1] = 0;
+            ::DebugLog(line);
+        }
+    } else g_tipSince = 0;
+}
+static void __fastcall TrackHook(BYTE* comp) {
+    ((void(__fastcall*)(BYTE*))kSteerFn)(comp);
+    if (comp) Track(comp);
+}
+
 static void Install() {
+    {
+        BYTE* s = (BYTE*)kSteerCall;
+        DWORD old;
+        if (s[0] != 0xE8 || (DWORD)(kSteerCall + 5 + *(LONG*)(s + 1)) != kSteerFn) mmenu::Log("cars2: respawn tracker site changed, not installed");
+        else if (VirtualProtect(s, 5, PAGE_EXECUTE_READWRITE, &old)) {
+            *(LONG*)(s + 1) = (LONG)((DWORD)TrackHook - (kSteerCall + 5));
+            VirtualProtect(s, 5, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), s, 5);
+        }
+    }
     BYTE* p = (BYTE*)kBonesCall;
     if (p[0] != 0xE8 || (DWORD)(kBonesCall + 5 + *(LONG*)(p + 1)) != kBonesFn) { mmenu::Log("cars2: wheel-bone guard site changed, not installed"); return; }
     DWORD old;
@@ -233,6 +396,7 @@ static bool __cdecl CF_CarsDrive(void* params, void* script) {
     int gta = IntParam(params, "gta", -1);
     if (gta == 0 || gta == 1) InterlockedExchange(&g_gta, gta);
     RetInt(script, "active", State() == nullptr ? 1 : 0);
+    if (InterlockedExchange(&g_camReset, 0)) RetInt(script, "cam_reset", 1);   // the tracker moved the car: QB resets the camera
     if (InterlockedExchange(&g_horn, 0) > 0 && State() == nullptr) RetInt(script, "horn", 1);
     return true;
 }

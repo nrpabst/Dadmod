@@ -324,6 +324,11 @@ script dadmod_cars_beat dadmod_c2_hide = 0
             dadmod_cars_horn
         endif
     endif
+    if GotParam cam_reset
+        if ObjectExists id = PlayerVehicleCamera
+            PlayerVehicleCamera : VehicleCamera_Reset
+        endif
+    endif
 endscript
 script dadmod_cars_exit
     exit_pause_menu

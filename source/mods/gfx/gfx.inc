@@ -986,7 +986,11 @@ float4 ps_look(float2 uv : TEXCOORD0) : COLOR {
     }
     c = lerp(c, float3(l, l, l), p3.y) * p4.rgb;
     c = c * (1 - p3.z) + p3.z;
-    if (p3.w > 0) c = pow(saturate(c), 1.0 / (1.0 + p3.w));  // Night: lift the darks so the level stays visible
+    // Night: lift the darks so the level stays visible. 2026-11-23: not on the bright replacement skies (golden hour,
+    // vaporwave, rainbow, cotton candy; s2 = depth when p9.z > 0): the lift washed them out to grey on a night server
+    bool brightSky = p9.z > 0 && (abs(p9.y - 8) < 0.5 || abs(p9.y - 9) < 0.5 || abs(p9.y - 12) < 0.5 || abs(p9.y - 14) < 0.5)
+                     && tex2D(s2, uv).r >= 0.99999;
+    if (p3.w > 0 && !brightSky) c = pow(saturate(c), 1.0 / (1.0 + p3.w));
     c = pow(saturate(c), p2.w);
     return float4(saturate(c), 1);
 }
@@ -3121,7 +3125,8 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         Pass(dev, g_psFxaa, ds, g_w, g_h, g_w, g_h, cur);
         cur = dst;
     }
-    Pass(dev, g_psLook, bb, g_w, g_h, g_w, g_h, cur, V("gfx_bloom") ? g_texC : nullptr);
+    // s2 = depth (when readable) so ps_look can keep the night lift off the bright replacement skies
+    Pass(dev, g_psLook, bb, g_w, g_h, g_w, g_h, cur, V("gfx_bloom") ? g_texC : nullptr, g_c[9][2] > 0 ? g_intz : nullptr);
     if (V("gfx_mblur")) { dev->StretchRect(bb, nullptr, sP, nullptr, D3DTEXF_NONE); g_prevValid = true; }
     dev->SetDepthStencilSurface(oldDS);
     g_sb->Apply();

@@ -168,3 +168,25 @@ you get off board")
   its walking branch (0x4FA860), so stepping off the board brought the look back.
 - Fix: dadmod_cars_exit_now calls THUGRECOMP_CarsDrive camfree = 1, which clears the lock (and the look offset) and logs
   "cars2: got out, skater camera look lock was N (override N), cleared" to thugrecomp_debug.log. DLL change: restart.
+
+More Cars model fix (2026-11-24, Noah: "a lot of more cars have their model placed wrong or they're invisible")
+- Cause: the stock car reads its parts from the body model's hierarchy BY POSITION (exe 0x43BA20 init, 0x43A070 pose):
+  part 1 = body, parts 2-5 = wheels 1-4, wheel k drawn from pose k. Every stock car lists Car_Shadow, Car,
+  Car_Wheel01-04 with an unturned body; many THUG2 traffic models don't (checked from the THUG2 .mdl.xbx files):
+    wheels in another order: Smart Car, Hippie Van, Delivery Van, Rust Bucket, Parade Float (back wheels steered)
+    body listed last: Liberty (body drawn at a wheel and spun, a wheel drawn where the body goes)
+    6 wheels, body 8th: Tour Bus (body pose read past the wheel list: garbage, invisible)
+    body part turned 90 degrees: Sedan, Delivery Van, Rust Bucket, Barcelona Taxi, Neon, Submarine (drawn on its side)
+    wheels on the middle line: Streetcar (tipped over at once)
+  Plus every More Car had its base car's wheel size and body boxes: big wheels sank (Tour Bus 26 vs 13, Box Truck,
+  SUV, Submarine, Duck Boat, Parade Float), small ones floated (ATV), and the boxes sat 50+ in off on models whose
+  origin is mid-car (Hearse, Woodie, Old Van, ATV, Tour Bus).
+- Fix, DLL (cars2.inc BoneFix, BonesGuard, PoseHook on the 4 pose call sites): for setups with dadmod_bonefix (QB sends
+  THUGRECOMP_CarsDrive bonefix=1 right before getting in, 0 for stock cars and props) init gets a reordered copy of
+  the list and the pose is mapped back by part NAME every frame: body = body pose turned by the body part's own bind
+  turn, wheels at their own spots, wheels 5/6 copy the nearest same-side wheel, anything else hidden. Middle-line
+  wheels are spread 35 out for the physics and drawn where they are. Logged once per get-in to mainmenu.log
+  ("cars2: More Cars fix: ..."). Test aid: THUGRECOMP_CarsDrive bfrot=0/1/2 (no turn / turn / transposed turn).
+- Fix, setups (gen_cars2.py fit_model): radius = the model's own axle height; body boxes moved and stretched from the
+  base car's wheel layout to the model's; dadmod_bonefix = 1. Read from the player's THUG2 files at generate time.
+- Stock cars and props are untouched. DLL change: needs a game restart. Untested in game yet.

@@ -223,6 +223,30 @@ def build_dll(out):
     print('binkw32.dll: client loader (clang/MinGW)')
 
 
+def whats_new(readme):
+    """README.txt section 6 (WHAT'S NEW IN @DADMOD_VERSION@) up to the first older version's heading: the NEW /
+    CHANGED / FIXED lists of this release, for dadmod\\whatsnew.txt (native/update.inc reads it)."""
+    text = open(readme, encoding='utf-8-sig').read().replace('\r\n', '\n')
+    out, on = [], False
+    rows = text.split('\n')
+    for i, ln in enumerate(rows):
+        if not on:
+            if re.match(r"\s*6\.\s+WHAT'S NEW", ln):
+                on = True
+            continue
+        if ln.startswith('====='):
+            if out:
+                break
+            continue
+        nxt = rows[i + 1] if i + 1 < len(rows) else ''
+        if re.match(r'\s+\d+\.\d+', ln) and re.match(r'\s+-{3,}', nxt):
+            break
+        out.append(ln)
+    body = '\n'.join(out).strip('\n')
+    body = ''.join(c if 32 <= ord(c) < 127 or c == '\n' else ' ' for c in body)
+    return body + '\n'
+
+
 def package(out, release=None):
     """build/dadmod-client-<version>.zip: what players unzip (one folder, dadmod-install). README.txt, Install dadmod.bat /
     Uninstall dadmod.bat, installer\\dadmod.ps1 and files\\ (copied into the game folder by the installer).
@@ -237,6 +261,10 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
     shutil.copyfile(os.path.join(inst, 'dadmod.ps1'), os.path.join(out, 'dadmod', 'updater', 'dadmod.ps1'))
     want.append(os.path.join('dadmod', 'updater', 'dadmod.ps1'))
+    # Dadmod > Updates > What's new in <yours> (2026-11-24): this version's part of README.txt section 6
+    with open(os.path.join(out, 'dadmod', 'whatsnew.txt'), 'w', newline='\r\n') as f:
+        f.write(whats_new(os.path.join(inst, 'README.txt')))
+    want.append(os.path.join('dadmod', 'whatsnew.txt'))
     # lit windows at night (mods/lamplights, 0.10.1): the window list + pane masks gfx.inc reads from <game>\dadmod\
     # (our own masks: one pane number per texel, made by mods/lamplights/gen_windows.py; no game texture bytes)
     lsrc = os.path.join(WORK, 'mods', 'lamplights', 'data')

@@ -3,8 +3,10 @@
 #   Uninstall dadmod.bat  -> dadmod.ps1 uninstall [-Game "<THUG Pro folder>"]
 #   Repair dadmod.bat     -> dadmod.ps1 repair    [-Game "<THUG Pro folder>"]  (puts back any dadmod file or extra
 #                            level that went missing, e.g. a map deleted from the custom maps folder)
-#   the game (Pause > dadmod > Update dadmod) -> <game>\dadmod\updater\dadmod.ps1 update -Game "<game>" -WaitPid <pid>
-#                            (a copy of this file the package installs; waits for the game to close, updates, restarts it)
+#   the game (main menu > Dadmod > Updates) -> <game>\dadmod\updater\dadmod.ps1 update -Game "<game>" -WaitPid <pid>
+#                            [-Zip <the game's download> -Version x -Sha256 y] [-OnQuit]
+#                            (a copy of this file the package installs; waits for the game to close, updates in a
+#                            small dadmod window, starts the game again unless it was Install when I quit)
 # Works on a plain THUG Pro install or a Kali Mod install. It never changes a THUG Pro or Kali file:
 #   - binkw32.dll is renamed binkw32_orig.dll (ours forwards every call to it) and put back on uninstall;
 #   - everything else it adds is new: data\pre\dadmod_qb.prx, data\dadmod_casidle.qb, dadmod\menulevels\, and the extra
@@ -19,7 +21,10 @@ param(
     [string]$Game = '',
     [string]$PackageDir = '',
     [int]$WaitPid = 0,
-    [string]$Zip = ''
+    [string]$Zip = '',
+    [string]$Version = '',
+    [string]$Sha256 = '',
+    [switch]$OnQuit
 )
 $ErrorActionPreference = 'Stop'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -30,7 +35,18 @@ if (-not $Pkg) { $Pkg = Split-Path -Parent $Here }
 $Files = Join-Path (Split-Path -Parent $Here) 'files'
 $Marker = 'dadmod client loader'
 
-function Say($t) { Write-Host $t }
+# the in-game updater's small window (Game-Update) and its log (dadmod\update\update.log); Setup.bat uses the console
+$script:UiForm = $null; $script:UiLabel = $null; $script:UiLines = @(); $script:UpdLog = ''
+function Say($t) {
+    Write-Host $t
+    if ($script:UpdLog) { try { Add-Content -LiteralPath $script:UpdLog -Value ((Get-Date).ToString('HH:mm:ss') + '  ' + $t) } catch { } }
+    if ($script:UiLabel -and "$t".Trim()) {
+        $script:UiLines = @($script:UiLines + "$t".Trim()) | Select-Object -Last 4
+        $script:UiLabel.Text = ($script:UiLines -join "`r`n")
+        Ui-Pump
+    }
+}
+function Ui-Pump { if ($script:UiForm) { try { [Windows.Forms.Application]::DoEvents() } catch { } } }
 function Fail($t) { Write-Host ''; Write-Host "Stopped: $t" -ForegroundColor Red; exit 1 }
 
 function Is-Game($p) { $p -and (Test-Path -LiteralPath (Join-Path $p 'THUGPro.exe')) -and (Test-Path -LiteralPath (Join-Path $p 'data\pre\thugpro_qb.prx')) }
@@ -43,6 +59,7 @@ function Is-Ours($dll) {
 }
 
 function Md5($p) { (Get-FileHash -LiteralPath $p -Algorithm MD5).Hash.ToLower() }
+function Md5Text($t) { $h = [Security.Cryptography.MD5]::Create(); (($h.ComputeHash([Text.Encoding]::UTF8.GetBytes("$t")) | ForEach-Object { $_.ToString('x2') }) -join '') }
 
 function Find-Game {
     if ($Game) { if (Is-Game $Game) { return (Resolve-Path -LiteralPath $Game).Path }; Fail "no THUG Pro install at $Game" }
@@ -365,17 +382,19 @@ function Get-Update($u, $g, $have = '') {
                 $wc.DownloadFile($u.url, $zip)
             } catch { Say 'The download failed (internet dropped?). Nothing was changed. Try again later.'; return $false }
         }
-        if ($u.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne $u.size) { Say 'The download came out the wrong size. Nothing was changed. Try again later.'; return $false }
+        if ($u.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne $u.size) { $script:ZipBad = $true; Say 'The download came out the wrong size. Nothing was changed. Try again later.'; return $false }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $x = Join-Path $tmp 'zip'
-        try { [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x) } catch { Say 'The downloaded zip is damaged. Nothing was changed. Try again later.'; return $false }
+        try { [IO.Compression.ZipFile]::ExtractToDirectory($zip, $x) } catch { $script:ZipBad = $true; Say 'The downloaded zip is damaged. Nothing was changed. Try again later.'; return $false }
         $dad = @(Get-ChildItem -LiteralPath $x -Recurse -Filter 'files.dad')
-        if ($dad.Count -ne 1) { Say 'The downloaded zip has no files.dad. Nothing was changed.'; return $false }
+        if ($dad.Count -ne 1) { $script:ZipBad = $true; Say 'The downloaded zip has no files.dad. Nothing was changed.'; return $false }
         $src = $dad[0].DirectoryName
         # unpack the new files.dad (same reader as Setup.bat: DADMODPK1 or the LZMA DADMODPK2) and run its installer
         Use-Pack2
         $inner = Join-Path $tmp 'pkg.zip'
-        try { [DadmodPack2]::Unpack($dad[0].FullName, $inner) } catch { Say 'The downloaded files.dad is damaged. Nothing was changed.'; return $false }
+        Ui-Pump
+        try { [DadmodPack2]::Unpack($dad[0].FullName, $inner) } catch { $script:ZipBad = $true; Say 'The downloaded files.dad is damaged. Nothing was changed.'; return $false }
+        Ui-Pump
         $nx = Join-Path $tmp 'x'
         [IO.Compression.ZipFile]::ExtractToDirectory($inner, $nx)
         Remove-Item -LiteralPath $inner -Force
@@ -407,10 +426,98 @@ function Get-Update($u, $g, $have = '') {
         Say "Installing dadmod $($u.tag)..."
         $ia = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $nx 'installer\dadmod.ps1'), 'install', '-Game', $g)
         if ($pkgOk) { $ia += @('-PackageDir', $Pkg) }
-        & powershell @ia | Out-Host
-        return ($LASTEXITCODE -eq 0)
+        return (Run-Installer $ia $tmp)
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# 64-bit Windows PowerShell when there is one (a 32-bit PowerShell can run out of memory unpacking the big map pack)
+function PowerShell-Exe {
+    $sn = Join-Path $env:windir 'Sysnative\WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $sn) { return $sn }
+    return (Join-Path $PSHOME 'powershell.exe')
+}
+
+# runs the new package's installer; with the updater window up, its output goes to the window line by line
+function Run-Installer($ia, $tmp) {
+    $ps = PowerShell-Exe
+    if (-not $script:UiForm) {
+        & $ps @ia | Out-Host
+        return ($LASTEXITCODE -eq 0)
+    }
+    $out = Join-Path $tmp 'install_out.txt'
+    $err = Join-Path $tmp 'install_err.txt'
+    $q = ($ia | ForEach-Object { if ("$_" -match '[\s"]') { '"' + ("$_" -replace '"', '\"') + '"' } else { "$_" } }) -join ' '
+    $p = Start-Process -FilePath $ps -ArgumentList $q -RedirectStandardOutput $out -RedirectStandardError $err -WindowStyle Hidden -PassThru
+    [void]$p.Handle   # keeps the exit code readable after it ends
+    $pos = 0; $rest = ''
+    $read = {
+        try {
+            $fs = New-Object IO.FileStream($out, 'Open', 'Read', 'ReadWrite')
+            try {
+                if ($fs.Length -gt $pos) {
+                    [void]$fs.Seek($pos, 'Begin')
+                    $buf = New-Object byte[] ($fs.Length - $pos)
+                    $n = $fs.Read($buf, 0, $buf.Length)
+                    $script:rdPos = $pos + $n
+                    $script:rdText = $rest + [Text.Encoding]::Default.GetString($buf, 0, $n)
+                } else { $script:rdPos = $pos; $script:rdText = $rest }
+            } finally { $fs.Close() }
+        } catch { $script:rdPos = $pos; $script:rdText = $rest }
+    }
+    while ($true) {
+        $done = $p.HasExited
+        . $read
+        $pos = $script:rdPos
+        $parts = $script:rdText -split "`n"
+        $rest = $parts[-1]
+        foreach ($ln in $parts[0..($parts.Count - 2)]) { if ($parts.Count -gt 1) { Say ($ln.TrimEnd("`r")) } }
+        if ($done) { break }
+        Ui-Pump
+        Start-Sleep -Milliseconds 100
+    }
+    if ($rest.Trim()) { Say $rest.TrimEnd("`r") }
+    try { foreach ($ln in @(Get-Content -LiteralPath $err -ErrorAction SilentlyContinue)) { if ("$ln".Trim()) { Say "$ln" } } } catch { }
+    return ($p.ExitCode -eq 0)
+}
+
+# the updater's small window: what it is doing, a moving bar, no console (2026-11-24)
+function Show-UpdateWindow($title) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+        [Windows.Forms.Application]::EnableVisualStyles()
+        $f = New-Object Windows.Forms.Form
+        $f.Text = $title
+        $f.ClientSize = New-Object Drawing.Size(460, 150)
+        $f.FormBorderStyle = 'FixedDialog'
+        $f.MaximizeBox = $false
+        $f.ControlBox = $false
+        $f.StartPosition = 'CenterScreen'
+        $f.TopMost = $true
+        $f.ShowInTaskbar = $true
+        $l = New-Object Windows.Forms.Label
+        $l.SetBounds(16, 14, 428, 86)
+        $l.Font = New-Object Drawing.Font('Segoe UI', 9.5)
+        $b = New-Object Windows.Forms.ProgressBar
+        $b.SetBounds(16, 110, 428, 18)
+        $b.Style = 'Marquee'
+        $b.MarqueeAnimationSpeed = 30
+        $f.Controls.Add($l); $f.Controls.Add($b)
+        $f.Show()
+        $script:UiForm = $f; $script:UiLabel = $l
+        Ui-Pump
+    } catch { $script:UiForm = $null; $script:UiLabel = $null }
+}
+function Close-UpdateWindow { if ($script:UiForm) { try { $script:UiForm.Close() } catch { }; $script:UiForm = $null; $script:UiLabel = $null } }
+function Update-Message($text, $bad) {
+    if ($script:UiForm) {
+        Close-UpdateWindow
+        $icon = $(if ($bad) { [Windows.Forms.MessageBoxIcon]::Warning } else { [Windows.Forms.MessageBoxIcon]::Information })
+        [void][Windows.Forms.MessageBox]::Show($text, 'dadmod updater', [Windows.Forms.MessageBoxButtons]::OK, $icon)
+    } else {
+        Write-Host $text
+        Write-Host 'Press any key to close.'; try { [void][Console]::ReadKey($true) } catch { }
     }
 }
 
@@ -661,6 +768,34 @@ function Get-MapPack($info, $g, $tmp) {
     }
 }
 
+# User\manifest_levels.dat is THUG Pro's list of custom levels (each entry holds the level's name and its .level.dat
+# name as NUL-ended strings). When it still lists one of our map-pack levels (installer\vault_levels.txt,
+# User\<name>.level.dat rows) whose .level.dat is gone, stock THUG Pro crashes at boot (0x47849B, 2026-11-23).
+# Move it to dadmod\backups; THUG Pro writes a new one on its next custom level scan.
+function Fix-LevelManifest($g) {
+    $man = Join-Path $g 'User\manifest_levels.dat'
+    if (-not (Test-Path -LiteralPath $man)) { return }
+    $vl = Join-Path $Here 'vault_levels.txt'
+    if (-not (Test-Path -LiteralPath $vl)) { return }
+    $names = @()
+    foreach ($ln in Get-Content -LiteralPath $vl) {
+        $m = [regex]::Match("$ln", '^User\\([^\\]+)\.level\.dat\s')
+        if ($m.Success) { $names += $m.Groups[1].Value }
+    }
+    if (-not $names.Count) { return }
+    $text = [Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($man))
+    $stale = @()
+    foreach ($n in $names) {
+        if ($text.IndexOf($n + [char]0, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            -not (Test-Path -LiteralPath (Join-Path $g "User\$n.level.dat"))) { $stale += $n }
+    }
+    if (-not $stale.Count) { return }
+    $bk = Join-Path $g 'dadmod\backups'
+    New-Item -ItemType Directory -Force -Path $bk | Out-Null
+    Move-Item -LiteralPath $man -Destination (Join-Path $bk ('manifest_levels.dat.' + (Get-Date).ToString('yyyyMMdd_HHmmss')))
+    Say ('Moved User\manifest_levels.dat to dadmod\backups: it still listed removed maps (' + ($stale -join ', ') + '). THUG Pro makes a new one.')
+}
+
 function Install($g, [bool]$repair = $false) {
     if (-not (Test-Path -LiteralPath (Join-Path $Files 'binkw32.dll'))) { Fail "the package is missing files\binkw32.dll (unzip the whole package first)" }
     $dadmod = Join-Path $g 'dadmod'
@@ -687,6 +822,10 @@ function Install($g, [bool]$repair = $false) {
     if (Test-Path -LiteralPath $vf) { $ver = (Get-Content -LiteralPath $vf -TotalCount 1).Trim() }
     Say "dadmod $ver"
     Say "Game folder: $g ($kind)"
+    # the version this replaces: the game shows "dadmod updated" once (dadmod\update\updated_from.txt, 2026-11-24)
+    $oldVer = ''
+    $ovf = Join-Path $dadmod 'version.txt'
+    if ($state -and (Test-Path -LiteralPath $ovf)) { try { $oldVer = (Get-Content -LiteralPath $ovf -TotalCount 1).Trim() } catch { } }
     # a server build of dadmod (or another menu mod) already has menu archives we would write over
     if (-not $state) {
         $mine = @(Get-ChildItem -LiteralPath (Join-Path $g 'data\pre') -Filter 'mainmenu_*_scripts.prx' -ErrorAction SilentlyContinue)
@@ -905,6 +1044,12 @@ function Install($g, [bool]$repair = $false) {
     if ($Pkg -and (Test-Path -LiteralPath (Join-Path $Pkg 'Setup.bat'))) { $info['package_dir'] = (Resolve-Path -LiteralPath $Pkg).Path }
     elseif ($state -and $state.package_dir) { $info['package_dir'] = $state.package_dir }
     $info | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $log -Encoding UTF8
+    $ov = Version-Of $oldVer; $nv = Version-Of $ver
+    if (-not $repair -and $ov -and $nv -and $nv -gt $ov) {
+        $ud = Join-Path $dadmod 'update'
+        New-Item -ItemType Directory -Force -Path $ud | Out-Null
+        Set-Content -LiteralPath (Join-Path $ud 'updated_from.txt') -Value $oldVer -Encoding ASCII
+    }
     if ($kept) { Say "Kept $kept level files you already had (yours are used, nothing of yours was replaced)." }
     if ($otherVer.Count) {
         Say 'These level files you already had are a different version than dadmod''s. Yours were kept:'
@@ -928,6 +1073,7 @@ function Install($g, [bool]$repair = $false) {
         Say 'To get them: run Setup.bat > Repair while online, or download the file named above from'
         Say "  https://github.com/$UpdateRepo/releases, put it next to Setup.bat and run Setup.bat > Repair."
     }
+    Fix-LevelManifest $g
     if ($repair) {
         if ($restored.Count) {
             Say "Put back $($restored.Count) missing files:"
@@ -980,6 +1126,7 @@ function Uninstall($g) {
         if ((Md5 $bink) -eq (Md5 $orig)) { Remove-Item -LiteralPath $orig -Force }
     }
     Move-Item -LiteralPath $log -Destination (Join-Path $dadmod ('install.json.removed_' + (Get-Date).ToString('yyyyMMdd_HHmmss')))
+    Fix-LevelManifest $g
     Say "Removed $gone dadmod files. Your settings are still in $dadmod (delete that folder if you don't want them)."
     Say "The dadmod-install folder stays, so you can install again with its Setup.bat."
 }
@@ -1003,21 +1150,43 @@ function Remove-Package {
     Start-Process -FilePath $env:ComSpec -ArgumentList ('/c "' + $cmd + '"') -WindowStyle Hidden -WorkingDirectory $env:TEMP
 }
 
-# the game's updater (Pause > dadmod > Update dadmod, or Update now on the main menu popup; Noah 2026-11-18): the game
-# starts this in its own window and quits; this waits for it to close, installs the newest release, starts it again
+# the game's updater (main menu > Dadmod > Updates; Noah 2026-11-18, reworked 2026-11-24). The game starts this hidden:
+#   -OnQuit: armed as soon as the game has a whole download; waits for every THUG Pro from this folder to close, then
+#            installs (Install when I quit) and starts the game again only if the player picked Restart now
+#            (the game leaves dadmod\update\restart.txt)
+#   without: Restart now when no updater was waiting: waits for the game to close, installs, starts it again
+# With -Zip/-Version (the game's own finished download) it installs that file without asking GitHub again.
 function Game-Update($g) {
-    try { $Host.UI.RawUI.WindowTitle = 'dadmod updater' } catch { }
-    Say 'dadmod updater'
-    Say ''
+    $upd = Join-Path $g 'dadmod\update'
+    New-Item -ItemType Directory -Force -Path $upd | Out-Null
+    $script:UpdLog = Join-Path $upd 'update.log'
+    try { if ((Test-Path -LiteralPath $script:UpdLog) -and (Get-Item -LiteralPath $script:UpdLog).Length -gt 200KB) { Move-Item -LiteralPath $script:UpdLog -Destination ($script:UpdLog + '.old') -Force } } catch { }
+    $restartFile = Join-Path $upd 'restart.txt'
+    # one updater per game folder (two open games each start one)
+    $id = (Md5Text $g.ToLower()).Substring(0, 12)
+    $mtx = New-Object Threading.Mutex($false, "Local\dadmod_updater_$id")
+    $mine = $false
+    try { $mine = $mtx.WaitOne(0) } catch [Threading.AbandonedMutexException] { $mine = $true }
+    if (-not $mine) { Say 'Another dadmod updater is already waiting for this game. This one stops.'; exit 0 }
+    Say ("dadmod updater: " + $(if ($OnQuit) { 'installs when THUG Pro closes' } else { 'restart now' }) + " (zip: $Zip, version $Version)")
     if ($WaitPid) {
-        Say 'Waiting for THUG Pro to close...'
-        try { [void](Get-Process -Id $WaitPid -ErrorAction Stop).WaitForExit(60000) } catch { }
+        try { $gp = Get-Process -Id $WaitPid -ErrorAction Stop; if ($OnQuit) { $gp.WaitForExit() } else { [void]$gp.WaitForExit(60000) } } catch { }
     }
-    for ($n = 0; (Game-Running $g) -and $n -lt 30; $n++) { Start-Sleep -Seconds 1 }
+    if ($OnQuit) {
+        while (Game-Running $g) { Start-Sleep -Seconds 2 }
+        # the download may be gone (Setup.bat updated meanwhile) or for a version that's already installed
+        if (-not ($Zip -and (Test-Path -LiteralPath $Zip))) { Say 'The game''s download is gone. Nothing to do.'; exit 0 }
+        $have = Version-Of (Have-Version $g '')
+        $want = Version-Of $Version
+        if ($have -and $want -and $have -ge $want) { Say "dadmod $Version is already installed. Nothing to do."; exit 0 }
+    } else {
+        for ($n = 0; (Game-Running $g) -and $n -lt 30; $n++) { Start-Sleep -Seconds 1 }
+    }
+    $restart = (-not $OnQuit) -or (Test-Path -LiteralPath $restartFile)
     $exe = Join-Path $g 'THUGPro.exe'
+    Show-UpdateWindow 'dadmod updater'
     if (Game-Running $g) {
-        Say 'THUG Pro is still open, so nothing was changed. Close it and pick Update dadmod again.'
-        Write-Host 'Press any key to close.'; try { [void][Console]::ReadKey($true) } catch { }
+        Update-Message 'THUG Pro is still open, so nothing was changed. Close it and pick Restart and install in Dadmod > Updates again.' $true
         exit 1
     }
     # the player's dadmod-install folder: the one install.json names, else <game>\dadmod-install
@@ -1027,23 +1196,47 @@ function Game-Update($g) {
     foreach ($c in @($(if ($state) { "$($state.package_dir)" }), (Join-Path $g 'dadmod-install'))) {
         if ($c -and (Test-Path -LiteralPath (Join-Path $c 'Setup.bat'))) { $script:Pkg = $c; break }
     }
-    Say 'Checking for a newer dadmod...'
-    $u = Check-Update (Have-Version $g '')
-    Say $u.text
-    $ok = $false
-    if ($u.state -eq 'newer') { $ok = Get-Update $u $g $Zip }
-    # the game's download is used up (or out of date): remove it
-    if ($Zip -and (Test-Path -LiteralPath $Zip)) { Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue }
-    Say ''
-    if ($ok) {
-        Say 'Done. Starting THUG Pro...'
+    $script:ZipBad = $false
+    $u = $null
+    if ($Zip -and $Version -and (Test-Path -LiteralPath $Zip)) {
+        # the game's finished download: no second GitHub check (a busy GitHub used to throw the download away)
+        if ($Sha256 -and ((Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash -ne $Sha256.ToUpper())) {
+            Say 'The download does not match GitHub''s checksum. The game will download it again.'
+            $script:ZipBad = $true
+        } else {
+            $u = @{ state = 'newer'; version = (Version-Of $Version); tag = $Version; url = ''; size = (Get-Item -LiteralPath $Zip).Length; text = "Installing dadmod $Version." }
+        }
     } else {
-        if ($u.state -eq 'newer') { Write-Host 'The update did not finish. Your dadmod is as it was.' -ForegroundColor Red }
-        Write-Host 'Press any key to start THUG Pro again.'
-        try { [void][Console]::ReadKey($true) } catch { }
+        Say 'Checking for a newer dadmod...'
+        $u = Check-Update (Have-Version $g '')
     }
-    Start-Process -FilePath $exe -WorkingDirectory $g
-    Start-Sleep -Seconds 2
+    $ok = $false
+    if ($u) {
+        Say $u.text
+        if ($u.state -eq 'newer') { $ok = Get-Update $u $g $Zip }
+    }
+    if ($ok -or $script:ZipBad) {
+        # used up (or damaged): the game downloads again when it needs to
+        foreach ($f in @($Zip, "$Zip.ver")) { if ($f -and (Test-Path -LiteralPath $f)) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+    }
+    Remove-Item -LiteralPath $restartFile -Force -ErrorAction SilentlyContinue
+    if ($ok) {
+        Say "dadmod $($u.tag) is installed."
+        if ($restart) { Say 'Starting THUG Pro...' }
+        Ui-Pump
+        Start-Sleep -Seconds 2
+        Close-UpdateWindow
+    } elseif ($u -and $u.state -ne 'newer') {
+        Close-UpdateWindow
+    } else {
+        $why = $(if ($script:UiLines.Count) { $script:UiLines[-1] } else { '' })
+        Update-Message ("The update did not finish, so your dadmod is as it was.`r`n`r`n$why`r`n`r`nIf it keeps happening, run Setup.bat in your dadmod-install folder. Details: dadmod\update\update.log") $true
+    }
+    if ($restart) {
+        Start-Process -FilePath $exe -WorkingDirectory $g
+        Start-Sleep -Seconds 2
+    }
+    try { $mtx.ReleaseMutex() } catch { }
 }
 
 if ($Action -eq 'update') {

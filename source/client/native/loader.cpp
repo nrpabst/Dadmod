@@ -623,6 +623,8 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_UpdateInfo", dupdate::CF_UpdateInfo },
     { "THUGRECOMP_UpdateStart", dupdate::CF_UpdateStart },
     { "THUGRECOMP_UpdateDownload", dupdate::CF_UpdateDownload },
+    { "THUGRECOMP_UpdateCheck", dupdate::CF_UpdateCheck },
+    { "THUGRECOMP_UpdateNotes", dupdate::CF_UpdateNotes },
 };
 
 static void __cdecl RegisterCFuncsHook(struct CFuncEntry* table, unsigned count) {

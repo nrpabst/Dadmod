@@ -189,7 +189,10 @@ static DWORD __fastcall SfxPlayHook(void* self, void*, DWORD sum, float* vol, fl
         return h;
     }
     int voice = -1;
-    for (int k = 0; k < n; ++k) if (*(DWORD*)(kHandles + k * 0x3C) == h) { voice = k; break; }
+    // the voice picker leaves the cursor on the voice it just used; fall back to a playing row with this id (stale rows
+    // of finished voices can carry the same id, which made earlier logs show sounds "ending" after 0-60 ms)
+    { int c = (int)*(DWORD*)kCursor; if (c >= 0 && c < n && *(DWORD*)(kHandles + c * 0x3C) == h && VoiceBusy(c)) voice = c; }
+    for (int k = 0; voice < 0 && k < n; ++k) if (*(DWORD*)(kHandles + k * 0x3C) == h && VoiceBusy(k)) voice = k;
     if (steal >= 0 && voice == steal)
         Log("STEAL  voice %d: all %d voices busy, cut off %s (playing %lu ms) to start %s", steal, n,
             stolenSum ? Name(stolenSum).c_str() : "(started before logging)", stolenAge, nm.c_str());

@@ -388,6 +388,38 @@ static void PatchParticleNullVB() {
     DebugLog("crashlog: particle null vertex buffer guard applied (0x4D54B8)");
 }
 
+// Stuck terrain sounds (Noah 2026-11-24: a grind / roll sound kept playing for minutes). Each voice has a handle row at
+// 0x6F7A68 (stride 0x3C: +0 handle id, +4 base id). When a voice finishes, 0x47C810 clears only its busy byte and the row
+// keeps its old id. The id-in-use check 0x47BAB0, the update-by-id 0x47B7C0 and the object-list stops 0x47BB50/0x47BC30 stop
+// at the FIRST row with that id, so a stale row makes the game hand one id to two playing sounds; stopping one then stops the
+// wrong copy and the skater loop (0x513BED) loses its real voice, which plays forever. The 10 bytes at 0x47C846 (dec the
+// playing count + clear busy) become a jump to a stub that does the same and also zeroes the finished voice's handle row
+// (+0 and +4), so no stale ids are left. edi = voice index there; edx is free.
+static void PatchSoundStaleHandles() {
+    BYTE* at = (BYTE*)0x47C846;
+    static const BYTE orig[10] = { 0xA1,0x48,0x8A,0x6F,0x00, 0x48, 0xC6,0x46,0x10,0x00 };  // mov eax,[6F8A48]; dec eax; mov byte [esi+10],0
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: sound stale handle fix skipped, bytes at 0x47C846 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, sizeof orig); s += sizeof orig;                          // original 3 instructions
+    *s++ = 0x6B; *s++ = 0xD7; *s++ = 0x3C;                                   // imul edx,edi,0x3C
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A68; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A68],0
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A6C; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A6C],0
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x47C850 - (DWORD)(s + 5); s += 5;         // jmp 0x47C850 (mov [6F8A48],eax)
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x47C846 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: sound stale handle fix applied (0x47C846)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -398,6 +430,7 @@ static void Install() {
     PatchSkaterCamera();
     PatchGlobalFlags();
     PatchParticleNullVB();
+    PatchSoundStaleHandles();
 }
 
 }  // namespace crashlog

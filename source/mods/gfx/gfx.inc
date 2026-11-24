@@ -727,6 +727,22 @@ static DWORD SwapCull(DWORD c);
 
 static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
+// File polls (Noah 2026-11-24, stutter hunt): the frame-end checks of gfx.ini and the request files take turns, one file
+// per frame at most and each about once a second (PollPick in EndFrame).
+enum { kPollIni, kPollShot, kPollFgDebug, kPollLastGame, kPollFireworks, kPollCount };
+static int g_pollSlot = -1;          // the file this frame may check (-1: none)
+static DWORD g_fileCheckTick = 0;    // GetTickCount of the last file check
+static void PollPick() {
+    static DWORD last = 0;
+    static int next = 0;
+    DWORD now = GetTickCount();
+    g_pollSlot = -1;
+    if (now - last < 1000 / kPollCount) return;
+    last = now;
+    g_pollSlot = next;
+    next = (next + 1) % kPollCount;
+    g_fileCheckTick = now;
+}
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
 static bool g_skySeen = false;  // the replacement sky drew on this level (2026-11-22, MapLookNow)
@@ -2686,12 +2702,14 @@ static void UpdateWorld() {
 
     // fireworks: a won game (last_game.txt is rewritten), THUGPro Manager's Launch now, or the timer
     int fwm = V("gfx_fireworks");
-    if ((g_presents & 31) == 0) {
+    if (g_pollSlot == kPollLastGame) {
         WIN32_FILE_ATTRIBUTE_DATA fa;
         FILETIME t = {};
         if (GetFileAttributesExA(ExeDirFile("last_game.txt").c_str(), GetFileExInfoStandard, &fa)) t = fa.ftLastWriteTime;
         if (!g_lastGameInit) { g_lastGame = t; g_lastGameInit = true; }
         else if (CompareFileTime(&t, &g_lastGame)) { g_lastGame = t; if (fwm) FireworksShow(14, "game over"); }
+    }
+    if (g_pollSlot == kPollFireworks) {
         std::string req = ExeDirFile("gfx_fireworks.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); FireworksShow(12, "THUGPro Manager"); }
     }
@@ -3280,7 +3298,7 @@ static void NoteDeviceLost(HRESULT hr);  // used by framegen.inc, defined below
 
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
-    if ((g_presents & 63) == 0) {  // ~once a second: pick up edits THUGPro Manager made to gfx.ini
+    if (g_pollSlot == kPollIni) {  // once a second: pick up edits THUGPro Manager (or another open game) made to gfx.ini
         FILETIME t = IniTime();
         if (CompareFileTime(&t, &g_iniTime)) {
             int trick = V("gfx_tricksfx"), postfx = V("gfx_postfx");
@@ -3301,9 +3319,11 @@ static void CheckKeysAndIni() {
     bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
     if (now && !down && shift) FgDebugAsk();  // Shift+F11: frame generation debugger records the next frames (framegen.inc)
     else if (now && !down && V("gfx_shotkey")) g_shotPending = true;
-    if ((g_presents & 31) == 0) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
+    if (g_pollSlot == kPollShot) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
         std::string req = ExeDirFile("gfx_shot.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); g_shotPending = true; }
+    }
+    if (g_pollSlot == kPollFgDebug) {
         std::string fq = ExeDirFile("fgdebug.txt");  // ... or a frame generation recording
         if (GetFileAttributesA(fq.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(fq.c_str()); FgDebugAsk(); }
     }
@@ -3419,6 +3439,7 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 static void EndFrame(IDirect3DDevice9* dev) {
     g_winDrawsLast = g_winDraws; g_winDraws = 0;
     if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
+    PollPick();
     g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame
         dev->BeginScene();

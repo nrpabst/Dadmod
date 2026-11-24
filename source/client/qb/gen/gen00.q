@@ -6658,7 +6658,18 @@ script dadmod_bhra_flush
             SetTags bhra_pending = 0 bhra_hop_now = 0
             dadmod_bhra_dbg what = "pending combo banked"
             LandSkaterTricks
+            if GoalManager_GoalShouldExpire
+                Obj_KillSpawnedScript Name = dadmod_bhra_endrun
+                Obj_SpawnScript dadmod_bhra_endrun
+            endif
         endif
+    endif
+endscript
+script dadmod_bhra_endrun
+    wait 1 gameframe
+    if not GameIsOver
+        dadmod_bhra_dbg what = "after zero: hop without a revert banked the combo, ending the run"
+        MakeSkaterGoto EndOfRun
     endif
 endscript
 

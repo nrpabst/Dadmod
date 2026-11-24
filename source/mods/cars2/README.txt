@@ -160,3 +160,11 @@ ramp"; picked "Last safe spot + flip back")
   can't be read, mainmenu.log says "cars2: car object has no PlayerVehicle id" and the tracker stays idle.
 - No menu option. Any stock car teleport while driving (also a pause menu restart) now lands at the last safe spot.
 - DLL change: needs a game restart. Not tested in game yet.
+
+Camera look after getting out (2026-11-24, Noah: "when you get out of a car it doesn't give you camera control back until
+you get off board")
+- Cause: skatercam0's cameralookaround component keeps a look lock (+0x18) that a pad button press flips; it keeps
+  updating under the car camera, so a press while driving could leave it locked. The skater camera clears it only in
+  its walking branch (0x4FA860), so stepping off the board brought the look back.
+- Fix: dadmod_cars_exit_now calls THUGRECOMP_CarsDrive camfree = 1, which clears the lock (and the look offset) and logs
+  "cars2: got out, skater camera look lock was N (override N), cleared" to thugrecomp_debug.log. DLL change: restart.

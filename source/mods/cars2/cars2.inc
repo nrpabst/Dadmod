@@ -381,7 +381,28 @@ static void HornPoll() {
     g_hornWas = h;
 }
 
-// THUGRECOMP_CarsDrive on=1|0  -> driving remap heartbeat / off. Returns active = 1 when the remap applies now.
+// Camera look after getting out (Noah 2026-11-24: "when you get out of a car it doesn't give you camera control back
+// until you get off board"). skatercam0 has a 'cameralookaround' component (0x81C7122D, vtable 0x64B28C, update
+// 0x4E4060): +0x18 = look lock, flipped by a pad button press (input pad +0x130) while it keeps updating under the car
+// camera; +0x19 = SC_SetSkaterCamOverride; +0x20 / +0x24 heading / tilt. While +0x18 is set the right stick / mouse
+// look does nothing. The skater camera update 0x4FA860 clears +0x18 only in its walking branch, which is why stepping
+// off the board brought it back. Getting out (dadmod_cars_exit_now) now clears it the same way.
+static void FreeSkaterCamLook() {
+    void* mgr = *(void**)0x6F0FC0;
+    if (!mgr || IsBadReadPtr(mgr, 0x10)) return;
+    void* obj = ((void*(__thiscall*)(void*, DWORD))0x462120)(mgr, QbKey("skatercam0"));
+    if (!obj || IsBadReadPtr(obj, 0x20)) return;
+    BYTE* la = (BYTE*)((void*(__thiscall*)(void*, DWORD))0x45DB90)(obj, 0x81C7122D);
+    if (!la || IsBadReadPtr(la, 0x44) || *(DWORD*)la != 0x64B28C) return;
+    char line[120];
+    _snprintf(line, sizeof line, "cars2: got out, skater camera look lock was %d (override %d), cleared", la[0x18], la[0x19]);
+    line[sizeof line - 1] = 0;
+    ::DebugLog(line);
+    la[0x18] = 0;
+    *(float*)(la + 0x20) = 0.f; *(float*)(la + 0x24) = 0.f;
+}
+
+// THUGRECOMP_CarsDrive on=1|0  -> driving remap heartbeat / off. camfree=1 clears the skater camera look lock. Returns active = 1 when the remap applies now.
 // gta=1|0 sets the GTA 3 steering (any time). Returns horn = 1 when the horn key was pressed since the last call.
 // Test aids: test=1 (forward) or test=-1 (back) reads=N pretends that direction is held for N controller reads;
 // key=<DIK code> reads=N pretends that key is down (57 Space, 14 Backspace, 73 Numpad 9).
@@ -393,6 +414,7 @@ static bool __cdecl CF_CarsDrive(void* params, void* script) {
     if (t) { g_testDir = t; InterlockedExchange(&g_testReads, IntParam(params, "reads", 60)); }
     int k = IntParam(params, "key", 0);
     if (k) { g_testKey = k; InterlockedExchange(&g_testKeyReads, IntParam(params, "reads", 60)); }
+    if (IntParam(params, "camfree", 0) == 1) FreeSkaterCamLook();
     int gta = IntParam(params, "gta", -1);
     if (gta == 0 || gta == 1) InterlockedExchange(&g_gta, gta);
     RetInt(script, "active", State() == nullptr ? 1 : 0);

@@ -385,6 +385,7 @@ script dadmod_cars_exit_now
     wait 2 gameframes
     if ObjectExists id = skater
         Skater : SetSpeed 0
+        THUGRECOMP_CarsDrive camfree = 1
         dadmod_cars_after_zero
         if GotParam dadmod_c2_z
             if not GameIsOver

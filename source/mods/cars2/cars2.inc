@@ -190,16 +190,153 @@ static void __fastcall SteerHook(BYTE* comp) {
 // a zeroed dummy list instead, so a bad body model can never crash (its wheels just all sit at the middle).
 static const DWORD kBonesCall = 0x43BA62, kBonesFn = 0x493040;
 static BYTE g_dummyBones[0x800];
+// ---- More Cars model fix (2026-11-24, Noah: "a lot of more cars have their model placed wrong or they're invisible") ----
+// The car takes its parts from the body model's hierarchy list (8 x 0x50-byte entries: +0 name checksum, +4 parent,
+// +8 index << 16, +0x10 4x4 bind matrix, translation at +0x40) BY POSITION, never by name:
+//   init 0x43BA20: entry 1 = body (offset), entries 2-5 = wheels 1-4 (spots, wheel base), setup Wheels[] in the same order
+//   pose 0x43A070: output bone 0 = zero (shadow hidden), 1 = body (fixed axis matrix + body offset), k >= 2 = wheel k-2
+//                  (reads past the 4 wheels for k >= 6: garbage)
+// Every stock car lists Car_Shadow, Car, Car_Wheel01-04 with an unturned body. Many THUG2 traffic models don't:
+//   wheels in another order (Smart Car, Hippie Van, Delivery Van, Rust Bucket, Parade Float: the back wheels steered),
+//   body listed last (Liberty: body drawn at a wheel, a wheel drawn as the body), 6 wheels with the body 8th (Tour
+//   Bus: body read garbage, invisible), body part turned 90 degrees (Sedan, Delivery Van, Rust Bucket, Barcelona Taxi,
+//   Neon, Submarine: drawn on its side / nose), wheels on the middle line (Streetcar: tipped over at once).
+// For setups with dadmod_bonefix (QB sends THUGRECOMP_CarsDrive bonefix=1 right before getting in, only for More Cars):
+//   init gets a reordered copy of the list (body 1, Car_Wheel01-04 as 2-5; middle-line wheels spread 35 out), and after
+//   every stock pose call the pose is mapped back to the model's own order by name: body -> the body pose turned by the
+//   body part's own bind turn, wheel -> its wheel's pose moved to its own spot, wheels 5/6 -> the nearest same-side
+//   wheel's pose moved to their spot, anything else (shadow, extra parts) hidden like stock bone 0.
+// Stock cars and props never get the fix (bonefix=0 clears it), so their stock behavior is untouched.
+static const DWORD kPoseFn = 0x43A070, kPoseSkipByte = 0x7D1EC0;
+static const DWORD kPoseCalls[] = { 0x43ADA7, 0x43BEC7, 0x43C269, 0x43C523 };
+struct BoneFix {
+    BYTE* list;           // the model's own hierarchy list this fix was built for
+    BYTE* comp;           // the vehicle component using it (first pose call after init)
+    bool pending, hasRot;
+    int n;                // hierarchy entries
+    int role[8];          // stock pose index to copy: 0 = hidden, 1 = body, 2-5 = wheel 1-4
+    float delta[8][3];    // added to the copied translation (vehicle axes)
+    float rot[9];         // body part bind turn (rows)
+    BYTE copy[8 * 0x50];  // reordered list handed to init
+};
+static BoneFix g_bf;
+static volatile LONG g_bfRot = 1;     // test aid: THUGRECOMP_CarsDrive bfrot=0 (no turn) / 1 (bind turn) / 2 (its transpose)
+static DWORD QbKey(const char* s);
+static volatile LONG g_bonefixNext;   // THUGRECOMP_CarsDrive bonefix=
+
+static void BindPos(const BYTE* e, float out[3]) {   // file axes (x, y = back, z = up) -> the car's (-x, z, -y)
+    const float* t = (const float*)(e + 0x40);
+    out[0] = -t[0]; out[1] = t[2]; out[2] = -t[1];
+}
+
+static void BuildBoneFix(BYTE* list) {
+    BYTE* keep = g_bf.list;
+    bool want = InterlockedExchange(&g_bonefixNext, 0) != 0 || (keep && keep == list);
+    memset(&g_bf, 0, sizeof g_bf);
+    if (!want || !list || IsBadReadPtr(list, 6 * 0x50)) return;
+    static DWORD kCar, kW[6];
+    if (!kCar) { kCar = QbKey("Car"); char nm[16]; for (int i = 0; i < 6; ++i) { _snprintf(nm, sizeof nm, "Car_Wheel0%d", i + 1); kW[i] = QbKey(nm); } }
+    DWORD root = *(DWORD*)list;
+    int n = 1;
+    while (n < 8 && !IsBadReadPtr(list + n * 0x50, 0x50) && *(DWORD*)(list + n * 0x50 + 4) == root &&
+           (*(DWORD*)(list + n * 0x50 + 8) >> 16) == (DWORD)n) ++n;
+    int body = -1, w[6] = { -1, -1, -1, -1, -1, -1 };
+    for (int k = 1; k < n; ++k) {
+        DWORD c = *(DWORD*)(list + k * 0x50);
+        if (c == kCar) body = k;
+        for (int i = 0; i < 6; ++i) if (c == kW[i]) w[i] = k;
+    }
+    if (n < 6 || body < 0 || w[0] < 0 || w[1] < 0 || w[2] < 0 || w[3] < 0) {
+        mmenu::Log("cars2: More Cars fix: model parts not recognized (%d parts), left stock", n);
+        return;
+    }
+    g_bf.list = list; g_bf.pending = true; g_bf.n = n;
+    memcpy(g_bf.copy, list, n * 0x50);
+    memcpy(g_bf.copy + 0x50, list + body * 0x50, 0x50);
+    for (int j = 0; j < 4; ++j) memcpy(g_bf.copy + (2 + j) * 0x50, list + w[j] * 0x50, 0x50);
+    float* t[4];
+    for (int j = 0; j < 4; ++j) t[j] = (float*)(g_bf.copy + (2 + j) * 0x50 + 0x40);
+    bool spread = fabsf(t[0][0]) < 5.f && fabsf(t[1][0]) < 5.f;
+    if (spread) {   // wheels on the middle line: give the physics a 70 wide track, each pair at its middle
+        for (int a = 0; a < 4; a += 2) {
+            float m = (t[a][1] + t[a + 1][1]) * 0.5f;
+            t[a][0] = 35.f; t[a + 1][0] = -35.f; t[a][1] = t[a + 1][1] = m;
+        }
+    }
+    float phys[4][3];
+    for (int j = 0; j < 4; ++j) BindPos(g_bf.copy + (2 + j) * 0x50, phys[j]);
+    for (int k = 0; k < n; ++k) {
+        g_bf.role[k] = 0;
+        if (k == body) { g_bf.role[k] = 1; continue; }
+        for (int i = 0; i < 6; ++i) {
+            if (k != w[i]) continue;
+            int j = i;
+            if (i >= 4) {   // extra wheel: copy the nearest wheel on the same side
+                float own[3]; BindPos(list + k * 0x50, own);
+                float best = 1e30f;
+                for (int c = 0; c < 4; ++c) {
+                    if ((phys[c][0] < 0.f) != (own[0] < 0.f)) continue;
+                    float d = fabsf(phys[c][2] - own[2]);
+                    if (d < best) { best = d; j = c; }
+                }
+                if (j >= 4) j = 2;
+            }
+            float own[3]; BindPos(list + k * 0x50, own);
+            g_bf.role[k] = 2 + j;
+            for (int a = 0; a < 3; ++a) g_bf.delta[k][a] = own[a] - phys[j][a];
+        }
+    }
+    const float* m = (const float*)(list + body * 0x50 + 0x10);
+    for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) g_bf.rot[r * 3 + c] = m[r * 4 + c];
+    for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c)
+        if (fabsf(g_bf.rot[r * 3 + c] - (r == c ? 1.f : 0.f)) > 0.01f) g_bf.hasRot = true;
+    mmenu::Log("cars2: More Cars fix: %d parts, body %d, wheels %d %d %d %d (+%d %d), body turned %d, middle-line wheels %d",
+               n, body, w[0], w[1], w[2], w[3], w[4], w[5], g_bf.hasRot ? 1 : 0, spread ? 1 : 0);
+}
+
 static void* __fastcall BonesGuard(void* ecx, void* /*edx*/) {
     void* r = ecx ? ((void*(__thiscall*)(void*))kBonesFn)(ecx) : nullptr;
     if (!r) {
         static DWORD s_logAt;
         if (GetTickCount() - s_logAt > 5000) { s_logAt = GetTickCount(); mmenu::Log("cars2: car body model has no wheel bones, using a blank set (no crash)"); }
         memset(g_dummyBones, 0, sizeof g_dummyBones);
+        g_bf.list = nullptr; g_bf.comp = nullptr; g_bf.pending = false;
         return g_dummyBones;
     }
-    return r;
+    BuildBoneFix((BYTE*)r);
+    return g_bf.list ? (void*)g_bf.copy : r;
 }
+
+static void __fastcall PoseHook(BYTE* comp, void* /*edx*/) {
+    ((void(__thiscall*)(BYTE*))kPoseFn)(comp);
+    if (!g_bf.list || !comp) return;
+    if (g_bf.pending) { g_bf.comp = comp; g_bf.pending = false; }
+    if (comp != g_bf.comp) return;
+    if (*(BYTE*)kPoseSkipByte || *(DWORD*)(comp + 0x131C) == 2) return;
+    BYTE* mdl = *(BYTE**)(comp + 0x1310);
+    if (!mdl || IsBadReadPtr(mdl, 0x1C)) return;
+    BYTE* obj = ((BYTE*(__thiscall*)(BYTE*))0x5480F0)(mdl);
+    if (!obj || IsBadReadPtr(obj, 0x18)) return;
+    float* buf = ((float*(__thiscall*)(BYTE*))0x5480C0)(obj);
+    int n = ((int(__thiscall*)(BYTE*))0x4A2BA0)(obj);
+    if (!buf || n != g_bf.n || IsBadWritePtr(buf, n * 64)) return;
+    float src[8][16];
+    memcpy(src, buf, n * 64);
+    for (int k = 0; k < n; ++k) {
+        float* o = buf + k * 16;
+        int r = g_bf.role[k];
+        if (r == 0) { memset(o, 0, 64); continue; }
+        memcpy(o, src[r], 64);
+        if (r == 1 && g_bf.hasRot && g_bfRot) {
+            float R[9];
+            for (int i = 0; i < 9; ++i) R[i] = g_bfRot == 2 ? g_bf.rot[(i % 3) * 3 + i / 3] : g_bf.rot[i];
+            for (int i = 0; i < 3; ++i) for (int c = 0; c < 4; ++c)
+                o[i * 4 + c] = R[i * 3] * src[1][c] + R[i * 3 + 1] * src[1][4 + c] + R[i * 3 + 2] * src[1][8 + c];
+        }
+        o[12] += g_bf.delta[k][0]; o[13] += g_bf.delta[k][1]; o[14] += g_bf.delta[k][2];
+    }
+}
+
 
 // ---- Respawn at the last safe spot + flip back (Noah 2026-11-24: "i drove into the water and my car respawned face
 // down in a ramp") ----
@@ -364,6 +501,16 @@ static void Install() {
             FlushInstructionCache(GetCurrentProcess(), s, 5);
         }
     }
+    for (DWORD site : kPoseCalls) {
+        BYTE* c = (BYTE*)site;
+        DWORD old;
+        if (c[0] != 0xE8 || (DWORD)(site + 5 + *(LONG*)(c + 1)) != kPoseFn) { mmenu::Log("cars2: More Cars pose site %08X changed, not installed", site); continue; }
+        if (VirtualProtect(c, 5, PAGE_EXECUTE_READWRITE, &old)) {
+            *(LONG*)(c + 1) = (LONG)((DWORD)PoseHook - (site + 5));
+            VirtualProtect(c, 5, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), c, 5);
+        }
+    }
     BYTE* p = (BYTE*)kBonesCall;
     if (p[0] != 0xE8 || (DWORD)(kBonesCall + 5 + *(LONG*)(p + 1)) != kBonesFn) { mmenu::Log("cars2: wheel-bone guard site changed, not installed"); return; }
     DWORD old;
@@ -415,6 +562,10 @@ static bool __cdecl CF_CarsDrive(void* params, void* script) {
     int k = IntParam(params, "key", 0);
     if (k) { g_testKey = k; InterlockedExchange(&g_testKeyReads, IntParam(params, "reads", 60)); }
     if (IntParam(params, "camfree", 0) == 1) FreeSkaterCamLook();
+    int bf = IntParam(params, "bonefix", -1);
+    if (bf == 0 || bf == 1) InterlockedExchange(&g_bonefixNext, bf);
+    int bfr = IntParam(params, "bfrot", -1);
+    if (bfr >= 0 && bfr <= 2) InterlockedExchange(&g_bfRot, bfr);
     int gta = IntParam(params, "gta", -1);
     if (gta == 0 || gta == 1) InterlockedExchange(&g_gta, gta);
     RetInt(script, "active", State() == nullptr ? 1 : 0);

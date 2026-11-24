@@ -552,9 +552,11 @@ static bool __cdecl CF_UpdateStart(void* params, void* script) {
     (void)params;
     if (g_started) { Log("update: already started"); RetInt(script, "update_ok", 1); return true; }
     bool ok = false;
-    if (g_dl == 2 && ArmedAlive()) {
-        ok = WriteWholeFile(ExeDirFile("update\\restart.txt"), "restart\r\n");
-        Log("update: restart and install now (the waiting updater takes it from here)");
+    if (g_dl == 2) {
+        // restart.txt also when the waiting updater belongs to another open THUG Pro from this folder (two games at
+        // once): that one installs once both are closed and must start the game again too (2026-11-24)
+        bool flag = WriteWholeFile(ExeDirFile("update\\restart.txt"), "restart\r\n");
+        if (flag && ArmedAlive()) { ok = true; Log("update: restart and install now (the waiting updater takes it from here)"); }
     }
     if (!ok) ok = RunUpdater(false);
     g_started = ok;

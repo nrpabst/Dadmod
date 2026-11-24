@@ -14,7 +14,8 @@ import os, re, shutil, sys
 
 WRAP = ['create_rankings', 'create_console_message', 'create_onscreen_keyboard', 'enter_kb_chat',
         'launch_chat_keyboard', 'launch_quick_menu_keyboard', 'entered_chat_message', 'cancel_enter_chat_menu',
-        'cancel_chat_menu', 'sound_options_exit', 'edit_tricks_menu_exit', 'exit_pause_menu']
+        'cancel_chat_menu', 'sound_options_exit', 'edit_tricks_menu_exit', 'exit_pause_menu',
+        'destroy_onscreen_keyboard']
 COPY_IN = ['gamemodes/gamemode.q', 'engine/menu/keyboard.q', 'game/menu/soundoptions.q', 'game/menu/edit_tricks_menu.q']
 KALI = 'decompiled/thugpro_qb/qb'
 

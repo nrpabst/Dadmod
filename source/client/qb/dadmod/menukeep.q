@@ -5,6 +5,9 @@ script dadmod_chatkeep_save
     Change dadmod_mk_game = ( dadmod_mk_game + 1 )
     Change dadmod_mk_keep = 0
     dadmod_mk_pause_open
+    if ( <mk_po> = 0 )
+        dadmod_mk_chat_open
+    endif
     if ( <mk_po> = 1 )
         Change dadmod_mk_keep = 1
         KillSpawnedScript Name = dadmod_mk_keep_clear
@@ -47,6 +50,39 @@ script dadmod_mk_pause_open
         mk_p = 0
     endif
     return mk_po = <mk_p>
+endscript
+script dadmod_mk_chat_open
+    mk_p = 0
+    if InNetGame
+        if not LevelIs Load_MainMenu
+            if not IsTrue is_changing_levels
+                if ( dadmod_mk_chat = 1 )
+                    if ScreenElementExists id = keyboard_anchor
+                        mk_p = 1
+                    endif
+                endif
+            endif
+        endif
+    endif
+    if ScreenElementExists id = dialog_box_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = quit_dialog_anchor
+        mk_p = 0
+    endif
+    if ScreenElementExists id = rankings_anchor
+        mk_p = 0
+    endif
+    return mk_po = <mk_p>
+endscript
+script destroy_onscreen_keyboard
+    if ( dadmod_mk_chat = 1 )
+        dadmod_mk_keeping
+        if ( <mk_keeping> = 1 )
+            return
+        endif
+    endif
+    destroy_onscreen_keyboard_orig <...>
 endscript
 script dadmod_mk_keeping
     mk_k = 0

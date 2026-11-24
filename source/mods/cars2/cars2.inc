@@ -34,6 +34,10 @@ static volatile LONG g_testDir, g_testReads;  // test aid: pretend forward (1) /
 static volatile LONG g_testKey, g_testKeyReads;  // test aid: pretend this DIK key is down for N reads
 static DWORD g_exitSince;             // Backspace pressed: hold Triangle from then
 static bool g_backWas;
+// 2026-11-24 (log 2026-11-23 19:05: got in the NY Cab and was out again 1 s later): a Triangle / grind key still held
+// from the menu pick made the stopped car ask to get out at once. Triangle now counts only after it was let go once
+// since the remap turned on (each car you get in).
+static bool g_triArmed;
 
 static const char* State() {
     if (!g_on) return "turned off: not driving, or a menu is open";
@@ -76,7 +80,7 @@ static void Remap(BYTE* out) {
     bool active = off == nullptr;
     if (active != g_active) {
         g_active = active;
-        if (active) mmenu::Log("cars2: driving remap on (forward = gas, back = brake, Space/RB handbrake, Backspace out)");
+        if (active) { g_triArmed = false; mmenu::Log("cars2: driving remap on (forward = gas, back = brake, Space/RB handbrake, Backspace out)"); }
         else mmenu::Log("cars2: driving remap off (%s)", off);
     }
     if (g_testKeyReads > 0) --g_testKeyReads;
@@ -100,6 +104,10 @@ static void Remap(BYTE* out) {
     g_backWas = back;
     if (g_exitSince && GetTickCount() - g_exitSince > kExitHoldMs) g_exitSince = 0;
 
+    if (!g_triArmed) {             // Triangle held since before getting in: ignore it until it is let go
+        if (out[9] == 0) g_triArmed = true;
+        else out[9] = 0;
+    }
     if (g_exitSince) {             // stock exit: Triangle brakes to a stop, then ExitVehicleRequest
         out[6] = 0;
         out[9] = 0xFF;

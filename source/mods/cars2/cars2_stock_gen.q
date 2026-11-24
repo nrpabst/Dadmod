@@ -42,13 +42,4 @@ dadmod_car_mardi = { dadmod_car_mardi = { model = "veh\\Veh_Mardi\\Veh_Mardi.mdl
 dadmod_car_duck = { dadmod_car_duck = { model = "veh\\Veh_Duck\\veh_duck.mdl" skater_pos = (0.0,0.0,0.0) } }
 dadmod_car_sub = { dadmod_car_sub = { model = "veh\\veh_sub\\veh_sub.mdl" skater_pos = (0.0,0.0,0.0) } }
 dadmod_car_streetcar = { dadmod_car_streetcar = { model = "veh\\veh_streetcar\\veh_streetcar.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_cone = { dadmod_prop_cone = { model = "Mdl_Cone\\Mdl_Cone.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_cart = { dadmod_prop_cart = { model = "veh\\Veh_Trolley\\veh_trolley.mdl" skater_pos = (-10.81,1.0,26.18) make_skater_visible } }
-dadmod_prop_scooter = { dadmod_prop_scooter = { model = "veh\\Veh_Scooter\\Veh_Scooter.mdl" skater_pos = (-10.81,1.0,26.18) make_skater_visible } }
-dadmod_prop_robot = { dadmod_prop_robot = { model = "veh\\veh_smallrobot\\veh_smallrobot.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_robot2 = { dadmod_prop_robot2 = { model = "veh\\veh_smallrobot2\\veh_smallrobot2.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_chest = { dadmod_prop_chest = { model = "gameobjects\\pickups\\treasure_chest\\treasure_chest.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_bike = { dadmod_prop_bike = { model = "veh\\Veh_CopperBike\\Veh_CopperBike.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_mini = { dadmod_prop_mini = { model = "veh\\Veh_Mini\\Veh_Mini.mdl" skater_pos = (0.0,0.0,0.0) } }
-dadmod_prop_halfpipe = { dadmod_prop_halfpipe = { model = "veh\\Veh_Half_Pipe\\Veh_Half_Pipe.mdl" skater_pos = (0.0,0.0,0.0) } }
 }

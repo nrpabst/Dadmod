@@ -146,7 +146,7 @@ script dadmod_cars_stock_row
     endif
     make_thugpro_menu_item {
     text = <dadmod_cs_tx>
-    description_text = "When you host: players without dadmod see More Cars and Props as the real thing (same switch as Throwables)"
+    description_text = "When you host: players without dadmod see More Cars as the real car; Props stay the green car for them (same switch as Throwables)"
     pad_choose_script = dadmod_cars_stock_toggle
     }
 endscript

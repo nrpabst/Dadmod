@@ -53,14 +53,18 @@ static bool IsClient() { char* m = Mgr(); return m && !(*(DWORD*)m & 1) && Clien
 // the host did not greet us as dadmod (skinsync.inc: THUGRECOMP_SkinHello records the client App that was greeted)
 static bool HostStock() { return IsClient() && skin::g_greetApp != ClientApp(); }
 
-// replaces ClientApp::Send at 0x5B5302 (thiscall: ECX = app, one stack arg, callee pops 4 = __fastcall + unused EDX)
+// replaces ClientApp::Send at 0x5B5302. 2026-11-27 (throw fix): it NEVER holds the 0x83 back any more. On 2026-11-24
+// Noah threw on a host that did not greet us; the 0x83 was held, the 0x48 went out, and the players without dadmod saw
+// nothing (a real THUG Pro server may not relay a player's 0x48; on a dadmod host whose greeting did not arrive the
+// held 0x83 also stopped the host's own push). The 0x83 now always goes out (the LAN-proven path: dadmod host pushes
+// the real model); dadmod_throw_cstock_send adds the 0x48 copy only when the host did not greet us. Cost: on a stock
+// host Kali sees its COMBO O as well, and on a dadmod host that failed to greet, stock players may see two copies.
 static void __fastcall SendHook(void* app, void*, BYTE* desc) {
     if (desc && desc[0] == 0x83 && g_typeCount && *(const WORD*)(desc + 2) >= 0x2C) {
         const BYTE* data = *(const BYTE**)(desc + 4);
         if (data && IsType(*(const DWORD*)(data + 0x28)) && On() && HostStock()) {
             if (++g_held == 1 || g_held % 50 == 0)
-                SLogT("host without dadmod: our throw goes as 0x48 instead of 0x83 (" + std::to_string(g_held) + ")");
-            return;
+                SLogT("host without dadmod: our throw goes as 0x83 plus a 0x48 copy (" + std::to_string(g_held) + ")");
         }
     }
     typedef void (__thiscall* Fn)(void*, BYTE*);
@@ -78,7 +82,7 @@ static void Patch() {
     *(DWORD*)(site + 1) = (DWORD)&SendHook - (kSendCall + 5);
     VirtualProtect(site, 5, old, &old);
     FlushInstructionCache(GetCurrentProcess(), site, 5);
-    SLogT("0x83 send hook in (our throws on a host without dadmod go as 0x48)");
+    SLogT("0x83 send hook in (our throws on a host without dadmod also go as 0x48; the 0x83 always goes out)");
 }
 
 // THUGRECOMP_ThrowHostStock  true when we are a client in a net game whose host has not greeted us as dadmod.

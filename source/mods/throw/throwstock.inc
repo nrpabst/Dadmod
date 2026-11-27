@@ -121,4 +121,119 @@ static bool __cdecl CF_ThrowPushStock(void* params, void* script) {
     return carshost::CF_CarsHornPushStock(params, script);
 }
 
+// ---- Look refresh (Noah 2026-11-24, "do 1 2 and 6" #6): a dadmod player did a mid-game Load Skater; players without
+// dadmod only had the join look. Stock has no "change look" message and RefreshSkaterModel on a remote skater crashes
+// them (0x522410), so the host drops that player on their games (0x2D, like DropPlayer 0x53CB70) and ~0.75 s later
+// re-adds him with the new profile (0x22, the "existing player" message 0x53D9D0 sends to a joiner). Players marked
+// as dadmod get the look on 0xD7 (skinsync) and are left out. Plan: work\notes\carstock_test\look_refresh_plan.md.
+static const DWORD kMsgCtor   = 0x4549F0;   // MsgDesc::MsgDesc()
+static const DWORD kScoreOf   = 0x5436E0;   // int __cdecl (skater id): the score the 0x22 header carries
+static const DWORD kLookDelay = 750;        // ms between the drop and the re-add
+struct LookJob { char* player; int skaterId; char name[17]; DWORD due; int handles[16]; int count; };
+static LookJob g_look[4];
+
+static int LookReason() {   // 0 quit (default); dadmod\throwstock_lookreason.txt (one digit) overrides, test aid
+    std::string data;
+    if (ReadWholeFile(ExeDirFile("throwstock_lookreason.txt"), data) && !data.empty() && data[0] >= '0' && data[0] <= '9')
+        return data[0] - '0';
+    return 0;
+}
+static void SendRaw(int handle, BYTE id, void* data, int len, int f8, int fC, int f10, int f1C) {
+    char* mgr = skin::Mgr();
+    void* app = mgr ? *(void**)(mgr + 4) : nullptr;
+    if (!app || !handle) return;
+    BYTE desc[0x20];
+    memset(desc, 0, sizeof desc);
+    typedef void (__thiscall* CtorFn)(void*);
+    ((CtorFn)kMsgCtor)(desc);
+    desc[0] = id;
+    *(WORD*)(desc + 2) = (WORD)len;
+    *(void**)(desc + 4) = data;
+    if (f8 >= 0) *(int*)(desc + 8) = f8;
+    *(int*)(desc + 0xC) = fC;
+    desc[0x10] = (BYTE)f10;
+    desc[0x1C] = (BYTE)f1C;
+    typedef void (__thiscall* Fn)(void*, int, BYTE*);
+    ((Fn)kEnqueue)(app, handle, desc);
+}
+static int HandleOf(char* p) {
+    char* conn = p ? *(char**)(p + skin::kPlayerConn) : nullptr;
+    return conn ? *(int*)(conn + 0x3C) : 0;
+}
+
+// 2026-11-27: untested on real players, so OFF unless dadmod\lookrefresh.txt starts with 1 (no menu row).
+static int g_lookOn = -1;
+static bool LookOn() {
+    if (g_lookOn < 0) {
+        std::string data;
+        g_lookOn = (ReadWholeFile(ExeDirFile("lookrefresh.txt"), data) && !data.empty() && data[0] == '1') ? 1 : 0;
+        if (!g_lookOn) TLog("look refresh: off (dadmod/lookrefresh.txt = 1 turns it on)");
+    }
+    return g_lookOn == 1;
+}
+static void LookChanged(char* player) {
+    if (!player || !skin::OnServer() || !On() || !LookOn()) return;
+    int id = skin::PlayerSkaterId(player);
+    if (id < 0 || id > 255) return;
+    LookJob* job = nullptr;
+    for (LookJob& j : g_look) if (j.player == player || !j.player) { job = &j; break; }
+    if (!job) { TLog("look refresh: busy, " + skin::PlayerName(player) + " skipped"); return; }
+    memset(job, 0, sizeof *job);
+    int reason = LookReason();
+    BYTE drop[2] = { (BYTE)id, (BYTE)reason };
+    skin::ForEachPlayer([&](char* p) {
+        if (p == player || (*(DWORD*)(p + 0x1D0) & 1) || skin::IsMarked(p)) return true;
+        int h = HandleOf(p);
+        if (!h || job->count >= 16) return true;
+        SendRaw(h, 0x2D, drop, 2, -1, 2, 8, 0);
+        job->handles[job->count++] = h;
+        return true;
+    });
+    std::string n = skin::PlayerName(player);
+    if (!job->count) { TLog("look refresh: " + n + " has a new look, no player without dadmod to refresh"); return; }
+    job->player = player; job->skaterId = id; job->due = GetTickCount() + kLookDelay;
+    strncpy(job->name, n.c_str(), 16);
+    TLog("look refresh: " + n + " (skater " + std::to_string(id) + ") dropped on " + std::to_string(job->count)
+         + " game(s) without dadmod, reason " + std::to_string(reason) + ", re-add in " + std::to_string(kLookDelay) + " ms");
+}
+
+static void LookTick() {
+    for (LookJob& j : g_look) {
+        if (!j.player || (int)(GetTickCount() - j.due) < 0) continue;
+        char* p = j.player;
+        j.player = nullptr;
+        if (!skin::PlayerHere(p) || skin::PlayerSkaterId(p) != j.skaterId || skin::PlayerName(p) != j.name) {
+            TLog(std::string("look refresh: ") + j.name + " left before the re-add");
+            continue;
+        }
+        void* prof = *(void**)(p + skin::kPlayerProf);
+        if (!prof) { TLog(std::string("look refresh: ") + j.name + " has no profile, not re-added"); continue; }
+        static BYTE msg[0x30 + skin::kMaxProfile + 16];
+        memset(msg, 0, 0x30);
+        *(int*)(msg + 0x00) = *(int*)(p + 0x28);
+        *(int*)(msg + 0x04) = *(int*)(p + 0x2C);
+        *(DWORD*)(msg + 0x08) = *(DWORD*)(p + 0x1D0) & 0x27880;
+        typedef int (__cdecl* ScoreFn)(int);
+        *(int*)(msg + 0x0C) = ((ScoreFn)kScoreOf)(j.skaterId);
+        *(int*)(msg + 0x10) = *(int*)(p + 0x1C);
+        *(int*)(msg + 0x14) = *(int*)(p + 0x20);
+        msg[0x18] = (BYTE)j.skaterId;
+        msg[0x19] = *(BYTE*)(p + 0x30);
+        *(int*)(msg + 0x1C) = *(int*)(p + 0x48);
+        memcpy(msg + 0x20, p + skin::kPlayerName, 16);
+        int n = skin::PackProfile(prof, msg + 0x30, skin::kMaxProfile);
+        if (n <= 0 || n > skin::kMaxProfile) { TLog(std::string("look refresh: ") + j.name + " profile did not pack"); continue; }
+        int sent = 0;
+        skin::ForEachPlayer([&](char* q) {
+            int h = HandleOf(q);
+            for (int i = 0; i < j.count; ++i)
+                if (j.handles[i] == h && h) { SendRaw(h, 0x22, msg, n + 0x30, 0x80, 2, 8, 2); ++sent; break; }
+            return true;
+        });
+        TLog(std::string("look refresh: ") + j.name + " re-added with the new look on " + std::to_string(sent)
+             + " game(s) (" + std::to_string(n) + " profile bytes)");
+    }
+}
+static struct LookInit { LookInit() { skin::g_stockLook = &LookChanged; skin::g_stockTick = &LookTick; } } g_lookInit;
+
 }  // namespace throwstock

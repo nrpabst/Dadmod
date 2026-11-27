@@ -85,18 +85,20 @@ static bool __cdecl CF_ServerLogJoin(void* params, void*) {
 static bool __cdecl CF_ServerLogTick(void* params, void*) {
     if (!g_have) return true;
     bool net = IntParam(params, "net", 0) != 0;
-    bool host = IntParam(params, "host", 0) != 0;
+    (void)IntParam(params, "host", 0);
     const char* lv = nullptr;
     GetStringParam(params, "level", &lv);
     if (!g_connected) {
-        if (net && !host) { g_connected = true; Write("connected to " + Tag()); }
+        if (net) { g_connected = true; Write("connected to " + Tag()); }
         else if (++g_waitTicks > 120) { Write("never got in to " + Tag()); g_have = false; return true; }
         else return true;
     }
     // InNetGame drops for a moment while a level loads (seen 2026-11-27: "left" logged 4 s before the real quit),
     // so only count it as leaving after about 10 seconds out of a net game.
-    if (!net || host) {
-        if (host || ++g_outTicks > 20) {
+    // IsHost also reads true for a moment while a joined level loads (seen 2026-11-27: "left" 1 s after joining
+    // with the 10 s wait in), so only "not in a net game" counts here.
+    if (!net) {
+        if (++g_outTicks > 20) {
             Write("left " + Tag());
             g_have = false; g_connected = false; g_level.clear(); g_outTicks = 0;
         }

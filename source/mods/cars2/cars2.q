@@ -334,6 +334,18 @@ script dadmod_cars_exit_now
         Skater : SetSpeed 0
     endif
 endscript
+script dadmod_cars_on_quit
+    KillSpawnedScript Name = dadmod_cars_go
+    KillSpawnedScript Name = dadmod_cars_wait_exit
+    KillSpawnedScript Name = dadmod_cars_watch
+    if not ObjectExists id = skater
+        return
+    endif
+    if Skater : Driving
+        THUGRECOMP_Log text = "cars2: leaving the game, getting out of the car first"
+        dadmod_cars_exit_now
+    endif
+endscript
 script dadmod_cars_cleanup
     dadmod_cars_prop_hide
     Skater : GetCameraId

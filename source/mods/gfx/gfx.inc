@@ -1830,6 +1830,30 @@ static void FreeTargets() {
     g_intzBound = false;
 }
 
+// Files we no longer need: old shader cache entries and old frame generation recordings (Noah 2026-11-24: dadmod
+// must not fill players' disks). Player build: deleted. Dev build: moved to dadmod\archive\retired\ instead (nothing
+// on Noah's PC is deleted by our code; he empties that folder when he wants).
+static void Retire(const std::string& path, bool dir) {
+#ifdef DADMOD_CLIENT_HAS_MAINMENU
+    if (dir) {
+        WIN32_FIND_DATAA fd;
+        HANDLE h = FindFirstFileA((path + "\\*").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) DeleteFileA((path + "\\" + fd.cFileName).c_str()); } while (FindNextFileA(h, &fd));
+            FindClose(h);
+        }
+        RemoveDirectoryA(path.c_str());
+    } else DeleteFileA(path.c_str());
+#else
+    (void)dir;
+    CreateDirectoryA(ExeDirFile("archive").c_str(), nullptr);
+    CreateDirectoryA(ExeDirFile("archive\\retired").c_str(), nullptr);
+    size_t sl = path.find_last_of('\\');
+    std::string to = ExeDirFile("archive\\retired\\") + (sl == std::string::npos ? path : path.substr(sl + 1));
+    if (!MoveFileExA(path.c_str(), to.c_str(), 0)) MoveFileExA(path.c_str(), (to + "_" + std::to_string(GetTickCount())).c_str(), 0);
+#endif
+}
+
 // Compiled shader cache (Noah 2026-10-20: boot got ~10 s slower once the sky/weather/fog shaders grew;
 // D3DXCompileShader ran for every shader on every start). Bytecode is kept in
 // dadmod\shadercache\<entry>_<hash of the shader source>.bin and reused until the source changes.
@@ -3098,9 +3122,20 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         if (g_lqDis->GetData(&dis, sizeof dis, 0) == S_OK && g_lqFreq->GetData(&f, sizeof f, 0) == S_OK &&
             g_lqA->GetData(&t0, sizeof t0, 0) == S_OK && g_lqM->GetData(&tm, sizeof tm, 0) == S_OK &&
             g_lqB->GetData(&tb, sizeof tb, 0) == S_OK && g_lqW->GetData(&tw, sizeof tw, 0) == S_OK) {
-            if (!dis && f)
-                mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
-                           (tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, g_lqDrawn, g_bulbN, g_lqArea, (tw - tb) * 1000.0 / f, g_winDrawsLast);
+            if (!dis && f) {
+                // logged only when the numbers change a lot (or every 10 minutes), not every 5 s (Noah 2026-11-24: small logs)
+                static double lastMs[3] = {-1, -1, -1}, lastAt = 0;
+                static int lastBulbs = -1;
+                double ms[3] = {(tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, (tw - tb) * 1000.0 / f};
+                bool big = g_bulbN != lastBulbs || NowS() - lastAt > 600.0;
+                for (int i = 0; i < 3 && !big; ++i) { double d = fabs(ms[i] - lastMs[i]); big = d > 0.5 && d > 0.5 * lastMs[i]; }
+                if (big) {
+                    mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
+                               ms[0], ms[1], g_lqDrawn, g_bulbN, g_lqArea, ms[2], g_winDrawsLast);
+                    for (int i = 0; i < 3; ++i) lastMs[i] = ms[i];
+                    lastBulbs = g_bulbN; lastAt = NowS();
+                }
+            }
             g_lqState = 0; g_lqNext = NowS() + 5.0;
         }
     }
@@ -3296,6 +3331,36 @@ static void RunScreen(IDirect3DDevice9* dev) {
 static void NoteDeviceLost(HRESULT hr);  // used by framegen.inc, defined below
 #include "framegen.inc"  // frame generation (Noah 2026-11-21)
 
+// Shader cache cleanup (Noah 2026-11-24): every build writes new cache files (the name holds a hash of the shader
+// source) and nothing removed the old ones. Once per start, on a worker thread, files whose hash is not the current
+// gfx or frame generation one are retired (see Retire).
+static DWORD WINAPI ShaderCachePruneThread(LPVOID) {
+    char cur[2][24];
+    wsprintfA(cur[0], "_%08X%08X.bin", (DWORD)(ShaderSourceHash() >> 32), (DWORD)ShaderSourceHash());
+    unsigned long long fh = FgSourceHash();
+    wsprintfA(cur[1], "_%08X%08X.bin", (DWORD)(fh >> 32), (DWORD)fh);
+    std::vector<std::string> old;
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(ExeDirFile("shadercache\\*.bin").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        std::string n = fd.cFileName;
+        bool keep = false;
+        for (auto& c : cur) if (n.size() > strlen(c) && !_stricmp(n.c_str() + n.size() - strlen(c), c)) keep = true;
+        if (!keep && !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) old.push_back(n);
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    EnterCriticalSection(CompileLock());
+    for (auto& n : old) Retire(ExeDirFile("shadercache") + "\\" + n, false);
+    LeaveCriticalSection(CompileLock());
+    if (!old.empty()) mmenu::Log("gfx: shader cache: %d old file(s) from earlier versions cleaned up", (int)old.size());
+    return 0;
+}
+static void ShaderCachePrune() {
+    HANDLE t = CreateThread(nullptr, 0, ShaderCachePruneThread, nullptr, 0, nullptr);
+    if (t) CloseHandle(t);
+}
+
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
     if (g_pollSlot == kPollIni) {  // once a second: pick up edits THUGPro Manager (or another open game) made to gfx.ini
@@ -3438,7 +3503,7 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 
 static void EndFrame(IDirect3DDevice9* dev) {
     g_winDrawsLast = g_winDraws; g_winDraws = 0;
-    if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
+    if (++g_presents == 1) { mmenu::Log("gfx: first frame presented"); ShaderCachePrune(); }
     PollPick();
     g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame

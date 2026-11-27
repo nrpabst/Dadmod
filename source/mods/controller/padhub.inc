@@ -157,10 +157,7 @@ static void Log(const char* fmt, ...) {
     va_end(ap);
     line[sizeof line - 3] = 0;
     strcat(line, "\r\n");
-    HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, 0, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return;
-    DWORD w; WriteFile(f, line, (DWORD)strlen(line), &w, nullptr);
-    CloseHandle(f);
+    logcap::Append(path, line, logcap::kSmall);  // trims itself at 256 KB (logcap.inc)
 }
 
 // ---- mappings (SDL gamecontrollerdb syntax; aN = Nth axis the pad has, in DIJOYSTATE order)

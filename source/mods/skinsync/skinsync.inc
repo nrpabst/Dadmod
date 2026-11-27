@@ -72,11 +72,10 @@ static const int kSkaterNum   = 0x2B8;  // CSkater heap slot
 static void SLog(const std::string& line) {
     std::string path = ExeDirFile("skinsync.log");
     if (path.empty()) return;
-    FILE* f = fopen(path.c_str(), "a");
-    if (!f) return;
     SYSTEMTIME t; GetLocalTime(&t);
-    fprintf(f, "%02d:%02d:%02d %s\n", t.wHour, t.wMinute, t.wSecond, line.c_str());
-    fclose(f);
+    char stamp[16]; sprintf(stamp, "%02d:%02d:%02d ", t.wHour, t.wMinute, t.wSecond);
+    std::string s = stamp + line + "\r\n";
+    logcap::Append(path.c_str(), s.data(), (DWORD)s.size(), logcap::kSmall);  // trims itself at 256 KB (logcap.inc)
 }
 
 static char* Mgr() { return *(char**)kMgrPtr; }

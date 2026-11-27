@@ -234,13 +234,17 @@ static void FgReadShow() {  // gfx_test.ini fgshow = 1: debug view in the made-u
 
 // ---- compiling (any thread: the compiler and the cache files are guarded by CompileLock in gfx.inc) ----
 static const char* const kFgNames[] = {"ps_fg_copy", "ps_fg_luma", "ps_fg_search0", "ps_fg_search1", "ps_fg_smooth", "ps_fg_make"};
-static bool FgCode(CompileShader_t compile, const char* fn, std::string& code, std::string& err) {
+static unsigned long long FgSourceHash() {  // also used by the shader cache cleanup in gfx.inc
     static unsigned long long h = 0;
     if (!h) {
         unsigned long long x = 1469598103934665603ULL;
         for (size_t i = 0; i < sizeof kFgShaders - 1; ++i) { x ^= (unsigned char)kFgShaders[i]; x *= 1099511628211ULL; }
         h = x;
     }
+    return h;
+}
+static bool FgCode(CompileShader_t compile, const char* fn, std::string& code, std::string& err) {
+    unsigned long long h = FgSourceHash();
     char name[160];
     wsprintfA(name, "shadercache\\%s_ps_3_0_%08X%08X.bin", fn, (DWORD)(h >> 32), (DWORD)h);
     std::string path = ExeDirFile(name);
@@ -936,6 +940,17 @@ static void FgRecSave(IDirect3DDevice9* dev) {
     g_fgRecDir = dir;
     g_fgSnapAsk = true;
     mmenu::Log("gfx: frame generation debugger: saved %d frames + frames.csv to %s", saved, dir.c_str());
+    {   // keep the newest 2 recordings (~28 MB each; Noah 2026-11-24: don't fill players' disks), older ones are retired
+        std::vector<std::string> recs;
+        WIN32_FIND_DATAA fd;
+        HANDLE h = FindFirstFileA(ExeDirFile("fgdebug\\*").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do { if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && fd.cFileName[0] != '.') recs.push_back(fd.cFileName); } while (FindNextFileA(h, &fd));
+            FindClose(h);
+        }
+        std::sort(recs.begin(), recs.end());  // names are date_time: oldest first
+        for (size_t i = 0; i + 2 < recs.size(); ++i) Retire(ExeDirFile("fgdebug") + "\\" + recs[i], true);
+    }
     snprintf(g_shotMsg, sizeof g_shotMsg, "Frame generation recording saved: dadmod\\%s", sub);
     g_shotMsgUntil = GetTickCount() + 600;
 }

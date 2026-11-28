@@ -141,3 +141,30 @@ Game modes (2026-11-24, Noah: "can you make cars work in the middle of a gamemod
 - dadmod_cars_watch gets you out when a new game starts (game mode changes to anything but free skate; going back to free
   skate after a game keeps you in) or a new round starts (time left jumps up by more than 3 s in a timed mode).
 - Untested in a real game so far (live-loaded into Dev 2026-11-24).
+Respawn at the last safe spot + flip back (2026-11-24, Noah: "i drove into the water and my car respawned face down in a
+ramp"; picked "Last safe spot + flip back")
+- Cause: stock recovery is QB only. A water / kill trigger runs SK3_KillSkater(_Water) -> SK3_Killskater_Finish ->
+  SK3_Killskater_Finish3, which while Driving calls PlayerVehicle : Vehicle_MoveToRestart <node> (the trigger's restart
+  node or trg_playerrestart). Those are skater restart points, often on or next to ramps, and the car keeps its tilt and
+  spin there.
+- cars2.inc Track (hook on the input step call 0x43C1E9, every frame of the local player's car, object id PlayerVehicle):
+  every 0.5 s with all wheels down, upright (up.y > 0.9) and not dropping fast it remembers pos + heading (last 4).
+  When the car jumps (> 300 units at > 6000 units/s: the stock teleport) or has had no wheel down for 4 s while 2500
+  below the best spot, it puts the car back at the newest spot that is at least 1 s old (else the newest, else where you
+  got in), 15 units up, upright, same heading, no speed or spin. Tipped over (up.y < 0.3) and nearly still for 3 s: it
+  stands the car up where it is, 40 units up, same heading. Upright quaternion via the stock matrix <-> quat helpers
+  0x42E1F0 / 0x42BC40 (as the stock self-righting 0x438770 does).
+- Camera: THUGRECOMP_CarsDrive returns cam_reset = 1 after a move; dadmod_cars_beat runs PlayerVehicleCamera :
+  VehicleCamera_Reset.
+- Log: thugrecomp_debug.log "cars2: respawn at last safe spot (...)" and "cars2: flipped back". If the car's object id
+  can't be read, mainmenu.log says "cars2: car object has no PlayerVehicle id" and the tracker stays idle.
+- No menu option. Any stock car teleport while driving (also a pause menu restart) now lands at the last safe spot.
+- DLL change: needs a game restart. Not tested in game yet.
+
+Camera look after getting out (2026-11-24, Noah: "when you get out of a car it doesn't give you camera control back until
+you get off board")
+- Cause: skatercam0's cameralookaround component keeps a look lock (+0x18) that a pad button press flips; it keeps
+  updating under the car camera, so a press while driving could leave it locked. The skater camera clears it only in
+  its walking branch (0x4FA860), so stepping off the board brought the look back.
+- Fix: dadmod_cars_exit_now calls THUGRECOMP_CarsDrive camfree = 1, which clears the lock (and the look offset) and logs
+  "cars2: got out, skater camera look lock was N (override N), cleared" to thugrecomp_debug.log. DLL change: restart.

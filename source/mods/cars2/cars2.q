@@ -326,6 +326,11 @@ script dadmod_cars_beat dadmod_c2_hide = 0
             dadmod_cars_horn
         endif
     endif
+    if GotParam cam_reset
+        if ObjectExists id = PlayerVehicleCamera
+            PlayerVehicleCamera : VehicleCamera_Reset
+        endif
+    endif
 endscript
 script dadmod_cars_exit
     exit_pause_menu
@@ -382,6 +387,7 @@ script dadmod_cars_exit_now
     wait 2 gameframes
     if ObjectExists id = skater
         Skater : SetSpeed 0
+        THUGRECOMP_CarsDrive camfree = 1
         dadmod_cars_after_zero
         if GotParam dadmod_c2_z
             if not GameIsOver

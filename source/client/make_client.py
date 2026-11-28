@@ -36,11 +36,14 @@ VAULT_SRC = os.environ.get('DADMOD_VAULT_SRC') or os.path.join(WORK, '..', 'THUG
 # fresh THUG Pro + the public Kali download with no thugpro_qe.prx (Noah 2026-11-18: players who only dragged in
 # Kali's data folder have no thugpro_qe.prx; made by client/tools/make_recipe_game_kali.py)
 KALI_DOWNLOAD_GAME = os.path.join(WORK, '..', 'recipe_games', 'THUG Pro + Kali download')
-RECIPE_GAMES = [os.path.join(WORK, '..', 'cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL'),
+# the plain THUG Pro install (read only). 2026-11-24: the cleanup_archive copy is gone from the PC; set
+# DADMOD_BASE_INSTALL to another plain install (Noah's: %LOCALAPPDATA%\THUG Pro) to use that one instead.
+BASE_INSTALL = os.environ.get('DADMOD_BASE_INSTALL') or os.path.join(WORK, '..', 'cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL')
+RECIPE_GAMES = [BASE_INSTALL,
                 os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Original'), r'E:\THUG Pro Kali v2 (use this)',
                 KALI_DOWNLOAD_GAME]
 RECIPE_SOURCES = [os.path.join('data', 'pre', 'thugpro_qb.prx'), os.path.join('data', 'pre', 'Skateshop_scripts.prx')]
-PLAIN_GAMES = [os.path.join(WORK, '..', d) for d in (os.path.join('cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL'), 'THUG Pro Kali v2 - 1.2 Original')]
+PLAIN_GAMES = [BASE_INSTALL, os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Original')]
 
 
 def refuse_game_folder(out):

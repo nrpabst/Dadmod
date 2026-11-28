@@ -2,10 +2,9 @@
 (cars2_stock.q) so they see More Cars / Props as the real model instead of the green tuner.
 Reads cars2_gen.q (each dadmod_*_setup: model, dadmod_prop_model, skater_pos, make_skater_visible).
 A stock game's lock_car_to_non_local_skater reads only model, skater_pos (and NonLocalClientInVehicle
-make_skater_visible), so each entry carries just those.
-Props are left out (stock players keep seeing the green tuner for them): a static prop model on a
-stock game's car crashed it in the 2026-11-24 LAN test (Traffic Cone, crash at 0x433730 in the car code).
-A prop can be added to SAFE_PROPS once a LAN test shows a stock game survives it.
+make_skater_visible), so each entry carries just those. Props are left out (stock players keep seeing the green tuner
+for them): a static prop model on a stock game's car crashed it in the 2026-11-24 LAN test (Traffic Cone, crash at
+0x433730 in the car code). A prop can be added to SAFE_PROPS once a LAN test shows a stock game survives it.
 Run again after gen_cars2.py changes the setups:  python -I mods/cars2/gen_cars2_stock.py   (from work/)"""
 import os, re
 HERE = os.path.dirname(os.path.abspath(__file__))

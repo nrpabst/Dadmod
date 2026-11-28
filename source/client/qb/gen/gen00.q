@@ -1826,6 +1826,9 @@ script dadmod_homelevel_tick
     if ScreenElementExists id = root_window
         root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
     endif
+    if ObjectExists id = dadmod_lampeditor
+        dadmod_hl_go = 0
+    endif
     if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open
@@ -6372,6 +6375,23 @@ script dadmod_skc_tricks_undo
     dadmod_skc_tricks_back focus_target = dadmod_skc_copy_tricks
 endscript
 
+script dadmod_serverlog_tick
+    net = 0
+    host = 0
+    if InNetGame
+        net = 1
+        if IsHost
+            host = 1
+        endif
+    endif
+    lv = "none"
+    GetLevelStructureName
+    if StructureContains structure = ( <level_structure_name> ) level
+        FormatText TextName = lv "%a" a = ( <level_structure_name> . level )
+    endif
+    THUGRECOMP_ServerLogTick net = <net> host = <host> level = <lv>
+endscript
+
 dadmod_bhra_keep = 0
 
 dadmod_bhra_easy = 0
@@ -6537,6 +6557,7 @@ endscript
 script dadmod_bhra_land2_out_z
     dadmod_bhra_interrupt src = 1 zero = 1
 endscript
+
 script dadmod_bhra_land2_out
     dadmod_bhra_interrupt src = 1
     if GotParam deferred
@@ -6667,6 +6688,7 @@ script dadmod_bhra_flush
         endif
     endif
 endscript
+
 script dadmod_bhra_endrun
     wait 1 gameframe
     if not GameIsOver
@@ -8189,80 +8211,5 @@ script dadmod_pause_graphics
     repeat
     dadmod_layout_item name = "gfx_reset" label = "" grey = 0 dadmod_pause = 1
     thugpro_menu_finalize
-endscript
-
-script dadmod_pause_gfx_group
-    Change dadmod_pause_group_last = <group>
-    g = ( dadmod_pause_gfx_groups [ <group> ] )
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_gfx_group
-    menu_title = ( <g> . title )
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_pause_graphics
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    names = ( <g> . items )
-    GetArraySize <names>
-    i = 0
-    begin
-        if (<i> = <array_size>)
-            break
-        endif
-        dadmod_layout_item name = ( <names> [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
-        i = ( <i> + 1 )
-    repeat
-    thugpro_menu_finalize
-endscript
-
-dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_lamplights" "gfx_lampposts" "gfx_skydef" ]
-
-script dadmod_pause_weather
-    dadmod_pause_skywx_menu
-    return
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_weather
-    menu_title = "weather"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_pause_skywx_menu
-    pad_back_params = { focus_id = dadmod_pause_wx }
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    GetArraySize dadmod_pause_weather_items
-    i = 0
-    begin
-        if (<i> = <array_size>)
-            break
-        endif
-        dadmod_layout_item name = ( dadmod_pause_weather_items [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
-        i = ( <i> + 1 )
-    repeat
-    thugpro_menu_finalize
-endscript
-
-script dadmod_free_cam
-    exit_quick_menu
-    SpawnScript dadmod_free_cam_on
-endscript
-
-script dadmod_free_cam_on
-    wait 2 gameframes
-    if IsTrue view_mode
-        if InNetGame
-            ToggleViewMode
-        endif
-    endif
-    if not IsTrue view_mode
-        ToggleViewMode
-    endif
 endscript
 

@@ -129,18 +129,23 @@ GTA 3 style handling, More Cars, Props, horn (2026-11-21, Noah: "make the handli
   by add_qdir.py, because ButtonScripts.qb / procrastination.qb are at the 512 KB limit.
 - Not tested in game yet. Risks: prop bodies (static .mdl with the car skeleton), tuning numbers are a first guess.
 
-Game modes (2026-11-24, Noah: "can you make cars work in the middle of a gamemode as well", "should work after zero as well")
-- dadmod_cars_can_drive: online, cars work in every mode except Horse ("No cars in Horse": turn based, the game pauses and
-  teleports players between turns) and Goal Attack ("No cars in Goal Attack": getting in runs GoalManager_HideAllGoalPeds 1).
-  Offline it is still free skate only.
-- After the car starts, the skater runs dadmod_cars_drive_ai (stock DrivingAi's handlers, so Road Kill / Hit and Run still
-  work) with RunHasEnded -> dadmod_cars_run_ended: when the clock hits zero the run ends like stock EndOfRun (lands tricks,
-  drops the CTF flag, EndOfRunDone after 1 s so the round doesn't wait on the driver) but without DisablePlayerInput, so you
-  keep driving after zero. Getting in after zero (dadmod_cars_after_zero: timed mode and time_left < 1) skips that exception
-  and re-enables input; getting out after zero (before the score screen) runs stock EndOfRun instant.
-- dadmod_cars_watch gets you out when a new game starts (game mode changes to anything but free skate; going back to free
-  skate after a game keeps you in) or a new round starts (time left jumps up by more than 3 s in a timed mode).
-- Untested in a real game so far (live-loaded into Dev 2026-11-24).
+Bug fixes (2026-11-24, Noah: "fix all the bugs in dadmod cars 2.0"; from the logs and a code review)
+- Instant get-out: thugrecomp_debug.log 2026-11-23 19:05:10/11 shows "get in" then "get out" 1 s later (NY Cab), with
+  no Backspace line, so a Triangle / grind key still held from the menu pick made the stopped car fire
+  ExitVehicleRequest. cars2.inc Remap: Triangle (block +9) now counts only after it was released once since the remap
+  turned on (g_triArmed). DLL change, needs a restart.
+- Remote props: when another dadmod player stopped driving a prop but their vehicle object stayed (switching to a
+  normal car), our prop model went away but their car stayed hidden. dadmod_cars_remote_prop_one now unhides it.
+- "The car didn't start": the skater was left in the TransAm state with no car (hidden, no camera, maybe frozen).
+  New dadmod_cars_start_failed gets out properly if driving, else unhides, restores the skater camera and goes back
+  to OnGroundAi.
+- Picking a car while the previous pick was still starting killed dadmod_cars_go before it put vehicleCameraSetup
+  back, so stock level cars could get a Limo/Cab camera. dadmod_cars_pick resets it first.
+- dadmod_cars_exit_now: no Skater : calls after the toggle if the skater is gone (a "Skater :" on a missing skater
+  hangs).
+- Known, fixed elsewhere: online car exit crash in Barcelona (THUGPro+0x76B41, stock IsAlive on a missing goal node):
+  crashlog.inc PatchIsAliveMissingNode, private PR #74 / Dadmod #50. Untested in game.
+
 Respawn at the last safe spot + flip back (2026-11-24, Noah: "i drove into the water and my car respawned face down in a
 ramp"; picked "Last safe spot + flip back")
 - Cause: stock recovery is QB only. A water / kill trigger runs SK3_KillSkater(_Water) -> SK3_Killskater_Finish ->

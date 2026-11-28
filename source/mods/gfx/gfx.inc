@@ -660,6 +660,24 @@ typedef std::vector<std::pair<std::string, int>> PanelList;
 static PanelList g_panel, g_panelFile;
 static FILETIME g_panelTime = {};
 static bool g_panelRead = false;
+// File polls (Noah 2026-11-24, stutter hunt): the frame-end checks of gfx.ini and the request files take turns, one file
+// per frame at most and each about once a second (PollPick in EndFrame); panel_settings.txt is checked at most once a
+// second and never on a frame that already checked a file. Changes made in game don't go through these checks.
+enum { kPollIni, kPollShot, kPollFgDebug, kPollLastGame, kPollFireworks, kPollCount };
+static int g_pollSlot = -1;          // the file this frame may check (-1: none)
+static DWORD g_fileCheckTick = 0;    // GetTickCount of the last file check
+static DWORD g_panelCheckTick = 0;
+static void PollPick() {
+    static DWORD last = 0;
+    static int next = 0;
+    DWORD now = GetTickCount();
+    g_pollSlot = -1;
+    if (now - last < 1000 / kPollCount) return;
+    last = now;
+    g_pollSlot = next;
+    next = (next + 1) % kPollCount;
+    g_fileCheckTick = now;
+}
 static FILETIME PanelTime() {
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (GetFileAttributesExA(ExeDirFile("panel_settings.txt").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
@@ -686,6 +704,11 @@ static void PanelParse(const std::string& data, PanelList& out) {   // "key valu
     }
 }
 static void PanelSync() {
+    if (g_panelRead) {
+        DWORD now = GetTickCount();
+        if (now - g_panelCheckTick < 1000 || now - g_fileCheckTick < 50) return;
+        g_panelCheckTick = g_fileCheckTick = now;
+    }
     FILETIME t = PanelTime();
     if (g_panelRead && !CompareFileTime(&t, &g_panelTime)) return;
     std::string data;
@@ -897,22 +920,6 @@ static DWORD SwapCull(DWORD c);
 
 static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
-// File polls (Noah 2026-11-24, stutter hunt): the frame-end checks of gfx.ini and the request files take turns, one file
-// per frame at most and each about once a second (PollPick in EndFrame).
-enum { kPollIni, kPollShot, kPollFgDebug, kPollLastGame, kPollFireworks, kPollCount };
-static int g_pollSlot = -1;          // the file this frame may check (-1: none)
-static DWORD g_fileCheckTick = 0;    // GetTickCount of the last file check
-static void PollPick() {
-    static DWORD last = 0;
-    static int next = 0;
-    DWORD now = GetTickCount();
-    g_pollSlot = -1;
-    if (now - last < 1000 / kPollCount) return;
-    last = now;
-    g_pollSlot = next;
-    next = (next + 1) % kPollCount;
-    g_fileCheckTick = now;
-}
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
 static bool g_skySeen = false;  // the replacement sky drew on this level (2026-11-22, MapLookNow)
@@ -1715,7 +1722,7 @@ float4 ps_bulbs(float2 uv : TEXCOORD0) : COLOR {
 // pixel or two wide is outvoted by the ground around it, while floors, walls and their edges keep their own light.
 // Tested in a College test copy (work/notes/shadow_rim): ring with the old shader at Moonlight 20, none at 0.
 float3 moon_p(float2 q) {
-    float d = tex2D(s1, q).r;
+    float d = tex2Dlod(s1, float4(q, 0, 0)).r;  // lod: fetched inside ps_moon's loop (INTZ has one level, same value)
     float2 ndc = float2(q.x * 2 - 1, 1 - q.y * 2);
     float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
     return camp.xyz + dv * dist(d);
@@ -1731,7 +1738,7 @@ float3 moon_axis(float2 uv, float3 P, float2 o) {
 }
 // moonlight at one screen point: 0 for the sky, else how much its surface faces the moon
 float moon_ndl(float2 q) {
-    float d = tex2D(s1, q).r;
+    float d = tex2Dlod(s1, float4(q, 0, 0)).r;
     if (d >= 0.99999) return 0;
     float3 P = moon_p(q);
     float3 n = normalize(cross(moon_axis(q, P, float2(0, px.y * 2)), moon_axis(q, P, float2(px.x * 2, 0))));
@@ -1751,8 +1758,17 @@ float med5(float a, float b, float c, float d, float e) {
 }
 float4 ps_moon(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
-    float2 ox = float2(px.x * 3, 0), oy = float2(0, px.y * 3);
-    float ndl = med5(moon_ndl(uv), moon_ndl(uv + ox), moon_ndl(uv - ox), moon_ndl(uv + oy), moon_ndl(uv - oy));
+    // 2026-11-24 (512-slot rule): the 5 moon_ndl samples (self, +x, -x, +y, -y, 3 pixels) in one [loop] body instead of
+    // 5 inlined copies (596 -> 179 slots); same values in the same med5 order, bit-identical output (scratch mooncmp)
+    float4 m4 = 0;
+    float m5 = 0;
+    [loop] for (int i = 0; i < 5; ++i) {
+        float2 o = float2(i == 1 ? 1 : (i == 2 ? -1 : 0), i == 3 ? 1 : (i == 4 ? -1 : 0)) * px.xy * 3;
+        float v = moon_ndl(uv + o);
+        m4 += float4(i == 0, i == 1, i == 2, i == 3) * v;
+        m5 += (i == 4) * v;
+    }
+    float ndl = med5(m4.x, m4.y, m4.z, m4.w, m5);
     if (tex2D(s1, uv).r >= 0.99999) ndl = 0;
     c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
     return float4(c, 1);
@@ -2679,6 +2695,8 @@ static void BulbCursorExtra(const float* v, int n, float poolY, float pool) {
 static void (*g_lmScene)(IDirect3DDevice9*) = nullptr;
 static void (*g_lmFrameEnd)(IDirect3DDevice9*) = nullptr;
 static void (*g_lmFree)() = nullptr;
+// skatelink (mods/skatelink, Grand Thug Auto, dev build only): reads the local skater once a frame
+static void (*g_skFrame)() = nullptr;
 // the lamp editor's cursor spot: the world point at the screen's middle, read back from a 1x1 float target each frame
 static IDirect3DTexture9* g_probeTex = nullptr;
 static IDirect3DSurface9 *g_probeRT = nullptr, *g_probeSys = nullptr;
@@ -3870,6 +3888,7 @@ static void EndFrame(IDirect3DDevice9* dev) {
     g_fgInEnd = false;
     RunScreen(dev);
     if (g_lmFrameEnd) g_lmFrameEnd(dev);  // lamp editor's model preview (dev build), over the HUD
+    if (g_skFrame) g_skFrame();  // skatelink: local skater snapshot (dev build)
     CheckKeysAndIni();
     UpdateWorld();
     ApplyWeatherFog(dev);

@@ -56,7 +56,8 @@ def compile_q(text, work, stem):
 
 
 def main(argv):
-    pre = os.path.join('..', 'cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL', 'data', 'pre')
+    # DADMOD_BASE_INSTALL: another plain install (read only) when the cleanup_archive copy is gone (2026-11-24)
+    pre = os.path.join(os.environ.get('DADMOD_BASE_INSTALL') or os.path.join('..', 'cleanup_archive_20261116', 'THUG Pro REAL BASE INSTALL'), 'data', 'pre')
     out = os.path.join('build', 'client_menulevels')
     while argv:
         if argv[0] == '--pre':

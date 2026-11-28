@@ -413,6 +413,65 @@
     + The main menu says when an update is out, downloading or
       ready, and the download's progress shows while you play.
     + After an update the game says once which version you now have.
+    + Smaller download: dadmod.zip holds only dadmod itself. The extra
+      maps come as four map packs on the same page (Larxian's cities,
+      Project 8, classic maps, THPG Training). Setup.bat downloads
+      only the packs you're missing, and keeps maps you already have.
+    + Sky & weather: Lamp lights (On / Off) and Extra lamp posts
+      (Show / Hide). Off saves graphics card time too.
+    + Cars come back at the last safe spot when they fall in the water
+      or off the level, and a car that tipped over stands back up
+      after 3 seconds.
+    + Thrown props now show for players without dadmod too.
+    + dadmod\servers.log lists the servers you joined (name, address,
+      levels played).
+
+  CHANGED
+    ~ Updating from the game shows a small dadmod window instead of
+      a black console window. With Auto update Off you get one popup
+      per new version (Download now, What's new, Later).
+    ~ On the ELEVATED FCFS servers, dadmod's added maps are locked
+      in level select unless you are the host (picking a map the
+      others don't have kicks everyone there).
+    ~ Cars work during game modes and keep driving after the timer
+      hits zero.
+    ~ Each open THUG Pro keeps its own settings.
+    ~ dadmod's log files stay small (they trim themselves), and the
+      game checks its settings files less often, which fixes a bit
+      of stutter.
+
+  FIXED
+    x Crash getting out of a car in Barcelona online.
+    x 14 crashes in THUG Pro itself are now caught (menus and screen
+      text, level changes online, map objects, skater models).
+    x Crash when quitting to the main menu while in a car.
+    x Grind, roll and slide sounds no longer get stuck looping.
+    x Cars: a key still held from the menu no longer throws you out
+      right after you get in; other players' cars no longer stay
+      invisible; a car that fails to start puts you back on your
+      board; you get camera control back after getting out; More
+      Cars are placed and shown correctly.
+    x The pause menu and chat now also stay open when a game mode
+      starts.
+    x Pausing in free skate no longer leaves your skater without
+      controls.
+    x BHRA keeps combo works after the timer hits zero.
+    x Vaporwave and Cotton candy skies are no longer grey, and the
+      night lift stays off bright skies.
+    x Moonlight no longer draws a dotted ring around skater shadows.
+    x The window's title bar and X button come back after Alt+Enter.
+    x In-game updates: a finished download is installed even when
+      GitHub is busy at that moment (before, it was thrown away), and
+      a download from an earlier session is used instead of
+      downloading again.
+    x In-game updates no longer run out of memory unpacking the big
+      map pack (they use 64-bit Windows PowerShell).
+
+
+  0.10.2
+  ------
+
+  NEW
     + New weather: Sky & weather now has two rows, Weather (Off, Rain,
       Thunderstorm, Snow, Fog, Random) and Intensity (1 to 10). Rain
       and snow fall in the world around you and stop at walls, with
@@ -427,9 +486,6 @@
       screen effects. They always match the launcher.
 
   CHANGED
-    ~ Updating from the game shows a small dadmod window instead of
-      a black console window. With Auto update Off you get one popup
-      per new version (Download now, What's new, Later).
     ~ Time of day "Sunset" is now "Evening" and looks softer.
       Evening lights is brighter.
     ~ A server's night now looks like picking Night yourself, with
@@ -443,12 +499,6 @@
     ~ Street lamp light fades in and out instead of popping on.
 
   FIXED
-    x In-game updates: a finished download is installed even when
-      GitHub is busy at that moment (before, it was thrown away), and
-      a download from an earlier session is used instead of
-      downloading again.
-    x In-game updates no longer run out of memory unpacking the big
-      map pack (they use 64-bit Windows PowerShell).
     x The controller no longer gets stuck after dragging the mouse
       camera on foot.
     x Bail cancel and getting out of a car keep your Skater shadow
@@ -797,6 +847,11 @@
   (see Online above). See 9. Credits for the full list.
 
   Already have one of these levels? Setup keeps yours.
+
+  The maps come in four map packs (dadmod-maps-*.zip) on the same
+  download page. Setup.bat downloads the ones you need. No internet?
+  Put the packs next to Setup.bat and pick Repair. Until then, the
+  levels whose maps are missing are greyed out.
 
 
 ==========================================================================

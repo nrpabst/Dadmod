@@ -5,7 +5,7 @@
   <img src="images/logo-light.png" alt="DADMOD" width="100%">
 </picture>
 
-**0.10.2 beta · for THUG Pro**
+**0.10.3 beta · for THUG Pro**
 
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
@@ -24,7 +24,7 @@ Changes none of THUG Pro's or Kali's own files.
 3. [Uninstall](#3-uninstall)
 4. [Playing with Kali Mod](#4-playing-with-kali-mod)
 5. [What's in dadmod](#5-whats-in-dadmod)
-6. [What's new in 0.10.2](#6-whats-new-in-0102)
+6. [What's new in 0.10.3](#6-whats-new-in-0103)
 7. [Extra levels](#7-extra-levels)
 8. [If something goes wrong](#8-if-something-goes-wrong)
 9. [Credits](#9-credits)
@@ -32,6 +32,8 @@ Changes none of THUG Pro's or Kali's own files.
 ## 1. Install / Update
 
 Download `dadmod.zip` from the newest release on the [Releases](../../releases) page.
+
+The extra maps come as four map packs on the same page (`dadmod-maps-cities.zip`, `dadmod-maps-p8.zip`, `dadmod-maps-classic.zip`, `dadmod-maps-thpg.zip`). You don't have to download them yourself: Setup.bat downloads the packs you're missing and keeps maps you already have. No internet while installing? Put the packs next to Setup.bat and pick **2) Repair**. Until then, levels whose maps are missing are greyed out.
 
 1. Close THUG Pro.
 2. Unzip this zip into your THUG Pro folder (the folder with THUGPro.exe in it).
@@ -41,7 +43,7 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 6. Pick **1) Install** (or **1) Update** or **1) Reinstall** if dadmod is already in).
 7. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
-   You'll see "Dadmod 0.10.2 beta" at the bottom of the main menu.
+   You'll see "Dadmod 0.10.3 beta" at the bottom of the main menu.
 
 > **Tip:** Keep the dadmod-install folder. Setup.bat is also how you Update, Repair and Uninstall.
 
@@ -63,7 +65,7 @@ The dadmod-install folder stays too, so you can install again later.
 
 ### Updates
 
-The game checks for a newer dadmod when it starts. When there is one, "Update available" shows on the main menu, and Main menu > Dadmod gets a **Download newest update** row (it only shows while an update is out). It downloads while you play; then pick **Restart to install update**, and the game closes, updates and starts again.
+The game checks for a newer dadmod when it starts. When there is one, the main menu says so and you get one popup per new version (**Download now**, **What's new**, **Later**). Main menu > Dadmod > **Updates** lets you check, download and install, see what's new in the new version and in yours, and turn on **Auto update** (Off at first; when On, new versions download while you play and install when you quit). The download's progress shows while you play, a small dadmod window shows while it installs, and after an update the game says once which version you now have.
 
 Setup.bat also checks each time it opens, before it unpacks anything. If there is a newer dadmod, it asks to download it and installs that instead. Your settings stay either way.
 
@@ -205,19 +207,51 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * Fixes for crashes in stock THUG Pro: some skater parts, the skater camera going into or out of a level, quitting the game, drawing particle effects, a menu event sent to a menu that already closed, a message sent to a player who just left, and hosting on a Proving Ground tab level.
 * New Orleans: the manhole scream ("Into the Underworld" gap) is off.
 * Safe start: if the game ever fails to start with dadmod, the next start skips dadmod's risky startup step. "Safe start: on" shows on the main menu. It tries a normal start again after an update or after 10 good starts, or after you pick Pause > dadmod > Graphics > Try a normal start (that row only shows while safe start is on).
-* Updates in game (Main menu > Dadmod > Download newest update, then Restart to install update) or with Setup.bat.
+* Updates in game (Main menu > Dadmod > Updates) or with Setup.bat.
 * Your settings, screenshots and logs live in the `dadmod` folder in your game folder: `gfx.ini` (graphics, sky, sound and controls), `mainmenu.ini` (main menu scenes), `panel_settings.txt` (Menu UI and some gameplay settings), `binds.ini` (key and button bindings), `fullscreen.ini` and the `screenshots` folder.
 
-## 6. What's new in 0.10.2
+## 6. What's new in 0.10.3
 
 ### New
+* **Smaller download:** `dadmod.zip` holds only dadmod itself. The extra maps come as four map packs on the same page (Larxian's cities, Project 8, classic maps, THPG Training). Setup.bat downloads only the packs you're missing, and keeps maps you already have.
+* **Dadmod > Updates:** check for updates, download, install, see what's new in the new version and in yours, and Auto update (Off at first; when On, new versions download while you play and install when you quit).
+* The main menu says when an update is out, downloading or ready, and the download's progress shows while you play. After an update the game says once which version you now have.
+* **Sky & weather:** Lamp lights (On / Off) and Extra lamp posts (Show / Hide). Off saves graphics card time too.
+* Cars come back at the last safe spot when they fall in the water or off the level, and a car that tipped over stands back up after 3 seconds.
+* Thrown props now show for players without dadmod too.
+* `dadmod\servers.log` lists the servers you joined (name, address, levels played).
+
+### Changed
+* Updating from the game shows a small dadmod window instead of a black console window. With Auto update Off you get one popup per new version (Download now, What's new, Later).
+* On the ELEVATED FCFS servers, dadmod's added maps are locked in level select unless you are the host (picking a map the others don't have kicks everyone there).
+* Cars work during game modes and keep driving after the timer hits zero.
+* Each open THUG Pro keeps its own settings.
+* dadmod's log files stay small (they trim themselves), and the game checks its settings files less often, which fixes a bit of stutter.
+
+### Fixed
+* Crash getting out of a car in Barcelona online.
+* 14 crashes in THUG Pro itself are now caught (menus and screen text, level changes online, map objects, skater models).
+* Crash when quitting to the main menu while in a car.
+* Grind, roll and slide sounds no longer get stuck looping.
+* Cars: a key still held from the menu no longer throws you out right after you get in; other players' cars no longer stay invisible; a car that fails to start puts you back on your board; you get camera control back after getting out; More Cars are placed and shown correctly.
+* The pause menu and chat now also stay open when a game mode starts.
+* Pausing in free skate no longer leaves your skater without controls.
+* BHRA keeps combo works after the timer hits zero.
+* Vaporwave and Cotton candy skies are no longer grey, and the night lift stays off bright skies.
+* Moonlight no longer draws a dotted ring around skater shadows.
+* The window's title bar and X button come back after Alt+Enter.
+* In-game updates: a finished download is installed even when GitHub is busy at that moment, a download from an earlier session is used instead of downloading again, and unpacking the big map pack no longer runs out of memory.
+
+### 0.10.2
+
+#### New
 * **New weather:** Sky & weather now has two rows, Weather (Off, Rain, Thunderstorm, Snow, Fog, Random) and Intensity (1 to 10). Rain and snow fall in the world around you and stop at walls, with the game's own rain and splashes on the ground.
 * **Thunderstorm:** an overcast sky, wet ground and lightning bolts.
 * Random weather changes every few minutes and fades between them.
 * **San Francisco at night:** street lamps and lit windows, like Chicago. Always on, nothing to set.
 * Dadmod > Graphics has the THUG Pro launcher's graphics settings as rows: distance clipping, clip distance, distance fog, skater shadow, level lights, particles, skater lights and THUG Pro screen effects. They always match the launcher.
 
-### Changed
+#### Changed
 * Time of day "Sunset" is now "Evening" and looks softer. Evening lights is brighter.
 * A server's night now looks like picking Night yourself, with the street lamps and windows lit.
 * Dark skies (Milky way, Nebula, Aurora and more) darken the map to match, unless you pick a Time of day.
@@ -225,7 +259,7 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * When a server turns on rain or snow, the server's weather wins. Yours comes back when it stops.
 * Street lamp light fades in and out instead of popping on.
 
-### Fixed
+#### Fixed
 * The controller no longer gets stuck after dragging the mouse camera on foot.
 * Bail cancel and getting out of a car keep your Skater shadow setting (before, you always got the full-body shadow).
 * Lit windows: walls no longer light up by mistake, windows hide behind poles and signs, and far windows don't flicker.

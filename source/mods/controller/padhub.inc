@@ -116,6 +116,10 @@ static volatile LONG g_padButtons;
 // and maps, so the game's own camera stops seeing them; the editor refreshes this tick every frame (300 ms timeout)
 static volatile LONG g_hideDpadTick = 0;
 static bool HideDpad() { LONG t = g_hideDpadTick; return t && GetTickCount() - (DWORD)t < 300; }
+// Lamp Editor camera height mode (R3): right stick up/down moves the editor camera's height instead (same timeout)
+static volatile LONG g_hideRYTick = 0;
+static bool HideRY() { LONG t = g_hideRYTick; return t && GetTickCount() - (DWORD)t < 300; }
+static volatile LONG g_padRY = 0;  // right stick up/down as the pad reads it, x1000 (for the Lamp Editor)
 static volatile LONG g_padActive;   // a pad button is down or a stick/trigger is pushed past 60% (button prompts)  // merged buttons last frame (Xbox layout bits), for THUGRECOMP_PadPressed
 // Dadmod > Controls (gfx.ini, kept in step by gfx.inc SyncInput, Noah 2026-11-16)
 static volatile LONG g_deadzone;  // Stick dead zone: 0 off, 1..10 = 3%..30% radial dead zone on both sticks
@@ -744,6 +748,7 @@ static bool ReadAll(DIJOYSTATE2* st) {
         }
     }
     InterlockedExchange(&g_padButtons, any ? (LONG)acc.buttons : 0);
+    InterlockedExchange(&g_padRY, any ? (LONG)(Clamp1(acc.axis[A_RY]) * 1000) : 0);
     {   // button prompts: the pad counts as "in use" only for a button or a stick/trigger pushed well past any drift
         float m = 0;
         for (int k = 0; k < A_COUNT; ++k) { float a = fabsf(acc.axis[k]); if (a > m) m = a; }
@@ -755,7 +760,7 @@ static bool ReadAll(DIJOYSTATE2* st) {
     st->lX = (LONG)(Clamp1(acc.axis[A_LX]) * 1000);
     st->lY = (LONG)(Clamp1(acc.axis[A_LY]) * 1000);
     st->lRx = (LONG)(Clamp1(acc.axis[A_RX]) * 1000);
-    st->lRy = (LONG)(Clamp1(acc.axis[A_RY]) * 1000);
+    st->lRy = HideRY() ? 0 : (LONG)(Clamp1(acc.axis[A_RY]) * 1000);
     st->lZ = (LONG)(Clamp1(acc.axis[A_LT] - acc.axis[A_RT]) * 1000);
     for (int i = 0; i <= B_GUIDE; ++i) if (acc.buttons & (1u << i)) st->rgbButtons[i] = 0x80;
     bool up = (acc.buttons >> B_UP) & 1, down = (acc.buttons >> B_DOWN) & 1;

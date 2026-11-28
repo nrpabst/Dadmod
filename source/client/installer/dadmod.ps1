@@ -1372,7 +1372,18 @@ function Game-Update($g) {
     $upd = Join-Path $g 'dadmod\update'
     New-Item -ItemType Directory -Force -Path $upd | Out-Null
     $script:UpdLog = Join-Path $upd 'update.log'
-    try { if ((Test-Path -LiteralPath $script:UpdLog) -and (Get-Item -LiteralPath $script:UpdLog).Length -gt 200KB) { Move-Item -LiteralPath $script:UpdLog -Destination ($script:UpdLog + '.old') -Force } } catch { }
+    # logs stay small (Noah 2026-11-24): update.log keeps its newest half past 200 KB, in place (no .old copy), and the
+    # .old logs older versions left behind are removed (update.log.old, soundlog.old.txt)
+    try {
+        if ((Test-Path -LiteralPath $script:UpdLog) -and (Get-Item -LiteralPath $script:UpdLog).Length -gt 200KB) {
+            $all = [System.IO.File]::ReadAllBytes($script:UpdLog)
+            $from = [Array]::IndexOf($all, [byte]10, $all.Length - 100KB) + 1
+            if ($from -gt 0) { $keep = New-Object byte[] ($all.Length - $from); [Array]::Copy($all, $from, $keep, 0, $keep.Length); [System.IO.File]::WriteAllBytes($script:UpdLog, $keep) }
+        }
+    } catch { }
+    foreach ($old in @(($script:UpdLog + '.old'), (Join-Path $g 'dadmod\soundlog.old.txt'))) {
+        try { if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Force } } catch { }
+    }
     $restartFile = Join-Path $upd 'restart.txt'
     # one updater per game folder (two open games each start one)
     $id = (Md5Text $g.ToLower()).Substring(0, 12)

@@ -439,6 +439,7 @@ static void __cdecl LoadStartupHook(void) {
 #include "../../mods/lamplights/lampmodels.inc"   // lamp posts drawn per map (merged per model part)
 #include "../../mods/lamplights/lamplights.inc"    // street lamps + lit windows at night (Chicago): engine LevelLights, bulbs/pools/windows drawn by gfx.inc
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
+#include "../../mods/serverlog/serverlog.inc"     // servers joined log + dadmod maps locked on listed servers (Noah 2026-11-27)
 
 // ---- script functions
 struct CFuncEntry { const char* name; bool (__cdecl* fn)(void*, void*); };
@@ -552,6 +553,10 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_ThrowHostStock", throwsend::CF_ThrowHostStock },
     { "THUGRECOMP_ThrowStockOn", throwsend::CF_ClientStockOn },
     { "THUGRECOMP_ThrowStockType", throwsend::CF_ClientStockType },
+    { "THUGRECOMP_ServerLogJoin", srvlog::CF_ServerLogJoin },
+    { "THUGRECOMP_ServerLogTick", srvlog::CF_ServerLogTick },
+    { "THUGRECOMP_ServerCurrent", srvlog::CF_ServerCurrent },
+    { "THUGRECOMP_ServerMapsLocked", srvlog::CF_ServerMapsLocked },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },

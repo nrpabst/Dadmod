@@ -1,0 +1,82 @@
+; lamp post recipes (mods/lampeditor/lamp_cache.py). model|key|title|group|number|source|level|objects|base|height radius|bulbs|aims
+model|AU:09e52dc8|Australia Lamp 1 (#1)|Australia|1|thug2|AU|09e52dc8,f6009b65|-1851.85 384.27 9630.01|330.73 14.01|-1.33 307.31 0.14|0.00 0.00 0.00
+model|AU:eb59151d|Australia Lamp 2 (#2)|Australia|2|thug2|AU|eb59151d,0f3e1741|-3668.57 -18.84 6656.27|244.53 9.46|-0.77 225.37 0.16|0.00 0.00 0.00
+model|AU:4eac86a4|Australia Lamp 3 (#3)|Australia|3|thug2|AU|4eac86a4,2e8d10ff,8d50e324|-5236.34 266.40 6030.84|469.66 7.09|26.92 446.29 53.80 -27.04 446.29 -54.12|0.00 0.00 0.00 0.00 0.00 0.00
+model|AU:725044a7|Australia Lamp 4 (#4)|Australia|4|thug2|AU|725044a7,963746fb|-3125.43 -18.84 6708.92|244.53 9.45|-0.76 225.37 0.27|0.00 0.00 0.00
+model|AU:ce7ce32e|Australia Lamp 5 (#5)|Australia|5|thug2|AU|ce7ce32e,fc66a6f1,47f1a617|-4848.56 -140.32 4853.37|256.20 12.99|0.01 243.51 0.46|0.00 0.00 0.00
+model|AU:a7cf2391|Australia Lamp 6 (#6)|Australia|6|thug2|AU|a7cf2391,c08371d3,49d15a9e|146.33 -267.60 4508.44|470.10 7.14|-26.52 446.79 -54.41 26.42 446.79 54.01|0.00 0.00 0.00 0.00 0.00 0.00
+model|AU:be1617a1|Australia Lamp 7 (#7)|Australia|7|thug2|AU|be1617a1,6ca7076b|675.39 -51.41 4080.95|327.22 12.98|45.89 313.38 -5.05|0.00 0.00 0.00
+model|BA:bbe376e7|Barcelona Lamp 1 (#8)|Barcelona|8|thug2|BA|bbe376e7,f2e86d6f,d9efc574,b9284c91|9804.55 -0.26 9081.24|408.57 155.33|-40.89 360.12 63.42|0.00 0.00 0.00
+model|BA:b257485a|Barcelona Lamp 2 (#9)|Barcelona|9|thug2|BA|b257485a,f64eb536|971.05 72.10 -1664.47|303.40 10.79|-2.48 266.62 68.22|0.00 0.00 0.00
+model|BA:2e232ee3|Barcelona Lamp 3 (#10)|Barcelona|10|thug2|BA|2e232ee3,f64eb536|971.04 72.10 -1672.19|303.40 9.56|-1.24 272.51 40.39|0.00 0.00 0.00
+model|BA:78cbbdba|Barcelona Lamp 4 (#11)|Barcelona|11|thug2|BA|78cbbdba,0b990669|3903.89 72.00 -700.04|186.19 15.04|0.29 165.55 -1.42|0.00 0.00 0.00
+model|BA:ac23cf94|Barcelona Lamp 5 (#12)|Barcelona|12|thug2|BA|ac23cf94,d7344d46,08e88b2b,4e3d1cfc|6400.53 -0.26 9496.44|410.76 155.96|21.88 362.31 24.86|0.00 0.00 0.00
+model|BA:b93a57fe|Barcelona Lamp 6 (#13)|Barcelona|13|thug2|BA|b93a57fe,d3834488|231.34 35.69 -495.57|254.44 39.65|-2.34 230.85 11.33|0.00 0.00 0.00
+model|BA:20330644|Barcelona Lamp 7 (#14)|Barcelona|14|thug2|BA|20330644,e26b5e15|228.57 37.59 938.54|252.53 13.52|-1.27 228.94 0.55|0.00 0.00 0.00
+model|BO:1dce954a|Boston Lamp 1 (#15)|Boston|15|thug2|BO|1dce954a,6923eaa7,abc3ead2|-2437.50 8.97 1493.94|383.71 12.25|138.75 359.59 0.19|0.00 0.00 0.00
+model|BO:6ac9a5dc|Boston Lamp 2 (#16)|Boston|16|thug2|BO|6ac9a5dc,872d8b8b,250a021b|-1936.31 130.11 -919.19|375.39 12.25|-135.44 351.27 0.69|0.00 0.00 0.00
+model|TESTLEVEL:78cbbdba|Misc Lamp 1 (#17)|Misc|17|thug2|TESTLEVEL|78cbbdba,0b990669,6896d3d7|-1048.80 0.00 1030.96|186.19 115.10|-3.66 165.55 3.15|0.00 0.00 0.00
+model|FOUN:09a552d2|Foundry Lamp 1 (#18)|Foundry|18|thugpro|FOUN|09a552d2|-4710.82 0.00 822.10|1201.99 26.94|-0.40 1201.99 1.57|0.00 0.00 0.00
+model|FOUN:00131ef9|Foundry Lamp 2 (#19)|Foundry|19|thugpro|FOUN|00131ef9|-3499.59 0.00 241.75|1202.00 22.50|-0.00 1202.00 0.55|0.00 0.00 0.00
+model|HI:a0dffe64|Hawaii Lamp 1 (#20)|Hawaii|20|thugpro|HI|a0dffe64|-556.04 -2.93 2270.35|206.37 15.03|-0.40 182.29 0.04|0.00 0.00 0.00
+model|HI:b204f78c|Hawaii Lamp 2 (#21)|Hawaii|21|thugpro|HI|b204f78c|-3942.35 -0.65 -2131.61|308.08 19.91|-47.64 293.77 0.34 47.51 293.77 0.33|0.00 0.00 0.00 0.00 0.00 0.00
+model|HI:2c60622f|Hawaii Lamp 3 (#22)|Hawaii|22|thugpro|HI|2c60622f|-2091.63 -7.83 -3327.48|315.26 20.31|-47.63 300.95 1.21 47.51 300.95 1.19|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:4cbde0bd|Chicago Lamp 1 (#23)|Chicago|23|thugpro|HOF|4cbde0bd|-2472.02 58.85 497.07|611.34 11.95|140.13 596.59 1.62 -140.14 592.96 0.66|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:91212da3|Chicago Lamp 2 (#24)|Chicago|24|thugpro|HOF|91212da3|-929.10 58.85 -5032.42|611.34 11.91|-1.62 596.59 140.12 -0.67 592.96 -140.16|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:cff6c60d|Chicago Lamp 3 (#25)|Chicago|25|thugpro|HOF|cff6c60d|811.87 58.85 222.13|611.34 11.92|-100.96 596.59 -103.30 102.57 592.96 101.68|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:6cd16335|Chicago Lamp 4 (#26)|Chicago|26|thugpro|HOF|6cd16335|1836.91 58.85 4035.37|611.34 11.95|-95.83 596.59 -102.35 103.09 592.96 97.73|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:3bbad02b|Chicago Lamp 5 (#27)|Chicago|27|thugpro|HOF|3bbad02b|-2470.08 58.85 -899.20|611.34 12.67|138.20 596.59 4.23 -142.08 592.96 3.29|0.00 0.00 0.00 0.00 0.00 0.00
+model|HOF:bf9c3282|Chicago Lamp 6 (#28)|Chicago|28|thugpro|HOF|bf9c3282|3355.94 58.85 523.38|611.34 269.57|49.50 596.59 -183.18 50.12 593.02 135.69|0.00 0.00 0.00 0.00 0.00 0.00
+model|NY:457d5c85|Manhattan Lamp 1 (#29)|Manhattan|29|thugpro|NY|457d5c85,143e8308|-1168.86 7.01 -6211.28|302.17 36.13|0.67 235.42 -18.97|0.00 0.00 0.00
+model|NY:2ba351c7|Manhattan Lamp 2 (#30)|Manhattan|30|thugpro|NY|2ba351c7,1fb89d9b,cca80e8d|-946.11 44.39 -2675.66|280.05 7.81|-0.06 260.74 0.19|0.00 0.00 0.00
+model|NY:ab733da9|Manhattan Lamp 3 (#31)|Manhattan|31|thugpro|NY|ab733da9|-4179.08 7.01 -2491.22|265.55 36.65|-14.73 212.36 -0.65|0.00 0.00 0.00
+model|NY:bcebc8ae|Manhattan Lamp 4 (#32)|Manhattan|32|thugpro|NY|bcebc8ae,86b1cc21|-5929.14 6.36 -1360.80|177.64 7.80|0.00 162.68 -0.00|0.00 0.00 0.00
+model|NY:1f5173de|Manhattan Lamp 5 (#33)|Manhattan|33|thugpro|NY|1f5173de,8742d4ab,95445681|-1927.63 7.01 -637.14|245.99 17.85|-1.49 202.64 -88.93|0.00 0.00 0.00
+model|SC2:4d5576f3|School II Lamp 1 (#34)|School II|34|thugpro|SC2|4d5576f3|0.35 0.00 -0.29|309.56 8.67|64.34 297.69 -0.24|0.00 0.00 0.00
+model|SCH:84d7e95d|College Lamp 1 (#35)|College|35|thugpro|SCH|84d7e95d|-2645.12 -412.18 -527.52|323.62 12.39|88.08 310.93 0.09|0.00 0.00 0.00
+model|SD:469ac29b|San Diego Lamp 1 (#36)|San Diego|36|thugpro|SD|469ac29b|1004.31 0.00 -8983.41|303.75 17.79|-0.03 280.47 0.14|0.00 0.00 0.00
+model|SD:b6e256ef|San Diego Lamp 2 (#37)|San Diego|37|thugpro|SD|b6e256ef,8386b513|6886.03 174.00 -9590.09|272.12 17.77|-0.02 248.84 0.12|0.00 0.00 0.00
+model|SD:58ec37c3|San Diego Lamp 3 (#38)|San Diego|38|thugpro|SD|58ec37c3,6ae51026|8272.69 174.00 -8747.31|272.12 17.81|0.01 248.84 0.13|0.00 0.00 0.00
+model|SD:b18f92f6|San Diego Lamp 4 (#39)|San Diego|39|thugpro|SD|b18f92f6|3154.09 0.00 -9565.03|272.12 17.77|-0.03 248.84 0.14|0.00 0.00 0.00
+model|SD:319df20d|San Diego Lamp 5 (#40)|San Diego|40|thugpro|SD|319df20d|-584.56 0.00 -7207.84|230.37 149.81|23.92 210.56 13.04|0.00 0.00 0.00
+model|SD:d8fe5738|San Diego Lamp 6 (#41)|San Diego|41|thugpro|SD|d8fe5738|-525.75 0.00 -9471.75|303.75 17.81|-0.04 280.47 0.12|0.00 0.00 0.00
+model|SF2:4d8f0345|San Francisco Lamp 1 (#42)|San Francisco|42|thugpro|SF2|4d8f0345|687.56 7.25 -712.53|374.12 21.59|0.01 347.72 -0.08|0.00 0.00 0.00
+model|SF2:8ea802b5|San Francisco Lamp 2 (#43)|San Francisco|43|thugpro|SF2|8ea802b5,5f8fb8d2|-363.41 7.25 -186.90|374.12 21.51|3.76 337.81 -0.04|0.00 0.00 0.00
+model|SF2:e2885a9f|San Francisco Lamp 3 (#44)|San Francisco|44|thugpro|SF2|e2885a9f|-1886.72 31.19 2674.41|159.31 13.00|-0.15 151.03 0.04|0.00 0.00 0.00
+model|SZ:62cf506b|Santa Cruz Lamp 1 (#45)|Santa Cruz|45|thugpro|SZ|62cf506b|-2018.88 0.00 3869.63|449.69 6.53|-0.40 449.69 0.31|0.00 0.00 0.00
+model|SZ:d9590a28|Santa Cruz Lamp 2 (#46)|Santa Cruz|46|thugpro|SZ|d9590a28|-336.03 0.00 2114.75|740.00 9.84|0.01 740.00 0.00|0.00 0.00 0.00
+model|SZ:ae5e3abe|Santa Cruz Lamp 3 (#47)|Santa Cruz|47|thugpro|SZ|ae5e3abe|2874.01 0.00 2714.87|617.44 21.93|1.19 617.44 0.55|0.00 0.00 0.00
+model|SZ:b815a539|Santa Cruz Lamp 4 (#48)|Santa Cruz|48|thugpro|SZ|b815a539|3012.00 0.00 2160.00|273.06 7.50|0.00 273.06 0.00|0.00 0.00 0.00
+model|SZ:211cf483|Santa Cruz Lamp 5 (#49)|Santa Cruz|49|thugpro|SZ|211cf483|3621.10 0.00 2092.38|360.62 7.54|0.00 360.62 0.02|0.00 0.00 0.00
+model|TOK:9b16e657|Tokyo Lamp 1 (#50)|Tokyo|50|thugpro|TOK|9b16e657|-994.57 0.00 7963.40|366.57 22.11|0.01 352.14 -143.27|0.00 0.00 0.00
+model|VC:436b5bb4|Vancouver Lamp 1 (#51)|Vancouver|51|thugpro|VC|436b5bb4|4317.14 1.17 -1939.98|265.33 26.63|-0.11 265.33 -0.39|0.00 0.00 0.00
+model|Z_BH:00c5e532|Beverly Hills Lamp 1 (#52)|Beverly Hills|52|thugpro|Z_BH|00c5e532|-1741.64 0.00 54.54|224.62 10.35|-116.00 174.90 0.40|0.00 0.00 0.00
+model|Z_BH:87ba41d0|Beverly Hills Lamp 2 (#53)|Beverly Hills|53|thugpro|Z_BH|87ba41d0|-2201.58 0.00 1714.77|227.50 10.36|81.80 177.10 -82.30|0.00 0.00 0.00
+model|Z_BH:ac971213|Beverly Hills Lamp 3 (#54)|Beverly Hills|54|thugpro|Z_BH|ac971213|370.15 0.00 -1155.93|236.25 10.36|-0.35 185.38 -121.72|0.00 0.00 0.00
+model|Z_DT:ab17924e|Downtown Lamp 1 (#55)|Downtown|55|thugpro|Z_DT|ab17924e|-1281.36 0.00 1265.84|262.29 13.67|82.46 246.47 0.07|0.00 0.00 0.00
+model|Z_DT:357307ed|Downtown Lamp 2 (#56)|Downtown|56|thugpro|Z_DT|357307ed|-721.87 0.00 3497.17|262.29 13.63|0.00 246.50 82.50|0.00 0.00 0.00
+model|Z_DT:ac7a5657|Downtown Lamp 3 (#57)|Downtown|57|thugpro|Z_DT|ac7a5657|-1281.36 0.00 3385.47|262.29 13.67|82.50 246.50 0.00|0.00 0.00 0.00
+model|Z_EL:0343216e|East LA Lamp 1 (#58)|East LA|58|thugpro|Z_EL|0343216e|2859.53 0.00 -656.39|151.39 14.96|-1.67 135.58 81.98|0.00 0.00 0.00
+model|Z_EL:744411f8|East LA Lamp 2 (#59)|East LA|59|thugpro|Z_EL|744411f8|3515.54 0.00 119.11|277.02 14.33|-0.63 261.20 -81.60|0.00 0.00 0.00
+model|Z_EL:ea20845b|East LA Lamp 3 (#60)|East LA|60|thugpro|Z_EL|ea20845b|-4643.25 0.00 -736.93|217.33 14.34|-78.66 201.52 21.73|0.00 0.00 0.00
+model|Z_HO:1f084dbe|Hollywood Lamp 1 (#61)|Hollywood|61|thugpro|Z_HO|1f084dbe,421fc7da|2670.56 91.81 -2961.42|280.00 9.56|-40.03 272.60 0.52|0.00 0.00 0.00
+model|Z_HO:26211f22|Hollywood Lamp 2 (#62)|Hollywood|62|thugpro|Z_HO|26211f22,ab7c62ef|2640.03 327.75 -4764.62|278.44 10.80|67.81 267.96 1.31|0.00 0.00 0.00
+model|Z_HO:2ff6f811|Hollywood Lamp 3 (#63)|Hollywood|63|thugpro|Z_HO|2ff6f811,770c0ddf,99026cf3,ee055c65|15.49 -2.31 84.88|422.50 51.53|-0.10 410.19 -87.98|0.00 0.00 0.00
+model|Z_HO:06f66a45|Hollywood Lamp 4 (#64)|Hollywood|64|thugpro|Z_HO|06f66a45,5386525a|-2375.46 -236.12 1867.85|473.56 40.50|149.73 465.00 -2.72|0.00 0.00 0.00
+model|Z_HO:257420e9|Hollywood Lamp 5 (#65)|Hollywood|65|thugpro|Z_HO|257420e9,ca8f03e0|-377.95 -185.44 2088.19|479.38 13.37|1.16 460.77 160.53|0.00 0.00 0.00
+model|Z_HO:3d7c8d88|Hollywood Lamp 6 (#66)|Hollywood|66|thugpro|Z_HO|3d7c8d88,770c0ddf,99026cf3,ee055c65|15.55 -2.25 104.86|437.69 14.78|-0.16 410.13 -107.97|0.00 0.00 0.00
+model|Z_HO:005112da|Hollywood Lamp 7 (#67)|Hollywood|67|thugpro|Z_HO|005112da,74c23918|-2399.22 95.75 -1862.18|446.81 40.89|147.53 436.74 -0.84|0.00 0.00 0.00
+model|Z_HO:020d7d06|Hollywood Lamp 8 (#68)|Hollywood|68|thugpro|Z_HO|020d7d06,dc7b5279|3120.65 466.12 -5483.15|280.00 9.55|-51.01 260.59 49.65|0.00 0.00 0.00
+model|Z_HO:51262fb4|Hollywood Lamp 9 (#69)|Hollywood|69|thugpro|Z_HO|51262fb4,dc7b5279|3115.19 466.12 -5477.70|278.44 10.78|-50.21 265.59 46.52|0.00 0.00 0.00
+model|Z_HO:769c9eca|Hollywood Lamp 10 (#70)|Hollywood|70|thugpro|Z_HO|769c9eca,23eca6d5|1820.15 -0.19 1037.62|470.81 41.90|148.11 459.02 -3.03|0.00 0.00 0.00
+model|Z_HO:d4508696|Hollywood Lamp 11 (#71)|Hollywood|71|thugpro|Z_HO|d4508696,74c23918|-2410.98 95.75 -1861.47|453.69 13.71|159.29 436.74 -1.56|0.00 0.00 0.00
+model|Z_HO:e0735d3c|Hollywood Lamp 12 (#72)|Hollywood|72|thugpro|Z_HO|e0735d3c,77a97495,99a715b9,eea0252f|-1208.11 3.75 -891.74|431.69 14.78|-0.73 404.13 107.28|0.00 0.00 0.00
+model|Z_HO:e8f80b69|Hollywood Lamp 13 (#73)|Hollywood|73|thugpro|Z_HO|e8f80b69,bd883376|2150.31 -0.06 2869.59|472.19 41.88|-102.99 458.89 -102.11|0.00 0.00 0.00
+model|Z_HO:ee28f34c|Hollywood Lamp 14 (#74)|Hollywood|74|thugpro|Z_HO|ee28f34c,bd883376|2159.30 -0.06 2878.36|477.75 13.70|-111.99 458.89 -110.88|0.00 0.00 0.00
+model|ATLANTA:020731d1|Atlanta Lamp 1 (#75)|Atlanta|75|thugpro|ATLANTA|020731d1,d78c49df|-4051.92 6.00 1320.52|338.69 12.27|0.08 240.81 27.08|0.00 0.00 0.00
+model|KYOTO:33ef4e7d|Kyoto Lamp 1 (#76)|Kyoto|76|thugpro|KYOTO|33ef4e7d|5016.97 0.00 -8806.77|473.44 10.13|0.00 460.00 45.00 0.00 460.00 -45.00|0.85 -0.53 0.00 0.85 -0.53 0.00
+model|Z_CENTER:2d4b88b1|City center Lamp 1 (#77)|City center|77|thugpro|Z_CENTER|2d4b88b1|2224.34 346.12 2855.15|257.31 17.64|140.00 212.00 -140.00 -45.00 242.00 -45.00|0.00 0.00 0.00 0.00 0.00 0.00
+model|Z_CENTER:7da9fbb6|City center Lamp 2 (#78)|City center|78|thugpro|Z_CENTER|7da9fbb6|6314.11 210.38 6914.69|384.88 29.33|-185.27 374.25 44.50|0.00 0.00 0.00
+model|Z_CENTER:1bfb0182|City center Lamp 3 (#79)|City center|79|thugpro|Z_CENTER|1bfb0182|1339.65 387.19 2661.37|159.75 22.05|72.00 145.00 0.00 0.00 145.00 72.00|0.00 0.00 0.00 0.00 0.00 0.00
+model|Z_CENTER:b2e31700|City center Lamp 4 (#80)|City center|80|thugpro|Z_CENTER|b2e31700|1047.85 398.56 2401.83|152.94 17.68|72.00 138.00 0.00 0.00 138.00 72.00|0.00 0.00 0.00 0.00 0.00 0.00
+model|Z_CENTER:2bea46ba|City center Lamp 5 (#81)|City center|81|thugpro|Z_CENTER|2bea46ba|776.53 397.88 2794.02|154.12 17.62|58.00 142.00 30.00|0.00 0.00 0.00

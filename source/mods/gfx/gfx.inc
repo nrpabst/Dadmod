@@ -75,6 +75,9 @@ static const Setting kSettings[] = {
     {"gfx_moonlight", 0, 0, 20, "moonlight: cool light on surfaces facing the moon at night x0.1 (default 0: Noah did not accept it, 2026-11-22)"},
     {"gfx_moonaz", 135, 0, 359, "moonlight: direction the moon light comes from (degrees around)"},
     {"gfx_lampbulbs", 1, 0, 1, "lamp bulbs and pools (mods/lamplights): 1 on, 0 off (for testing)"},
+    {"gfx_lamplights", 1, 0, 1, "Lamp lights (Sky & weather, Noah 2026-11-23): our night lamp light (bulbs, pools, the engine lights we add) 1 on, 0 off"},
+    {"gfx_lamptiles", 1, 0, 1, "lamp lights drawn by screen tile (speed, 2026-11-23): 1 on, 0 = one pass per lamp as before (for comparing)"},
+    {"gfx_lampposts", 1, 0, 1, "Extra lamp posts (Sky & weather, Noah 2026-11-23): the added lamp post models and their light 1 show, 0 hide"},
     {"gfx_bulbsize", 8, 1, 30, "lamp bulb glow size x0.1 (10 = normal)"},
     {"gfx_bulbstr", 7, 0, 30, "lamp bulb glow brightness x0.1 (10 = normal, 0 = no bulbs, pools stay)"},
     {"gfx_lampreach", 1000, 200, 3000, "lamp engine lights (amber wash on the level around each lamp): reach; applied within a second"},
@@ -279,6 +282,8 @@ static void SyncInput() {  // Dadmod > Controls -> padhub
 // lamp settings: written together at the end of gfx.ini under their own header (Noah 2026-11-22)
 struct LampKeyInfo { const char* key; const char* text; };
 static const LampKeyInfo kLampKeys[] = {
+    {"gfx_lamplights", "Lamp lights: our street lamp light at night (bulbs, light pools, light on walls): 1 on, 0 off"},
+    {"gfx_lampposts", "Extra lamp posts: the lamp posts added to some maps, with their light: 1 show, 0 hide"},
     {"gfx_lampbulbs", "lamp bulbs and light pools at night: 1 on, 0 off"},
     {"gfx_bulbsize", "size of the glow around each bulb: 1 .. 30, 8 = normal"},
     {"gfx_bulbstr", "brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)"},
@@ -1566,6 +1571,49 @@ float4 ps_moon(float2 uv : TEXCOORD0) : COLOR {
     c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
     return float4(c, 1);
 }
+// ps_btile (2026-11-23 speed review): every lamp entry touching one screen tile in ONE pass (up to 24; more = another
+// pass on that tile), the same maths as ps_bpool / ps_bhalo in the same order. Entries split in two arrays so the
+// loop counter can index them: tA = lp[0] (position, drop), tB = lp[1] (colour or flood stretch, pool radius)
+float4 tA[24] : register(c30);
+float4 tB[24] : register(c54);
+float4 ps_btile(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    float d0 = tex2D(s1, uv).r;
+    float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    float dd = dist(d0);
+    float far = length(dv) * dd;
+    float3 dn = normalize(dv);
+    float3 P = camp.xyz + dv * dd;
+    bool sky = d0 >= 0.99999;
+    [loop] for (int i = 0; i < 24; ++i) {
+        if (i >= lampc.y) break;
+        float4 A = tA[i];
+        float4 B = tB[i];
+        if (B.w > 1.0) {
+            if (!sky) {
+                float3 dl = P - (A.xyz - float3(0, A.w, 0));
+                float st = length(B.xyz);
+                if (st > 1.01) { float3 sn = B.xyz / st; dl -= sn * dot(dl, sn) * (1 - 1 / st); }
+                float x = saturate(1 - dot(dl, dl) / (B.w * B.w + 0.001));
+                float pl = x * x * lampc.x;
+                float lum = dot(c, float3(0.3, 0.5, 0.2));
+                c = lerp(c, c * float3(1.2, 0.95, 0.7), pl);
+                c += float3(1.0, 0.55, 0.16) * pl * (lum * lampc.z + lampc.w);
+            }
+        } else {
+            float tl = dot(A.xyz - camp.xyz, dn);
+            if (tl > 0 && tl < far + 30) {
+                float3 q = camp.xyz + dn * tl - A.xyz;
+                float r2 = dot(q, q);
+                float nr = saturate(tl / 600.0), fs = 1 + tl * 0.0015;
+                float cs = 100.0 * lerp(0.35, 1.0, nr) * fs * fs * camp.w * camp.w, hs = (1250.0 * nr * nr + 40.0) * fs * camp.w * camp.w;
+                c += (B.rgb * exp(-r2 / cs) * 0.9 + B.rgb * float3(1.0, 0.85, 0.62) * exp(-r2 / hs) * 0.2 * nr) * lampc.x;
+            }
+        }
+    }
+    return float4(c, 1);
+}
 // one lamp entry per pass (lp[0] position, lp[1] color + pool radius): ps_bhalo = bulb glow only, ps_bpool = light pool only
 // lamp editor probe (dev only): the world spot at the middle of the screen (the editor camera looks at its cursor;
 // the editor object's own position is the camera, 2026-11-23); a = 1 when something solid is there
@@ -1607,7 +1655,7 @@ float4 ps_lampcur(float2 uv : TEXCOORD0) : COLOR {
         float rr = lerp(45.0, 70.0, cur);
         float hr = length(P.xz - L.xz);
         float lw = 3 + far * 0.002;
-        bool near_ = d0 < 0.99999 && abs(P.y - L.y) < 150;
+        bool near_ = d0 < 0.99999 && abs(P.y - L.y) < 4 + far * 0.003;  // only the surface the lamp stands on (never up a wall)
         float ring = near_ ? saturate(1 - abs(hr - rr) / lw) : 0;
         float2 dq = abs(P.xz - L.xz);  // a small cross on the exact spot (cursor only)
         float armd = min(dq.x < 30 ? dq.y : 1000.0, dq.y < 30 ? dq.x : 1000.0);
@@ -1646,6 +1694,8 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
     float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
     float3 dl = camp.xyz + dv * dist(d0) - (lp[0].xyz - float3(0, lp[0].w, 0));
+    float st = length(lp[1].xyz);  // flood (lamp editor models): the pool is stretched st times along lp[1].xyz
+    if (st > 1.01) { float3 sn = lp[1].xyz / st; dl -= sn * dot(dl, sn) * (1 - 1 / st); }
     float x = saturate(1 - dot(dl, dl) / (lp[1].w * lp[1].w + 0.001));
     float pl = x * x * lampc.x;
     float lum = dot(c, float3(0.3, 0.5, 0.2));
@@ -1817,7 +1867,7 @@ static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDo
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
                              *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
-                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr, *g_psWindow = nullptr, *g_psWinComp = nullptr, *g_psBHalo = nullptr, *g_psBPool = nullptr, *g_psMoon = nullptr, *g_psWinVis = nullptr, *g_psLampCur = nullptr, *g_psLampProbe = nullptr,  // optional too
+                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr, *g_psWindow = nullptr, *g_psWinComp = nullptr, *g_psBHalo = nullptr, *g_psBPool = nullptr, *g_psMoon = nullptr, *g_psWinVis = nullptr, *g_psLampCur = nullptr, *g_psLampProbe = nullptr, *g_psBTile = nullptr,  // optional too
                              *g_psMirror = nullptr,  // optional: without it mirror mode does nothing
                              *g_psGroundMist = nullptr,  // optional: the Fog row (ground mist)
                              *g_psNightTint = nullptr;  // optional: without it night/evening buildings keep the game's lighting
@@ -2031,7 +2081,7 @@ static bool MakeShaders(IDirect3DDevice9* dev) {
     struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
         {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
         {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
-        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_wincomp", &g_psWinComp, "lit windows"}, {"ps_bhalo", &g_psBHalo, "lamp bulb glow"}, {"ps_bpool", &g_psBPool, "lamp light pools"}, {"ps_moon", &g_psMoon, "moonlight"}, {"ps_winvis", &g_psWinVis, "window light spill"}, {"ps_lampcur", &g_psLampCur, "lamp editor marks"}, {"ps_lampprobe", &g_psLampProbe, "lamp editor cursor probe"}, {"ps_mirror", &g_psMirror, "mirror picture"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_wincomp", &g_psWinComp, "lit windows"}, {"ps_bhalo", &g_psBHalo, "lamp bulb glow"}, {"ps_bpool", &g_psBPool, "lamp light pools"}, {"ps_moon", &g_psMoon, "moonlight"}, {"ps_winvis", &g_psWinVis, "window light spill"}, {"ps_lampcur", &g_psLampCur, "lamp editor marks"}, {"ps_lampprobe", &g_psLampProbe, "lamp editor cursor probe"}, {"ps_btile", &g_psBTile, "lamp lights by screen tile"}, {"ps_mirror", &g_psMirror, "mirror picture"},
         {"ps_nighttint", &g_psNightTint, "night tint"}, {"ps_groundmist", &g_psGroundMist, "ground mist"}};
     for (auto& o : optional)
         if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
@@ -2306,6 +2356,7 @@ static bool LampsOn() { return g_lampAmt > 0.01f && g_lampN > 0; }
 // lamp bulbs (mods/lamplights): head positions sent by QB per level (THUGRECOMP_LampBulb), game coordinates = D3D world
 static std::vector<Lamp> g_bulbs;
 static std::vector<float> g_bulbDrop;  // pool center = bulb - drop (height)
+static std::vector<char> g_bulbPost;  // per g_bulbs entry: 1 = it belongs to an added lamp post (Extra lamp posts hides it)
 static std::vector<Lamp> g_edBulbs;     // lamp editor (dev only): the placed lamps' bulb + pool entries, kept apart from
 static std::vector<float> g_edDrop;     // the level's list so editing never has to rebuild it (set by lampeditor.inc)
 static std::vector<float> g_edAll;      // the placed lamps for the editor marks: ground x y z, bulb height
@@ -2315,13 +2366,15 @@ static const int kBulbMax = 192;   // drawn in passes of 24 (ps_bulbs loop)
 static float g_bulbC[2 + 2 * kBulbMax][4];
 static int g_bulbN = 0;
 static void WinCacheClear();
-static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear(); WinCacheClear(); }
+static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); g_bulbPost.clear(); g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear(); WinCacheClear(); }
 // lamplights' level hook (2026-11-23): loading = a level load is starting (windows off until the level is known),
 // else the level that just loaded (nullptr = the last level SetLevel saw)
 static void WinLevelHook(const char* lv, bool loading);
-static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b) {
-    if (g_bulbs.size() >= 1024) return;
+static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b, bool post = false) {
+    if (g_bulbs.size() >= 4096) return;  // 2026-11-23: room for every map getting lamps (was 1024)
     g_bulbDrop.push_back(drop);
+    g_bulbPost.resize(g_bulbs.size(), 0);
+    g_bulbPost.push_back(post ? 1 : 0);
     Lamp l; l.x = x; l.y = y; l.z = z; l.r = pool; l.cr = r; l.cg = g; l.cb = b;
     g_bulbs.push_back(l);
 }
@@ -2367,6 +2420,23 @@ static int g_edMarkN = 0;
 static const float kEdAmber[3] = {1.0f, 176 / 255.0f, 80 / 255.0f};
 // placed lamps: v = n x (ground x, y, z, bulb height, pool radius, bulb x, y, z); pool center 150 over the ground
 // under the bulb (a lamp model's bulb hangs at its arm, not over the base)
+// lamp editor lights, v = n x (bulb x y z, pool centre x y z, pool radius, stretch x y z): the stretch (length > 1)
+// makes a flood's pool long along its aim (ps_bpool); zero = an ordinary round pool
+static void EdLamps10(const float* v, int n, std::vector<Lamp>& bl, std::vector<float>* drop) {
+    bl.clear(); if (drop) drop->clear();
+    for (int i = 0; i < n; ++i) {
+        const float* l = v + i * 10;
+        bl.push_back(Lamp{l[0], l[1], l[2], 0, kEdAmber[0], kEdAmber[1], kEdAmber[2]});
+        bl.push_back(Lamp{l[3], l[4], l[5], l[6], l[7], l[8], l[9]});
+        if (drop) { drop->push_back(0); drop->push_back(0); }
+    }
+}
+static std::vector<Lamp> g_curLamps;  // the cursor lamp's lights (every head, floods aimed), drawn instead of g_bulbCursor
+static void EdLampsSet(const float* v, int n) { g_edAll.clear(); EdLamps10(v, n, g_edBulbs, &g_edDrop); }
+static void CursorLamps(const float* v, int n) {
+    EdLamps10(v, n, g_curLamps, nullptr);
+    for (size_t i = 0; i + 1 < g_curLamps.size(); i += 2) { g_curLamps[i].cr = 0.5f; g_curLamps[i].cg = 0.9f; g_curLamps[i].cb = 1.0f; }
+}
 static void EdLamps(const float* v, int n) {
     g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear();
     for (int i = 0; i < n; ++i) {
@@ -2382,7 +2452,17 @@ static void BulbCursor(bool on, float x, float ground, float z, float h, float p
     g_edMark[0][0] = x; g_edMark[0][1] = ground; g_edMark[0][2] = z; g_edMark[0][3] = beam ? h : 0;
     float bx = bulb ? bulb[0] : x, by = bulb ? bulb[1] : ground + h, bz = bulb ? bulb[2] : z;
     g_bulbCursor = Lamp{bx, by, bz, 0, 0.5f, 0.9f, 1.0f};
-    g_bulbCursorPool = Lamp{bx, ground + 150, bz, pool, 0, 0, 0};
+    g_bulbCursorPool = Lamp{bx, ground + (bulb && beam ? h : 0) + 150, bz, pool, 0, 0, 0};  // a raised / lowered model lamp: the pool follows its base
+}
+// the cursor lamp's other heads (a two-headed model: Noah 2026-11-23 saw one head lit and the other doubled once
+// placed): bulb + pool for each, v = n x (x y z), pool centre 150 over poolY
+static std::vector<Lamp> g_curExtra;
+static void BulbCursorExtra(const float* v, int n, float poolY, float pool) {
+    g_curExtra.clear();
+    for (int i = 0; i < n; ++i) {
+        g_curExtra.push_back(Lamp{v[i * 3], v[i * 3 + 1], v[i * 3 + 2], 0, 0.5f, 0.9f, 1.0f});
+        g_curExtra.push_back(Lamp{v[i * 3], poolY + 150, v[i * 3 + 2], pool, 0, 0, 0});
+    }
 }
 // lamp models (mods/lampeditor/lampmodels.inc, dev build only): drawn at the end of the 3D scene, the editor's
 // preview after the HUD, their state block let go before a device reset
@@ -2541,13 +2621,20 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
     float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
     g_bulbNight = want > 0.5f;
+    if (!V("gfx_lamplights")) want = 0.0f;  // Lamp lights Off: nothing to draw, the passes stop (BulbsOn)
     if (g_bulbCursorOn) want = 1.0f;  // lamp editor open: preview by day too
+    bool postsOn = V("gfx_lampposts") != 0;
     struct EdPush {  // the editor's placed lamps and its cursor lamp (bulb + pool) join the list for this update only
         size_t n0;
         EdPush() : n0(g_bulbs.size()) {
-            g_bulbs.insert(g_bulbs.end(), g_edBulbs.begin(), g_edBulbs.end());
-            g_bulbDrop.insert(g_bulbDrop.end(), g_edDrop.begin(), g_edDrop.end());
-            if (g_bulbCursorOn) { g_bulbs.push_back(g_bulbCursor); g_bulbs.push_back(g_bulbCursorPool); g_bulbDrop.push_back(0); g_bulbDrop.push_back(0); }
+            if (V("gfx_lampposts")) {  // the editor's placed lamps are extra posts too
+                g_bulbs.insert(g_bulbs.end(), g_edBulbs.begin(), g_edBulbs.end());
+                g_bulbDrop.insert(g_bulbDrop.end(), g_edDrop.begin(), g_edDrop.end());
+            }
+            if (g_bulbCursorOn) {
+                if (g_curLamps.empty()) { g_bulbs.push_back(g_bulbCursor); g_bulbs.push_back(g_bulbCursorPool); g_bulbDrop.push_back(0); g_bulbDrop.push_back(0); }
+                for (const auto& e : g_curLamps) { g_bulbs.push_back(e); g_bulbDrop.push_back(0); }
+            }
         }
         ~EdPush() { g_bulbs.resize(n0); g_bulbDrop.resize(n0); }
     } edPush;
@@ -2564,6 +2651,7 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     static std::vector<std::pair<float, int>> bnear;
     bnear.clear();
     for (size_t i = 0; i < g_bulbs.size(); ++i) {
+        if (!postsOn && i < g_bulbPost.size() && g_bulbPost[i]) continue;  // Extra lamp posts: Hide
         const Lamp& l = g_bulbs[i];
         float d = (l.x - cx) * (l.x - cx) + (l.y - cy) * (l.y - cy) + (l.z - cz) * (l.z - cz);
         if (d < 20000.0f * 20000.0f) bnear.push_back(std::make_pair(d, (int)i));
@@ -2585,6 +2673,7 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
         a[0] = l.x; a[1] = l.y; a[2] = l.z; a[3] = g_bulbDrop[bi];
         float bs = V("gfx_bulbstr") / 10.0f;  // the halo uses the color, the pool its own amber
         c[0] = l.cr * bs; c[1] = l.cg * bs; c[2] = l.cb * bs; c[3] = l.r * V("gfx_lamppool") / 10.0f * poolFade;
+        if (l.r > 0) { c[0] = l.cr; c[1] = l.cg; c[2] = l.cb; }  // a pool's colour slots hold its flood stretch, unscaled
     }
 }
 // lamps light up in the evening and at night (a little at sunset); picks the 24 nearest to the camera
@@ -3052,7 +3141,67 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         float hdr[4] = {g_bulbC[0][0], 1.0f, g_bulbC[0][2], g_bulbC[0][3]};
         dev->SetPixelShaderConstantF(28, hdr, 1);
         dev->SetPixelShaderConstantF(29, g_bulbC[1], 1);
-        for (int i = 0; i < g_bulbN; ++i) {
+        // 2026-11-23 speed review: one pass per screen tile with every entry touching it (ps_btile), instead of one
+        // pass + copy-back per entry (35-160 a frame, 15-30 screens of pixels). Same maths, same order per pixel.
+        // gfx_lamptiles 0 (or a card without ps_btile) = the old per-entry path below.
+        bool tiled = g_psBTile && V("gfx_lamptiles");
+        if (tiled) {
+            const int TX = 8, TY = 6;
+            static std::vector<int> bin[TX * TY];
+            static std::vector<RECT> erect;
+            for (auto& b : bin) b.clear();
+            erect.assign(g_bulbN, RECT{0, 0, 0, 0});
+            for (int i = 0; i < g_bulbN; ++i) {
+                const float* a = g_bulbC[2 + i * 2];
+                const float* c = g_bulbC[3 + i * 2];
+                float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
+                float tl = sqrtf(dx * dx + dy * dy + dz * dz), fs = 1 + tl * 0.0015f;
+                float hr = (2.2f * sqrtf((1250.0f + 40.0f) * fs) + 2.2f * sqrtf(100.0f) * fs) * g_bulbC[1][3];
+                bool pool = c[3] > 1.0f;
+                if (!pool && c[0] + c[1] + c[2] <= 0.001f) continue;
+                RECT r;
+                bool any = !g_haveProj ? (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true)
+                         : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3] * (std::max)(1.0f, sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2])), g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
+                if (!any) continue;
+                erect[i] = r;
+                int x0 = (int)(r.left * TX / (LONG)g_w), x1 = (int)((r.right - 1) * TX / (LONG)g_w);
+                int y0 = (int)(r.top * TY / (LONG)g_h), y1 = (int)((r.bottom - 1) * TY / (LONG)g_h);
+                for (int ty = (std::max)(0, y0); ty <= (std::min)(TY - 1, y1); ++ty)
+                    for (int tx = (std::max)(0, x0); tx <= (std::min)(TX - 1, x1); ++tx) bin[ty * TX + tx].push_back(i);
+            }
+            dev->StretchRect(srcS, nullptr, dstS, nullptr, D3DTEXF_NONE);  // tiles with no lamp stay as they were
+            static float ta[24][4], tb[24][4];
+            for (int t = 0; t < TX * TY; ++t) {
+                const auto& list = bin[t];
+                if (list.empty()) continue;
+                RECT tr = {(LONG)((t % TX) * g_w / TX), (LONG)((t / TX) * g_h / TY), (LONG)((t % TX + 1) * g_w / TX), (LONG)((t / TX + 1) * g_h / TY)};
+                RECT u = erect[list[0]];  // only the part of the tile the lamps reach
+                for (int k : list) { const RECT& e = erect[k]; u.left = (std::min)(u.left, e.left); u.top = (std::min)(u.top, e.top); u.right = (std::max)(u.right, e.right); u.bottom = (std::max)(u.bottom, e.bottom); }
+                RECT r = {(std::max)(tr.left, u.left), (std::max)(tr.top, u.top), (std::min)(tr.right, u.right), (std::min)(tr.bottom, u.bottom)};
+                if (r.right <= r.left || r.bottom <= r.top) continue;
+                for (size_t s0 = 0; s0 < list.size(); s0 += 24) {
+                    int n = (int)(std::min)((size_t)24, list.size() - s0);
+                    for (int k = 0; k < n; ++k) { memcpy(ta[k], g_bulbC[2 + list[s0 + k] * 2], 16); memcpy(tb[k], g_bulbC[3 + list[s0 + k] * 2], 16); }
+                    float h2[4] = {hdr[0], (float)n, hdr[2], hdr[3]};
+                    dev->SetPixelShaderConstantF(28, h2, 1);
+                    dev->SetPixelShaderConstantF(30, ta[0], n);
+                    dev->SetPixelShaderConstantF(54, tb[0], n);
+                    if (s0) dev->StretchRect(dstS, &r, srcS, &r, D3DTEXF_NONE);  // a second batch on this tile builds on the first
+                    dev->SetScissorRect(&r);
+                    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+                    g_passScissor = &r;
+                    Pass(dev, g_psBTile, dstS, g_w, g_h, g_w, g_h, srcT, g_intz);
+                    g_passScissor = nullptr;
+                    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+                    ++drawn;
+                    area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
+                }
+            }
+            dev->SetPixelShaderConstantF(28, hdr, 1);
+            static bool once2 = false;
+            if (!once2) { once2 = true; mmenu::Log("gfx: lamp lights drawn by screen tile (ps_btile)"); }
+        }
+        for (int i = 0; i < (tiled ? 0 : g_bulbN); ++i) {
             const float* a = g_bulbC[2 + i * 2];
             const float* c = g_bulbC[3 + i * 2];
             float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
@@ -3062,7 +3211,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
             bool pool = c[3] > 1.0f;  // pool entry (no glow) or bulb entry (glow only)
             if (!pool && c[0] + c[1] + c[2] <= 0.001f) continue;
             bool any = !g_haveProj ? (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true)
-                     : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3], g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
+                     : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3] * (std::max)(1.0f, sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2])), g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
             if (!any) continue;
             dev->SetPixelShaderConstantF(30, a, 2);
             dev->SetScissorRect(&r);
@@ -3075,8 +3224,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
             ++drawn;
             area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
         }
-        (void)dstT;
-        cur = srcT;
+        cur = tiled ? dstT : srcT;
         if (timing) { g_lqDrawn = drawn; g_lqArea = area; }
     }
     if (timing) g_lqB->Issue(D3DISSUE_END);
@@ -3108,7 +3256,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psLampCur, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
         cur = dst;
-        LampProbe(dev);  // where the cursor is, for the next frame
+        // LampProbe(dev) is not run any more: the editor reads the stock editor camera's own cursor (lampeditor.inc)
     }
     if (timing) { g_lqW->Issue(D3DISSUE_END); g_lqDis->Issue(D3DISSUE_END); g_lqFreq->Issue(D3DISSUE_END); g_lqState = 1; }
     if (g_lqState == 1) {

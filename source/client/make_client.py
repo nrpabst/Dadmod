@@ -245,6 +245,9 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'lampwindows'))
     shutil.copyfile(os.path.join(lsrc, 'lampwindows.txt'), os.path.join(out, 'dadmod', 'lampwindows.txt'))
     want.append(os.path.join('dadmod', 'lampwindows.txt'))
+    # lamp post recipes (2026-11-23): which scene objects of the player's own THUG2 / THUG Pro levels make each post
+    shutil.copyfile(os.path.join(lsrc, 'lamprecipes.txt'), os.path.join(out, 'dadmod', 'lamprecipes.txt'))
+    want.append(os.path.join('dadmod', 'lamprecipes.txt'))
     for n in sorted(os.listdir(os.path.join(lsrc, 'lampwindows'))):
         if n.lower().endswith('.raw'):
             shutil.copyfile(os.path.join(lsrc, 'lampwindows', n), os.path.join(out, 'dadmod', 'lampwindows', n))
@@ -516,7 +519,7 @@ def default_settings(out):
     gl = [(l.split('=')[0].strip() + ' = %d' % gfx_fixed[l.split('=')[0].strip()]) if l.split('=')[0].strip() in gfx_fixed else l for l in gl]
     # street lamps + lit windows (mods/lamplights, 0.10.1): Dev's lamp test values never ship; a fresh install gets the
     # values Noah picked on 2026-11-22 (moonlight was not accepted: off), as one block at the end of the file
-    lamp_keys = ('gfx_lampbulbs', 'gfx_bulbsize', 'gfx_bulbstr', 'gfx_lamppool', 'gfx_lampstr', 'gfx_lamplift', 'gfx_lampreach',
+    lamp_keys = ('gfx_lamplights', 'gfx_lampposts', 'gfx_lampbulbs', 'gfx_bulbsize', 'gfx_bulbstr', 'gfx_lamppool', 'gfx_lampstr', 'gfx_lamplift', 'gfx_lampreach',
                  'gfx_windows', 'gfx_windowstr', 'gfx_windowshare', 'gfx_lamps', 'gfx_windowspill', 'gfx_moonlight', 'gfx_moonaz')
     if any(l.strip() == '; ---- Street lamps ----' for l in gl):
         gl = gl[:next(i for i, l in enumerate(gl) if l.strip() == '; ---- Street lamps ----')]
@@ -531,6 +534,8 @@ def default_settings(out):
     while gl and not gl[-1].strip():
         gl.pop()
     gl += ['', '; ---- Street lamps ----',
+           '; Lamp lights: our street lamp light at night (bulbs, light pools, light on walls): 1 on, 0 off', 'gfx_lamplights = 1',
+           '; Extra lamp posts: the lamp posts added to some maps, with their light: 1 show, 0 hide', 'gfx_lampposts = 1',
            '; lamp bulbs and light pools at night: 1 on, 0 off', 'gfx_lampbulbs = 1',
            '; size of the glow around each bulb: 1 .. 30, 8 = normal', 'gfx_bulbsize = 8',
            '; brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)', 'gfx_bulbstr = 7',

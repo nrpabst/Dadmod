@@ -5432,6 +5432,8 @@ dadmod_item_catalog = [
 { name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up." } }
 { name = "gfx_fireworks" b = 1 p = { id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes." } }
 { name = "gfx_fwnow" b = 1 p = { id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now." } }
+{ name = "gfx_lamplights" b = 1 p = { id = gfx_lamplights key = "gfx_lamplights" label = "Lamp lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lamplights desc = "Street lamp light at night: bulb glow and light on the ground and walls. Off also saves work." } }
+{ name = "gfx_lampposts" b = 1 p = { id = gfx_lampposts key = "gfx_lampposts" label = "Extra lamp posts" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lampposts desc = "The extra lamp posts added to some maps, with their light. Hide keeps the map's own lamps lit." } }
 { name = "gfx_fps" b = 1 p = { id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number." } }
 { name = "gfx_shotkey" b = 1 p = { id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder." } }
 { name = "gfx_shothud" b = 1 p = { id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture." } }
@@ -8062,6 +8064,8 @@ script dadmod_pause_skywx_menu
     dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up."
     dadmod_ui_item id = gfx_fireworks_pause key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
     dadmod_ui_item id = gfx_fwnow_pause key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
+    dadmod_ui_item id = gfx_lamplights_pause key = "gfx_lamplights" label = "Lamp lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lamplights desc = "Street lamp light at night: bulb glow and light on the ground and walls. Off also saves work."
+    dadmod_ui_item id = gfx_lampposts_pause key = "gfx_lampposts" label = "Extra lamp posts" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lampposts desc = "The extra lamp posts added to some maps, with their light. Hide keeps the map's own lamps lit."
     dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
     if GotParam focus_id
         thugpro_menu_finalize focus_target = <focus_id>
@@ -8196,7 +8200,7 @@ script dadmod_pause_gfx_group
     thugpro_menu_finalize
 endscript
 
-dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
+dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_lamplights" "gfx_lampposts" "gfx_skydef" ]
 
 script dadmod_pause_weather
     dadmod_pause_skywx_menu

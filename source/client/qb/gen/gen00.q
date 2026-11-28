@@ -6519,7 +6519,7 @@ script dadmod_bhra_cand
     endif
 endscript
 
-script dadmod_bhra_interrupt src = 1
+script dadmod_bhra_interrupt src = 1 zero = 0
     dadmod_bhra_cand
     if GotParam bhra_cand
         SetTags bhra_wait = <src> bhra_hopped = 0
@@ -6527,13 +6527,16 @@ script dadmod_bhra_interrupt src = 1
         if IsTrue dadmod_bhra_keep
             SetTags bhra_pending = 1
             dadmod_bhra_dbg what = "interrupted with the ollie button down: bank deferred"
-            Obj_SpawnScript dadmod_bhra_watch params = { src = <src> }
+            Obj_SpawnScript dadmod_bhra_watch params = { src = <src> zero = <zero> }
             return deferred = 1
         endif
         Obj_SpawnScript dadmod_bhra_watch params = { src = <src> nobank = 1 }
     endif
 endscript
 
+script dadmod_bhra_land2_out_z
+    dadmod_bhra_interrupt src = 1 zero = 1
+endscript
 script dadmod_bhra_land2_out
     dadmod_bhra_interrupt src = 1
     if GotParam deferred
@@ -6602,7 +6605,7 @@ script dadmod_bhra_ollie_mark
     endif
 endscript
 
-script dadmod_bhra_watch src = 1
+script dadmod_bhra_watch src = 1 zero = 0
     wait 1 gameframe
     GetSingleTag bhra_hopped
     SetTags bhra_wait = 0 bhra_hop_now = 0
@@ -6615,6 +6618,11 @@ script dadmod_bhra_watch src = 1
         return
     endif
     if ( <hop> = 0 )
+        if ( <zero> = 1 )
+            SetTags bhra_pending = 0
+            dadmod_bhra_dbg what = "after zero, no ollie followed: not banked"
+            return
+        endif
         dadmod_bhra_dbg what = "no ollie followed: banking"
         dadmod_bhra_flush
         return
@@ -6652,7 +6660,18 @@ script dadmod_bhra_flush
             SetTags bhra_pending = 0 bhra_hop_now = 0
             dadmod_bhra_dbg what = "pending combo banked"
             LandSkaterTricks
+            if GoalManager_GoalShouldExpire
+                Obj_KillSpawnedScript Name = dadmod_bhra_endrun
+                Obj_SpawnScript dadmod_bhra_endrun
+            endif
         endif
+    endif
+endscript
+script dadmod_bhra_endrun
+    wait 1 gameframe
+    if not GameIsOver
+        dadmod_bhra_dbg what = "after zero: hop without a revert banked the combo, ending the run"
+        MakeSkaterGoto EndOfRun
     endif
 endscript
 

@@ -10,6 +10,13 @@
 Works with plain THUG Pro or Kali Mod.
 Changes none of THUG Pro's or Kali's own files.
 
+## What you need
+
+* Windows with THUG Pro installed (plain THUG Pro or Kali Mod). THUG Pro itself needs Tony Hawk's Underground 2.
+* Setup.bat uses Windows PowerShell 5.1 or newer (built into Windows 10 and 11).
+* Any DirectX 9 graphics card.
+* Internet only for update checks. Everything else works offline.
+
 ## Contents
 
 1. [Install / Update](#1-install--update)
@@ -29,8 +36,10 @@ Download `dadmod.zip` from the newest release on the [Releases](../../releases) 
 1. Close THUG Pro.
 2. Unzip this zip into your THUG Pro folder (the folder with THUGPro.exe in it).
 3. Open the "dadmod-install" folder and double-click "Setup.bat".
-4. Pick **1) Install** (or **1) Update** if dadmod is already in).
-5. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
+4. Setup first checks for a newer dadmod. If there is one, pick **1) Yes** to download it (or **2) Not now**).
+5. Setup shows the game folder it found. Pick **1) Yes**, or **2) Pick another folder**.
+6. Pick **1) Install** (or **1) Update** or **1) Reinstall** if dadmod is already in).
+7. Start THUG Pro as usual. The first start takes a few seconds longer while the main menu scenes are set up.
 
    You'll see "Dadmod 0.10.2 beta" at the bottom of the main menu.
 
@@ -54,7 +63,9 @@ The dadmod-install folder stays too, so you can install again later.
 
 ### Updates
 
-From 0.9.11 the game tells you on the main menu when there's an update (see What's new). Setup.bat also checks for a newer dadmod each time it opens, before it unpacks anything. If there is one, it asks to download it and then updates your game. Your settings stay.
+The game checks for a newer dadmod when it starts. When there is one, "Update available" shows on the main menu, and Main menu > Dadmod gets a **Download newest update** row (it only shows while an update is out). It downloads while you play; then pick **Restart to install update**, and the game closes, updates and starts again.
+
+Setup.bat also checks each time it opens, before it unpacks anything. If there is a newer dadmod, it asks to download it and installs that instead. Your settings stay either way.
 
 ## 4. Playing with Kali Mod
 
@@ -76,7 +87,7 @@ Kali's scaling is replaced by dadmod's own Scale Options (0 to 1,000,000 for eve
 Kali's pause menu stays as it is, Kalimod v2 entry included. dadmod adds one item to it: "Dadmod", right under Continue.
 
 **Quick Menu**
-dadmod adds Noclip, Free Cam, Load Skater and Set Main Menu Here under Level Restarts.
+dadmod adds Noclip (in free skate and online games), Free Cam, Load Skater and Set Main Menu Here under Level Restarts.
 
 **Main menu**
 "Kalimod Features" stays, next to "Dadmod".
@@ -97,7 +108,7 @@ Every dadmod setting only changes your own game. Everything below works on plain
 * "Update available" shows under the dadmod text when a new dadmod is out (see Updates above).
 
 ### Menus
-* Menu UI (Dadmod > Menu UI): menu colors, 12 ready-made themes, text, highlight and title effects, highlight styles (Grow, Slide, Brackets, Underline, Side marker, Spotlight, Wave), and the main screen's size, position and logo. Reset Menu UI puts it all back.
+* Menu UI (Dadmod > Menu UI): menu colors, 12 ready-made themes (and your own saved themes), text, highlight and title effects, highlight styles (Grow, Slide, Brackets, Underline, Side marker, Spotlight, Wave), and the main screen's size, position and logo. Reset Menu UI puts it all back.
 * Reorder any menu: F9 move mode, F10 undo, F12 stock order (on a controller: hold Select and press LB, RB or LT). Custom menus > Restore deleted menus puts back one you deleted.
 * Clickable menus: point and click any row, click the arrows on option rows, the wheel scrolls, and right click or the Back button in the top-left corner goes back. The on-screen keyboard and the skater select screen are clickable too.
 * Button prompts show the keys and buttons you actually use, and switch between keyboard and controller pictures as you play.
@@ -107,24 +118,30 @@ Every dadmod setting only changes your own game. Everything below works on plain
 * Color, Brightness and Saturation sliders, Random Color and Default Color.
 * Scaling with no limits: Scale Options go from 0 to 1,000,000, and so does logo and tattoo Scale.
 * Copy Scales From and Copy Tricks From another saved skater, each with an Undo.
-* Male Backpack and Female Backpack rows, so any skater can wear either one.
+* Male and female parts for any skater (hair, hat hair, shirts, pants, gloves, Male Backpack and Female Backpack), plus pedestrian heads, torsos, pants and accessories.
+* Remove Clothes, and changing sex keeps your look.
+* Part lists open on what you're wearing and preview each part as you scroll. Every part list has a Color row at the top, and every color menu has Copy Color and Paste Color.
+* Undo Last Change (press it again to redo). In a long list, click the left stick in to jump 10 rows up, the right stick to jump 10 down.
 * Camera on keyboard and mouse: number pad + and - zoom, Page Up and Page Down tilt, drag with the left mouse button on the skater's side of the screen to turn, the wheel zooms. Hold Shift on a slider to move faster.
 * Quick Menu > Load Skater changes your skater in the middle of a level, offline and online. Other dadmod players see the new skater within about a second; players without dadmod see it after a rejoin.
 
 ### Skating (Pause > dadmod > Gameplay)
-* Balance: Default, Easy, Sick or Infinite (Infinite works offline only).
+* Balance: Default, Easy, Sick or Infinite (Infinite turns off in online games).
 * Player speed: 1 to 4 slow motion, 5 normal, 6 to 10 a higher top speed.
 * Bail cancel: press Flip during a bail to get straight back on your board, with a THPS1+2 style flicker and blue sparkles. Auto bail cancel (default Off) does it on every bail by itself. Bail cancel effects (default On) turns the whoosh, sparkles and flicker off. All three are off in Firefight, King of the Hill and Capture the Flag.
 * Bank drops.
 * BHRA keeps combo (default Off): a Bunny Hop Revert keeps your combo going. Easy BHRA (default Off): a longer revert window around the hop. BHRA style: Land Pivot or Revert, for players with Land Pivots on.
 * Trick Screen Effects (default On): Off skips the full-screen effect of special tricks like the 3D Scary Grind.
-* Mirror mode: flips the level left to right and swaps steering to match.
+* Mirror mode: flips the level left to right and swaps steering to match. It starts Off each time the game starts.
 * Mouse camera (default On): on foot, hold the left mouse button and drag to look around your skater. The wheel zooms, middle click resets.
 
 ### Animations, throwables and noclip
 * Animations (Pause > dadmod > Animations): play any skater animation, search by name, star favorites, loop one and keep walking while it loops, and Kali's idle loops.
-* Throwables (Pause > dadmod > Throwables): get ammo and throw with Flip. Random Animal, Random Pedestrian, Random Junk, Skateboard, Bowling Ball, Mystery Box and Cars (a random car each throw). Other dadmod players see what you throw; players without dadmod see a COMBO O.
-* Noclip (F6, or Quick Menu > Noclip): fly through walls. Hold the left mouse button and drag to turn, right click pauses. If you fall out of the level, it puts you back where noclip started.
+* Throwables (Pause > dadmod > Throwables): get ammo and throw with Flip, in any server.
+  * Everyone sees: the COMBO O, and story mode Tomatoes, Apples, Beads, Shrimp, Smoke bombs and Paint cans (they all look like a COMBO O).
+  * dadmod players see: Cars (a random car each throw), Random Animal, Random Pedestrian, Random Junk, Skateboard, Bowling Ball and Mystery Box. Players without dadmod see a COMBO O.
+  * Stop throwing puts Flip back to normal.
+* Noclip (F6, or Quick Menu > Noclip): fly through walls, in free skate and online games (not while driving or watching). Hold the left mouse button and drag to turn, right click pauses. If you fall out of the level, it puts you back where noclip started.
 * Free Cam (Quick Menu): fly the camera around. Online it works where the server allows the free camera.
 * Freeskate keeps running while the pause menu is open.
 
@@ -138,7 +155,7 @@ Every dadmod setting only changes your own game. Everything below works on plain
 * **Right click** in a level: open the pause menu.
 * **Alt+Enter**: switch between a window and fullscreen (borderless, at your monitor's own resolution).
 * **F11**: save a PNG screenshot to `dadmod\screenshots`.
-* **F6**: noclip. **F9**, **F10**, **F12**: reorder menus.
+* **F6**: noclip. **F9**, **F10**, **F12**: reorder menus. **F7** and **F8**: star and delete in Custom menus.
 
 ### Controls the game doesn't show
 Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left, Rotate right), so they follow your bindings in Dadmod > Controls on any controller or keyboard.
@@ -147,48 +164,49 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 * **On foot:** tap Grind to play the last animation you picked in Animations again. Standing still, Flip slaps and Grab sits down.
 * **Reposition camera** (Main Menu options > Camera): W, A, S, D move the camera, E and Q (or Page Up and Page Down) move it up and down, the arrow keys turn and tilt it, and Shift moves faster. On a controller the left stick moves, the right stick turns and the shoulder buttons go up and down.
 
-### Graphics (Dadmod > Graphics)
+### Graphics (Dadmod > Graphics, or Pause > dadmod > Graphics)
 * Display: Display mode (Windowed or Fullscreen), Resolution and V-sync. Press Apply to see them right away, then press it again within 15 seconds to keep them, or they go back by themselves. Distance clipping, Clip distance and Distance fog are the THUG Pro launcher's own settings.
-* Textures: Texture filtering (up to 16x), Texture sharpness and Smooth menu graphics.
+* Textures: Texture filtering (Off to 16x), Texture sharpness and Smooth menu graphics.
 * Anti-aliasing: FXAA (Fast or High quality) and MSAA (2x to 8x, after a restart).
 * Effects: Sharpening, Bloom, Ambient occlusion, Distance haze, Depth of field, Outlines (or a cel-shaded cartoon look) and Motion blur. Skater shadow, Particles, Level lights, Skater lights and THUG Pro screen effects are the THUG Pro launcher's own settings, so the launcher and dadmod always show the same values.
 * Color: a Color look (Vivid, Warm, Cool, Film, Black and white, Retro, Night, Sunset, Overcast, VHS), plus Brightness, Contrast, Saturation, Vibrance, Gamma, Color temperature and Tint.
 * Retro: Pixelate, CRT TV (scanlines, optionally curved), Film grain, Chromatic aberration and Vignette.
-* Extras: FPS counter, Screenshot key (F11), Screenshots show menus, and Frame generation (Off, Auto or 120 to 240 Hz: smoother motion on fast monitors while the game itself runs at 60).
+* Extras: FPS counter (On, or Tiny in the corner), Screenshot key (F11, starts On), Screenshots show menus, and Frame generation (Off, Auto or 120 to 240 Hz: smoother motion on fast monitors while the game itself runs at 60).
 * With ReShade installed, a "Graphics effects: dadmod / ReShade" row picks which one draws the screen effects.
-* Reset graphics puts everything back. A new install starts with every Graphics option off.
+* Reset graphics puts everything back. A new install starts with every graphics effect off.
 * Made for every DirectX 9 graphics card. If a card can't make one effect, only that effect turns off.
 
-### Sky & weather (Pause > dadmod > Sky & weather)
-* Time of day: Level / server, Dawn, Morning, Day, Evening, Evening (lights on) or Night. Night, Evening lights and Dawn darken the whole level while its own lights stay lit. Online your pick shows on your screen only. It follows Kali Mod's Time Of Day menu too. On Level / server, a server's night looks like Night, and dark skies darken the map to match.
-* Sky: swap every level's sky for Milky way, Nebula, Deep space, Matrix, Aurora, Synthwave, Storm, Golden hour, Vaporwave, Hellfire, Underwater, Rainbow, Black hole or Cotton candy. Sky boost gives richer sky colors for the time of day, with stars at night.
-* Weather: Rain, Thunderstorm, Snow, Fog or Random, with Intensity 1 to 10. Rain and snow fall in the world around you and stop at walls. When a server turns on rain or snow, the server's weather wins until it stops.
+### Sky & weather (Pause > dadmod > Sky & weather, or Dadmod > Sky & weather)
+* Time of day: Level / server, Dawn, Morning, Day, Evening, "Evening, lights on" or Night. Night, Evening lights and Dawn darken the whole level while its own lights stay lit. Online your pick shows on your screen only. It follows Kali Mod's Time Of Day menu too. On Level / server, a server's night looks like Night, and dark skies darken the map to match.
+* Sky: swap every level's sky for Milky way, Nebula, Deep space, Matrix, Aurora, Synthwave, Storm, Golden hour, Vaporwave, Hellfire, Underwater, Rainbow, Black hole or Cotton candy. Sky boost (0 to 10, starts at 0) gives richer sky colors for the time of day, with stars at night.
+* Weather (starts Off): Rain, Thunderstorm, Snow, Fog or Random (changes every few minutes), with Intensity 1 to 10 (starts at 5). Rain and snow fall in the world around you and stop at walls. When a server turns on rain or snow, the server's weather wins until it stops.
 * Fireworks when someone wins, or every 1, 3, 5 or 10 minutes, and Launch fireworks now.
 * Default sky puts the whole page back.
-* Chicago and San Francisco at night: the street lamps glow and light the ground, and building windows light up. Always on. If you like to tinker, the lamp and window numbers are in `dadmod\gfx.ini` under "Street lamps", each with a note on what it does.
+* Chicago and San Francisco at night (Evening, lights on, Night, Dawn, or a server's night): the street lamps glow and light the ground, and building windows light up. Always on. If you like to tinker, the lamp and window numbers are in `dadmod\gfx.ini` under "Street lamps", each with a note on what it does.
 
-### Sound (Dadmod > Graphics > Sound)
-* Level sounds, Special trick sounds and Teleporter sounds, each 0 to 100.
+### Sound (Pause > dadmod > Sound, or Dadmod > Graphics > Sound)
+* Level sounds, Special trick sounds and Teleporter sounds, each 0 to 100. A new install starts Special trick sounds at 30 and the other two at 100.
 * Level sounds keep playing after you pause and unpause.
 
-### Controls (Dadmod > Controls)
+### Controls (Dadmod > Controls, or Pause > dadmod > Controls)
 * Keyboard bindings and Controller bindings, or Use launcher button layout.
-* Swap A/B and X/Y, Stick dead zone, Background input (keep playing while another window is in front) and Controller popups.
+* Swap A/B and X/Y, Stick dead zone, Background input (keep playing while another window is in front, starts On) and Controller popups (starts On).
 * Controller plug and play: a controller that disconnects is picked up again by itself.
 
 ### Online
 * The pause menu and the chat box stay open when a game ends or a new one starts, and typed chat is never lost. Long chat lines are split into two so everyone sees them.
-* Host 12 of the extra maps from the online level select (players need the map too).
+* Host 15 of the extra maps from the online level select: Streets, the five THPS2 maps, the five Project 8 maps and THPG Training, plus Larxian's Philadelphia, Baltimore and Washington D.C. (players need the map too).
 
 ### Levels
 * Filled level slots and a THPG tab (see [7. Extra levels](#7-extra-levels)).
 
 ### Under the hood
 * Faster boot.
-* Fixes for crashes in stock THUG Pro: some skater parts, the skater camera going into or out of a level, quitting the game, and drawing particle effects.
-* Safe start: if the game ever fails to start with dadmod, the next start skips dadmod's risky startup step. "Safe start: on" shows on the main menu. It tries a normal start again after an update or after 10 good starts, or right away with Dadmod > Graphics > Try a normal start.
-* Updates in game (Dadmod > Download newest update, then Restart to install update) or with Setup.bat.
-* Your settings, screenshots and logs live in the `dadmod` folder in your game folder.
+* Fixes for crashes in stock THUG Pro: some skater parts, the skater camera going into or out of a level, quitting the game, drawing particle effects, a menu event sent to a menu that already closed, a message sent to a player who just left, and hosting on a Proving Ground tab level.
+* New Orleans: the manhole scream ("Into the Underworld" gap) is off.
+* Safe start: if the game ever fails to start with dadmod, the next start skips dadmod's risky startup step. "Safe start: on" shows on the main menu. It tries a normal start again after an update or after 10 good starts, or after you pick Pause > dadmod > Graphics > Try a normal start (that row only shows while safe start is on).
+* Updates in game (Main menu > Dadmod > Download newest update, then Restart to install update) or with Setup.bat.
+* Your settings, screenshots and logs live in the `dadmod` folder in your game folder: `gfx.ini` (graphics, sky, sound and controls), `mainmenu.ini` (main menu scenes), `panel_settings.txt` (Menu UI and some gameplay settings), `binds.ini` (key and button bindings), `fullscreen.ini` and the `screenshots` folder.
 
 ## 6. What's new in 0.10.2
 
@@ -348,7 +366,7 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 
 #### New
 * In-game updates: when a new dadmod is out, "Update available" shows under the dadmod text on the main menu. Main menu > Dadmod > **Download newest update** downloads it while you play, then **Restart to install update** installs it and restarts the game.
-* 12 of the extra maps can be hosted online: pick them in the online level select, or type their ! command (like !STREETS, !NYC, !SUBURBS).
+* 12 of the extra maps can be hosted online: pick them in the online level select.
 * Time of day follows Kali Mod's Time Of Day menu and the other way round (Morning, Day/Afternoon, Sunset/Evening, Night).
 
 #### Changed
@@ -422,7 +440,7 @@ Most of these use the game's own actions (Ollie, Flip, Grab, Grind, Rotate left,
 
 ## 7. Extra levels
 
-dadmod fills the greyed-out level slots (playable offline) and adds a THPG tab to the level select. See [9. Credits](#9-credits) for the full list.
+dadmod fills the greyed-out level slots and adds a THPG tab to the level select. They play offline, and 15 of them can be hosted online (see Online above). See [9. Credits](#9-credits) for the full list.
 
 Already have one of these levels? Setup keeps yours.
 

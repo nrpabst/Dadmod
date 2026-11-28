@@ -85,8 +85,13 @@
   Setup.bat checks for a newer dadmod each time it opens, before it
   unpacks anything. If there is one, it downloads it into the
   dadmod-install folder and installs that instead. Your settings stay.
-  The game also checks when it starts and can update itself
-  (Dadmod page on the main menu).
+  The game also checks when it starts and can update itself: main
+  menu > Dadmod > Updates. With Auto update On, a new dadmod downloads
+  while you play and installs by itself when you quit THUG Pro, in a
+  small dadmod window. Auto update is Off at first: the main menu
+  tells you when a new dadmod is out (one popup per version) and
+  Dadmod > Updates downloads and installs it. Restart and install now
+  does it right away.
 
 
 ==========================================================================
@@ -351,8 +356,8 @@
       the main menu. It tries a normal start again after an update or
       after 10 good starts, or right away with Dadmod > Graphics > Try a
       normal start.
-    * Updates in game (Dadmod > Download newest update, then Restart to
-      install update) or with Setup.bat.
+    * Updates in game (Dadmod > Updates: Auto update, What's new) or
+      with Setup.bat.
     * Your settings, screenshots and logs live in the dadmod folder in
       your game folder.
 
@@ -362,6 +367,13 @@
 ==========================================================================
 
   NEW
+    + Dadmod > Updates: check for updates, download, install, see
+      what's new in the new version and in yours, and Auto update
+      (Off at first; when On, new versions download while you play
+      and install when you quit).
+    + The main menu says when an update is out, downloading or
+      ready, and the download's progress shows while you play.
+    + After an update the game says once which version you now have.
     + New weather: Sky & weather now has two rows, Weather (Off, Rain,
       Thunderstorm, Snow, Fog, Random) and Intensity (1 to 10). Rain
       and snow fall in the world around you and stop at walls, with
@@ -376,6 +388,9 @@
       screen effects. They always match the launcher.
 
   CHANGED
+    ~ Updating from the game shows a small dadmod window instead of
+      a black console window. With Auto update Off you get one popup
+      per new version (Download now, What's new, Later).
     ~ Time of day "Sunset" is now "Evening" and looks softer.
       Evening lights is brighter.
     ~ A server's night now looks like picking Night yourself, with
@@ -389,6 +404,12 @@
     ~ Street lamp light fades in and out instead of popping on.
 
   FIXED
+    x In-game updates: a finished download is installed even when
+      GitHub is busy at that moment (before, it was thrown away), and
+      a download from an earlier session is used instead of
+      downloading again.
+    x In-game updates no longer run out of memory unpacking the big
+      map pack (they use 64-bit Windows PowerShell).
     x The controller no longer gets stuck after dragging the mouse
       camera on foot.
     x Bail cancel and getting out of a car keep your Skater shadow

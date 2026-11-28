@@ -223,6 +223,30 @@ def build_dll(out):
     print('binkw32.dll: client loader (clang/MinGW)')
 
 
+def whats_new(readme):
+    """README.txt section 6 (WHAT'S NEW IN @DADMOD_VERSION@) up to the first older version's heading: the NEW /
+    CHANGED / FIXED lists of this release, for dadmod\\whatsnew.txt (native/update.inc reads it)."""
+    text = open(readme, encoding='utf-8-sig').read().replace('\r\n', '\n')
+    out, on = [], False
+    rows = text.split('\n')
+    for i, ln in enumerate(rows):
+        if not on:
+            if re.match(r"\s*6\.\s+WHAT'S NEW", ln):
+                on = True
+            continue
+        if ln.startswith('====='):
+            if out:
+                break
+            continue
+        nxt = rows[i + 1] if i + 1 < len(rows) else ''
+        if re.match(r'\s+\d+\.\d+', ln) and re.match(r'\s+-{3,}', nxt):
+            break
+        out.append(ln)
+    body = '\n'.join(out).strip('\n')
+    body = ''.join(c if 32 <= ord(c) < 127 or c == '\n' else ' ' for c in body)
+    return body + '\n'
+
+
 def package(out, release=None):
     """build/dadmod-client-<version>.zip: what players unzip (one folder, dadmod-install). README.txt, Install dadmod.bat /
     Uninstall dadmod.bat, installer\\dadmod.ps1 and files\\ (copied into the game folder by the installer).
@@ -237,6 +261,10 @@ def package(out, release=None):
     os.makedirs(os.path.join(out, 'dadmod', 'updater'), exist_ok=True)
     shutil.copyfile(os.path.join(inst, 'dadmod.ps1'), os.path.join(out, 'dadmod', 'updater', 'dadmod.ps1'))
     want.append(os.path.join('dadmod', 'updater', 'dadmod.ps1'))
+    # Dadmod > Updates > What's new in <yours> (2026-11-24): this version's part of README.txt section 6
+    with open(os.path.join(out, 'dadmod', 'whatsnew.txt'), 'w', newline='\r\n') as f:
+        f.write(whats_new(os.path.join(inst, 'README.txt')))
+    want.append(os.path.join('dadmod', 'whatsnew.txt'))
     # lit windows at night (mods/lamplights, 0.10.1): the window list + pane masks gfx.inc reads from <game>\dadmod\
     # (our own masks: one pane number per texel, made by mods/lamplights/gen_windows.py; no game texture bytes)
     lsrc = os.path.join(WORK, 'mods', 'lamplights', 'data')
@@ -448,12 +476,16 @@ def package(out, release=None):
                 sys.exit('PACKAGE FAILED: missing ' + rel)
             zf.write(src, 'files/' + rel.replace(os.sep, '/'))
         vault = vault_files()
-        for rel, src in vault:
-            zf.write(src, 'files/' + rel.replace('\\', '/'))
-        # the installer keeps a player's own copy of these instead of replacing it; the md5 tells it whether the
-        # player's copy is the same version (installer names a different one in its summary)
+        # Noah 2026-11-23: the extra levels are NOT in files.dad any more; they come in map packs (separate release
+        # assets dadmod-maps-<pack>.zip) the installer fetches only when a file is missing or changed.
+        # The installer keeps a player's own copy instead of replacing it; the md5 tells it whether a copy is the
+        # same version, the pack which download holds the file.
         md5s = {row.split()[0].lower(): row.split()[1].lower() for row in lines(os.path.join(CLIENT, 'vault_levels.txt'))}
-        zf.writestr('installer/vault_levels.txt', ''.join('%s %s\r\n' % (rel, md5s[rel.lower()]) for rel, _ in vault))
+        packs = build_map_packs(vault, md5s, os.path.dirname(z))
+        zf.writestr('installer/vault_levels.txt', ''.join('%s %s %s\r\n' % (rel, md5s[rel.lower()], map_pack_of(rel)) for rel, _ in vault))
+        zf.writestr('installer/map_packs.txt', ''.join('%s %s %d %s\r\n' % p for p in packs))
+        # the same list next to the release zips, for tools/stage_release.py and the publish workflow
+        open(os.path.join(os.path.dirname(z), 'map_packs.txt'), 'w', newline='\r\n').write(''.join('%s %s %d %s\n' % p for p in packs))
     key = 0xA7
     table = bytes(b ^ key for b in range(256))
     dpk = os.path.join(WORK, 'build', 'files.dad')
@@ -481,8 +513,85 @@ def package(out, release=None):
         zf.writestr('dadmod-install/README.txt', ('\ufeff' + txt.replace('\r\n', '\n').replace('\n', '\r\n')).encode('utf-8'))  # Notepad-friendly
         zf.write(dpk, 'dadmod-install/files.dad', compress_type=zipfile.ZIP_STORED)  # scrambled: doesn't compress
     os.remove(dpk)
-    size = sum(os.path.getsize(s) for _, s in vault)
-    print(f'package: {len(want)} game files + {len(vault)} level files ({size // 1024} KB) + installer -> {os.path.relpath(z, WORK)}')
+    print(f'package: {len(want)} game files + installer -> {os.path.relpath(z, WORK)} ({os.path.getsize(z) // 1024} KB)')
+    for name, asset, size, md5 in packs:
+        print(f'map pack {name}: {asset} {size // 1024} KB md5 {md5}')
+
+
+# Noah 2026-11-23: which map pack (release asset dadmod-maps-<pack>.zip) holds each extra level file. A pack is only
+# rebuilt when one of its files changes, so an update downloads just the small dadmod.zip (and a changed pack).
+MAP_PACKS = ('cities', 'p8', 'classic', 'thpg')
+
+
+def map_pack_of(rel):
+    low = rel.lower().replace('/', '\\')
+    if low.startswith('user\\data\\levels\\') or (low.startswith('user\\') and low.endswith('.level.dat')):
+        return 'cities'                  # Larxian's Philly / Baltimore / DC (+ their skies and the User\\<city>.level.dat
+                                         # entries, which list them in the Imported tab: only with the city files)
+    name = low.rsplit('\\', 1)[-1]
+    if name.startswith('p8') or '\\p8' in low:
+        return 'p8'                      # our Project 8 conversions and their sounds
+    if name.startswith('thpg'):
+        return 'thpg'                    # THPG Training
+    return 'classic'                     # Streets + THPS2 maps from the thpsX Vault and their sounds
+
+
+def build_map_packs(vault, md5s, dest):
+    """-> [(pack, asset name, size, md5)]; dadmod-maps-<pack>.zip in dest. Each pack = a zip holding maps.dad (the
+    files.dad format: DADMODPK2, LZMA of a stored zip of files/<path>). Cached in build/map_packs by content, so an
+    unchanged pack is byte for byte the one already published (the release workflow then carries it over)."""
+    import hashlib, lzma, time, zipfile
+    cache = os.path.join(WORK, 'build', 'map_packs')
+    os.makedirs(cache, exist_ok=True)
+    out = []
+    for pack in MAP_PACKS:
+        rows = [(rel, src) for rel, src in vault if map_pack_of(rel) == pack]
+        if not rows:
+            continue
+        # identical files next to each other (the three city skies are the same files), else by path, so the LZMA
+        # window sees the repeat
+        rows.sort(key=lambda r: (md5s[r[0].lower()] if sum(1 for x in rows if md5s[x[0].lower()] == md5s[r[0].lower()]) > 1 else '~', r[0].lower()))
+        key = hashlib.sha1(''.join('%s %s\n' % (rel.lower(), md5s[rel.lower()]) for rel, _ in rows).encode()).hexdigest()[:12]
+        asset = 'dadmod-maps-%s.zip' % pack
+        cached = os.path.join(cache, '%s_%s.zip' % (pack, key))
+        if not os.path.isfile(cached):
+            t0 = time.time()
+            inner = cached + '.inner'
+            with zipfile.ZipFile(inner, 'w', zipfile.ZIP_STORED) as zf:
+                for rel, src in rows:
+                    zf.write(src, 'files/' + rel.replace('\\', '/'))
+            raw = os.path.getsize(inner)
+            # a bigger LZMA window than preset 9's 64 MB catches textures the three cities share; at most 256 MB,
+            # since the reader holds the whole window in memory (the in-game updater runs 32-bit PowerShell)
+            dict_size = 1 << 22
+            while dict_size < raw and dict_size < (256 << 20):
+                dict_size <<= 1
+            key_b = 0xA7
+            table = bytes(b ^ key_b for b in range(256))
+            lz = lzma.LZMACompressor(format=lzma.FORMAT_ALONE, filters=[{'id': lzma.FILTER_LZMA1, 'preset': 9 | lzma.PRESET_EXTREME, 'dict_size': dict_size}])
+            dad = cached + '.dad'
+            with open(inner, 'rb') as fi, open(dad, 'wb') as fo:
+                fo.write(b'DADMODPK2' + bytes(6) + bytes([key_b]))
+                while True:
+                    chunk = fi.read(1 << 22)
+                    if not chunk:
+                        break
+                    fo.write(lz.compress(chunk).translate(table))
+                fo.write(lz.flush().translate(table))
+            os.remove(inner)
+            tmp = cached + '.tmp'
+            with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_STORED) as zf:
+                # fixed date: the same files make the same zip, byte for byte
+                os.utime(dad, (1767225600, 1767225600))
+                zf.write(dad, 'maps-%s.dad' % pack)
+            os.remove(dad)
+            os.replace(tmp, cached)
+            print('map pack %s: %d files, %d MB stored -> %d MB (%d s, new)' % (pack, len(rows), raw >> 20, os.path.getsize(cached) >> 20, time.time() - t0))
+        else:
+            print('map pack %s: %d files, unchanged (%s)' % (pack, len(rows), os.path.basename(cached)))
+        shutil.copyfile(cached, os.path.join(dest, asset))
+        out.append((pack, asset, os.path.getsize(cached), hashlib.md5(open(cached, 'rb').read()).hexdigest()))
+    return out
 
 
 def default_settings(out):

@@ -721,6 +721,91 @@ static void PatchScreenElementGuards() {
     DebugLog(msg);
 }
 
+// Stuck terrain sounds (Noah 2026-11-24: a grind / roll sound kept playing for minutes). Each voice has a handle row at
+// 0x6F7A68 (stride 0x3C: +0 handle id, +4 base id). When a voice finishes, 0x47C810 clears only its busy byte and the row
+// keeps its old id. The id-in-use check 0x47BAB0, the update-by-id 0x47B7C0 and the object-list stops 0x47BB50/0x47BC30 stop
+// at the FIRST row with that id, so a stale row makes the game hand one id to two playing sounds; stopping one then stops the
+// wrong copy and the skater loop (0x513BED) loses its real voice, which plays forever. The 10 bytes at 0x47C846 (dec the
+// playing count + clear busy) become a jump to a stub that does the same and also zeroes the finished voice's handle row
+// (+0 and +4), so no stale ids are left. edi = voice index there; edx is free.
+static void PatchSoundStaleHandles() {
+    BYTE* at = (BYTE*)0x47C846;
+    static const BYTE orig[10] = { 0xA1,0x48,0x8A,0x6F,0x00, 0x48, 0xC6,0x46,0x10,0x00 };  // mov eax,[6F8A48]; dec eax; mov byte [esi+10],0
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: sound stale handle fix skipped, bytes at 0x47C846 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, sizeof orig); s += sizeof orig;                          // original 3 instructions
+    *s++ = 0x6B; *s++ = 0xD7; *s++ = 0x3C;                                   // imul edx,edi,0x3C
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A68; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A68],0
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A6C; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A6C],0
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x47C850 - (DWORD)(s + 5); s += 5;         // jmp 0x47C850 (mov [6F8A48],eax)
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x47C846 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: sound stale handle fix applied (0x47C846)");
+}
+
+// Walking camera with no skater (2026-11-27 Dev crash, THUGPro+0x125030 writing 0x70C): when the skater switches from
+// skating to walking (SkaterPhysicsControl_SwitchSkatingToWalking -> 0x517940), the walk camera copies the skater
+// camera's state in 0x524FF0 and clears a byte in its target's SkaterCorePhysics ([esi+0xA0]+0x70C). That pointer is
+// NULL whenever the walk camera was unhooked from the skater (skatercam0 retarget 0x53A910 calls SetSkater(0) when the
+// camera is on anything but the local skater). Seen when quitting to the menu while driving a car. The 20 bytes at
+// 0x525022 become a jump to a stub that does the same work but skips that one write when the pointer is NULL.
+static volatile LONG g_walkCamLogged = 0;
+
+static void WalkCamGuardLogOnce() {
+    if (InterlockedExchange(&g_walkCamLogged, 1)) return;
+    char path[MAX_PATH], line[160];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    path[n] = 0;
+    char logp[MAX_PATH];
+    snprintf(logp, sizeof logp, "%sdadmod\\mainmenu.log", path);
+    SYSTEMTIME t; GetLocalTime(&t);
+    snprintf(line, sizeof line, "%02d:%02d:%02d walk camera guard: switched to walking while the walk camera had no skater\r\n",
+             t.wHour, t.wMinute, t.wSecond);
+    HANDLE f = CreateFileA(logp, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) { Put(f, line); CloseHandle(f); }
+}
+
+static void PatchWalkCameraNoSkater() {
+    BYTE* at = (BYTE*)0x525022;
+    static const BYTE orig[20] = { 0x8B,0x8E,0xA0,0x00,0x00,0x00, 0x33,0xC0, 0x89,0x56,0x20, 0x88,0x46,0x1C,
+                                   0x88,0x81,0x0C,0x07,0x00,0x00 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: walk camera no-skater guard skipped, bytes at 0x525022 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, 14); s += 14;                          // mov ecx,[esi+0xA0]; xor eax,eax; mov [esi+0x20],edx; mov [esi+0x1C],al
+    *s++ = 0x85; *s++ = 0xC9;                              // test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                              // jz none (skip the 6-byte write + 5-byte jmp)
+    memcpy(s, orig + 14, 6); s += 6;                       // mov [ecx+0x70C],al
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x525036 - (DWORD)(s + 5); s += 5;            // jmp 0x525036
+    *s = 0xE8; *(DWORD*)(s + 1) = (DWORD)&WalkCamGuardLogOnce - (DWORD)(s + 5); s += 5;   // none: call WalkCamGuardLogOnce
+    *s++ = 0x33; *s++ = 0xC0;                              // xor eax,eax (the code after 0x525036 stores eax = 0)
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x525036 - (DWORD)(s + 5); s += 5;            // jmp 0x525036
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x525022 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: walk camera no-skater guard applied (0x525022)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -739,6 +824,8 @@ static void Install() {
     PatchGotParamNullThis();
     PatchModelGeometryNull();
     PatchScreenElementGuards();
+    PatchSoundStaleHandles();
+    PatchWalkCameraNoSkater();
 }
 
 }  // namespace crashlog

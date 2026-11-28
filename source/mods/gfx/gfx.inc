@@ -897,6 +897,22 @@ static DWORD SwapCull(DWORD c);
 
 static bool g_inPost = false;     // our own draws: hooks pass straight through
 static DWORD g_presents = 0;
+// File polls (Noah 2026-11-24, stutter hunt): the frame-end checks of gfx.ini and the request files take turns, one file
+// per frame at most and each about once a second (PollPick in EndFrame).
+enum { kPollIni, kPollShot, kPollFgDebug, kPollLastGame, kPollFireworks, kPollCount };
+static int g_pollSlot = -1;          // the file this frame may check (-1: none)
+static DWORD g_fileCheckTick = 0;    // GetTickCount of the last file check
+static void PollPick() {
+    static DWORD last = 0;
+    static int next = 0;
+    DWORD now = GetTickCount();
+    g_pollSlot = -1;
+    if (now - last < 1000 / kPollCount) return;
+    last = now;
+    g_pollSlot = next;
+    next = (next + 1) % kPollCount;
+    g_fileCheckTick = now;
+}
 static bool g_sceneDone = false;  // scene effects already ran this frame (so 2D drawing has started)
 static bool g_galaxyDone = false;
 static bool g_skySeen = false;  // the replacement sky drew on this level (2026-11-22, MapLookNow)
@@ -2070,6 +2086,30 @@ static void FreeTargets() {
     g_intzBound = false;
 }
 
+// Files we no longer need: old shader cache entries and old frame generation recordings (Noah 2026-11-24: dadmod
+// must not fill players' disks). Player build: deleted. Dev build: moved to dadmod\archive\retired\ instead (nothing
+// on Noah's PC is deleted by our code; he empties that folder when he wants).
+static void Retire(const std::string& path, bool dir) {
+#ifdef DADMOD_CLIENT_HAS_MAINMENU
+    if (dir) {
+        WIN32_FIND_DATAA fd;
+        HANDLE h = FindFirstFileA((path + "\\*").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) DeleteFileA((path + "\\" + fd.cFileName).c_str()); } while (FindNextFileA(h, &fd));
+            FindClose(h);
+        }
+        RemoveDirectoryA(path.c_str());
+    } else DeleteFileA(path.c_str());
+#else
+    (void)dir;
+    CreateDirectoryA(ExeDirFile("archive").c_str(), nullptr);
+    CreateDirectoryA(ExeDirFile("archive\\retired").c_str(), nullptr);
+    size_t sl = path.find_last_of('\\');
+    std::string to = ExeDirFile("archive\\retired\\") + (sl == std::string::npos ? path : path.substr(sl + 1));
+    if (!MoveFileExA(path.c_str(), to.c_str(), 0)) MoveFileExA(path.c_str(), (to + "_" + std::to_string(GetTickCount())).c_str(), 0);
+#endif
+}
+
 // Compiled shader cache (Noah 2026-10-20: boot got ~10 s slower once the sky/weather/fog shaders grew;
 // D3DXCompileShader ran for every shader on every start). Bytecode is kept in
 // dadmod\shadercache\<entry>_<hash of the shader source>.bin and reused until the source changes.
@@ -2981,12 +3021,14 @@ static void UpdateWorld() {
 
     // fireworks: a won game (last_game.txt is rewritten), THUGPro Manager's Launch now, or the timer
     int fwm = V("gfx_fireworks");
-    if ((g_presents & 31) == 0) {
+    if (g_pollSlot == kPollLastGame) {
         WIN32_FILE_ATTRIBUTE_DATA fa;
         FILETIME t = {};
         if (GetFileAttributesExA(ExeDirFile("last_game.txt").c_str(), GetFileExInfoStandard, &fa)) t = fa.ftLastWriteTime;
         if (!g_lastGameInit) { g_lastGame = t; g_lastGameInit = true; }
         else if (CompareFileTime(&t, &g_lastGame)) { g_lastGame = t; if (fwm) FireworksShow(14, "game over"); }
+    }
+    if (g_pollSlot == kPollFireworks) {
         std::string req = ExeDirFile("gfx_fireworks.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); FireworksShow(12, "THUGPro Manager"); }
     }
@@ -3434,9 +3476,20 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         if (g_lqDis->GetData(&dis, sizeof dis, 0) == S_OK && g_lqFreq->GetData(&f, sizeof f, 0) == S_OK &&
             g_lqA->GetData(&t0, sizeof t0, 0) == S_OK && g_lqM->GetData(&tm, sizeof tm, 0) == S_OK &&
             g_lqB->GetData(&tb, sizeof tb, 0) == S_OK && g_lqW->GetData(&tw, sizeof tw, 0) == S_OK) {
-            if (!dis && f)
-                mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
-                           (tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, g_lqDrawn, g_bulbN, g_lqArea, (tw - tb) * 1000.0 / f, g_winDrawsLast);
+            if (!dis && f) {
+                // logged only when the numbers change a lot (or every 10 minutes), not every 5 s (Noah 2026-11-24: small logs)
+                static double lastMs[3] = {-1, -1, -1}, lastAt = 0;
+                static int lastBulbs = -1;
+                double ms[3] = {(tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, (tw - tb) * 1000.0 / f};
+                bool big = g_bulbN != lastBulbs || NowS() - lastAt > 600.0;
+                for (int i = 0; i < 3 && !big; ++i) { double d = fabs(ms[i] - lastMs[i]); big = d > 0.5 && d > 0.5 * lastMs[i]; }
+                if (big) {
+                    mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
+                               ms[0], ms[1], g_lqDrawn, g_bulbN, g_lqArea, ms[2], g_winDrawsLast);
+                    for (int i = 0; i < 3; ++i) lastMs[i] = ms[i];
+                    lastBulbs = g_bulbN; lastAt = NowS();
+                }
+            }
             g_lqState = 0; g_lqNext = NowS() + 5.0;
         }
     }
@@ -3633,9 +3686,39 @@ static void RunScreen(IDirect3DDevice9* dev) {
 static void NoteDeviceLost(HRESULT hr);  // used by framegen.inc, defined below
 #include "framegen.inc"  // frame generation (Noah 2026-11-21)
 
+// Shader cache cleanup (Noah 2026-11-24): every build writes new cache files (the name holds a hash of the shader
+// source) and nothing removed the old ones. Once per start, on a worker thread, files whose hash is not the current
+// gfx or frame generation one are retired (see Retire).
+static DWORD WINAPI ShaderCachePruneThread(LPVOID) {
+    char cur[2][24];
+    wsprintfA(cur[0], "_%08X%08X.bin", (DWORD)(ShaderSourceHash() >> 32), (DWORD)ShaderSourceHash());
+    unsigned long long fh = FgSourceHash();
+    wsprintfA(cur[1], "_%08X%08X.bin", (DWORD)(fh >> 32), (DWORD)fh);
+    std::vector<std::string> old;
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(ExeDirFile("shadercache\\*.bin").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        std::string n = fd.cFileName;
+        bool keep = false;
+        for (auto& c : cur) if (n.size() > strlen(c) && !_stricmp(n.c_str() + n.size() - strlen(c), c)) keep = true;
+        if (!keep && !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) old.push_back(n);
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    EnterCriticalSection(CompileLock());
+    for (auto& n : old) Retire(ExeDirFile("shadercache") + "\\" + n, false);
+    LeaveCriticalSection(CompileLock());
+    if (!old.empty()) mmenu::Log("gfx: shader cache: %d old file(s) from earlier versions cleaned up", (int)old.size());
+    return 0;
+}
+static void ShaderCachePrune() {
+    HANDLE t = CreateThread(nullptr, 0, ShaderCachePruneThread, nullptr, 0, nullptr);
+    if (t) CloseHandle(t);
+}
+
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
-    if ((g_presents & 63) == 0) {  // ~once a second: pick up edits THUGPro Manager made to gfx.ini
+    if (g_pollSlot == kPollIni) {  // once a second: pick up edits THUGPro Manager (or another open game) made to gfx.ini
         FILETIME t = IniTime();
         if (CompareFileTime(&t, &g_iniTime)) {
             int trick = V("gfx_tricksfx"), postfx = V("gfx_postfx");
@@ -3656,9 +3739,11 @@ static void CheckKeysAndIni() {
     bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
     if (now && !down && shift) FgDebugAsk();  // Shift+F11: frame generation debugger records the next frames (framegen.inc)
     else if (now && !down && V("gfx_shotkey")) g_shotPending = true;
-    if ((g_presents & 31) == 0) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
+    if (g_pollSlot == kPollShot) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
         std::string req = ExeDirFile("gfx_shot.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); g_shotPending = true; }
+    }
+    if (g_pollSlot == kPollFgDebug) {
         std::string fq = ExeDirFile("fgdebug.txt");  // ... or a frame generation recording
         if (GetFileAttributesA(fq.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(fq.c_str()); FgDebugAsk(); }
     }
@@ -3773,7 +3858,8 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 
 static void EndFrame(IDirect3DDevice9* dev) {
     g_winDrawsLast = g_winDraws; g_winDraws = 0;
-    if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
+    if (++g_presents == 1) { mmenu::Log("gfx: first frame presented"); ShaderCachePrune(); }
+    PollPick();
     g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame
         dev->BeginScene();

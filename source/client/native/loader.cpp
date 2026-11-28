@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include "widefile.inc"   // all file calls go through the wide Windows functions
+#include "../../mods/logcap/logcap.inc"  // capped logs: every log trims itself in place (Noah 2026-11-24)
 
 #ifdef _MSC_VER
 #define THISCALL __thiscall
@@ -150,10 +151,8 @@ static void Diag(const char*, ...) {}
 static void Log(const char* fmt, ...) {
     char line[600]; va_list ap; va_start(ap, fmt); _vsnprintf(line, sizeof line - 3, fmt, ap); va_end(ap);
     line[sizeof line - 3] = 0; strcat(line, "\r\n");
-    HANDLE f = CreateFileA(g_logPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, 0, NULL);  // share write: two threads logging at once used to drop a line
-    if (f != INVALID_HANDLE_VALUE) { DWORD n; WriteFile(f, line, (DWORD)strlen(line), &n, NULL); CloseHandle(f); }
+    logcap::Append(g_logPath, line, logcap::kClient);  // trims itself at 2 MB (mods/logcap/logcap.inc)
 #ifdef DADMOD_DIAG
-    else Diag("client.log write FAILED (error %lu): %s", GetLastError(), line);
     Diag("log: %.300s", line);
 #endif
 }

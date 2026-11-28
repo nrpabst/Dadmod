@@ -70,9 +70,9 @@ static void WriteLine(const char* s) {
         if (g_file == INVALID_HANDLE_VALUE) return;
     }
     DWORD w; WriteFile(g_file, s, (DWORD)strlen(s), &w, nullptr);
-    if (++g_lines % 500 == 0 && GetFileSize(g_file, nullptr) > 20u * 1024 * 1024) {   // keep it to ~40 MB: one old file
+    if (++g_lines % 500 == 0 && GetFileSize(g_file, nullptr) > logcap::kSoundLog) {   // over 5 MB: cut the oldest half in place, no .old copy (logcap.inc)
         CloseHandle(g_file); g_file = INVALID_HANDLE_VALUE;
-        MoveFileExA(DadmodFile("soundlog.txt").c_str(), DadmodFile("soundlog.old.txt").c_str(), MOVEFILE_REPLACE_EXISTING);
+        logcap::TrimLocked(DadmodFile("soundlog.txt").c_str(), logcap::kSoundLog / 2);
     }
 }
 static void Log(const char* fmt, ...) {

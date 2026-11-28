@@ -128,3 +128,16 @@ GTA 3 style handling, More Cars, Props, horn (2026-11-21, Noah: "make the handli
 - Build: cars2.q + cars2_gen.q + throw.q + throw_types.q are their own qb (qb\dadmod\dadmod_cars.qb), added to qdir.txt
   by add_qdir.py, because ButtonScripts.qb / procrastination.qb are at the 512 KB limit.
 - Not tested in game yet. Risks: prop bodies (static .mdl with the car skeleton), tuning numbers are a first guess.
+
+Game modes (2026-11-24, Noah: "can you make cars work in the middle of a gamemode as well", "should work after zero as well")
+- dadmod_cars_can_drive: online, cars work in every mode except Horse ("No cars in Horse": turn based, the game pauses and
+  teleports players between turns) and Goal Attack ("No cars in Goal Attack": getting in runs GoalManager_HideAllGoalPeds 1).
+  Offline it is still free skate only.
+- After the car starts, the skater runs dadmod_cars_drive_ai (stock DrivingAi's handlers, so Road Kill / Hit and Run still
+  work) with RunHasEnded -> dadmod_cars_run_ended: when the clock hits zero the run ends like stock EndOfRun (lands tricks,
+  drops the CTF flag, EndOfRunDone after 1 s so the round doesn't wait on the driver) but without DisablePlayerInput, so you
+  keep driving after zero. Getting in after zero (dadmod_cars_after_zero: timed mode and time_left < 1) skips that exception
+  and re-enables input; getting out after zero (before the score screen) runs stock EndOfRun instant.
+- dadmod_cars_watch gets you out when a new game starts (game mode changes to anything but free skate; going back to free
+  skate after a game keeps you in) or a new round starts (time left jumps up by more than 3 s in a timed mode).
+- Untested in a real game so far (live-loaded into Dev 2026-11-24).

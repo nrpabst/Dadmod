@@ -79,8 +79,17 @@ script dadmod_cars_can_drive
     if IsTrue THUGPRO_ObserveOn
         return dadmod_c2_no = "Not while observing"
     endif
-    if not ( ( GameModeEquals is_lobby ) or ( GameModeEquals is_singlesession ) )
-        return dadmod_c2_no = "Cars work in free skate only"
+    if InNetGame
+        if GameModeEquals is_horse
+            return dadmod_c2_no = "No cars in Horse"
+        endif
+        if GameModeEquals is_goal_attack
+            return dadmod_c2_no = "No cars in Goal Attack"
+        endif
+    else
+        if not ( ( GameModeEquals is_lobby ) or ( GameModeEquals is_singlesession ) )
+            return dadmod_c2_no = "Cars work in free skate only"
+        endif
     endif
     return dadmod_c2_ok = 1
 endscript
@@ -184,6 +193,15 @@ script dadmod_cars_go
     Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
     PlayerVehicleCamera : VehicleCamera_Reset
     SetActiveCamera id = PlayerVehicleCamera
+    dadmod_cars_after_zero
+    if GotParam dadmod_c2_z
+        MakeSkaterGoto dadmod_cars_drive_ai params = { dadmod_c2_z = 1 }
+        if ObjectExists id = skater
+            Skater : EnablePlayerInput
+        endif
+    else
+        MakeSkaterGoto dadmod_cars_drive_ai
+    endif
     dadmod_cars_prop_show VehicleSetup = <VehicleSetup>
     if ObjectExists id = skater
         Skater : SetTags dadmod_c2_hide = <dadmod_c2_hide>
@@ -206,6 +224,10 @@ script dadmod_cars_wait_exit
     dadmod_cars_exit_now
 endscript
 script dadmod_cars_watch dadmod_c2_hide = 0
+    GetGameMode
+    dadmod_c2_gm = <gamemode>
+    dadmod_cars_time_left
+    dadmod_c2_tl = <dadmod_c2_t>
     begin
         dadmod_cars_beat dadmod_c2_hide = <dadmod_c2_hide>
         wait 3 gameframes
@@ -237,10 +259,31 @@ script dadmod_cars_watch dadmod_c2_hide = 0
         dadmod_cars_can_drive
         if GotParam dadmod_c2_no
             KillSpawnedScript Name = dadmod_cars_wait_exit
-            THUGRECOMP_Log text = "cars2: left free skate or level changing, getting out"
+            THUGRECOMP_Log text = "cars2: car not allowed here any more, getting out"
             dadmod_cars_exit_now
             break
         endif
+        GetGameMode
+        if not ( <gamemode> = <dadmod_c2_gm> )
+            if GameModeEquals is_lobby
+                dadmod_c2_gm = <gamemode>
+            else
+                KillSpawnedScript Name = dadmod_cars_wait_exit
+                THUGRECOMP_Log text = "cars2: a new game is starting, getting out"
+                dadmod_cars_exit_now
+                break
+            endif
+        endif
+        dadmod_cars_time_left
+        if not GameModeEquals is_lobby
+            if ( <dadmod_c2_t> > ( <dadmod_c2_tl> + 3000 ) )
+                KillSpawnedScript Name = dadmod_cars_wait_exit
+                THUGRECOMP_Log text = "cars2: a new round is starting, getting out"
+                dadmod_cars_exit_now
+                break
+            endif
+        endif
+        dadmod_c2_tl = <dadmod_c2_t>
     repeat
 endscript
 script dadmod_cars_hint_off
@@ -339,6 +382,13 @@ script dadmod_cars_exit_now
     wait 2 gameframes
     if ObjectExists id = skater
         Skater : SetSpeed 0
+        dadmod_cars_after_zero
+        if GotParam dadmod_c2_z
+            if not GameIsOver
+                THUGRECOMP_Log text = "cars2: got out after the clock hit zero, ending the run"
+                MakeSkaterGoto EndOfRun params = { instant }
+            endif
+        endif
     endif
 endscript
 script dadmod_cars_cleanup
@@ -633,4 +683,75 @@ script dadmod_cars_start_failed
         SetActiveCamera id = <CameraId>
     endif
     MakeSkaterGoto Switch_OnGroundAi params = { NewScript = OnGroundAi }
+endscript
+script dadmod_cars_time_left
+    dadmod_c2_t = 0
+    if InNetGame
+        if not GameModeEquals is_lobby
+            if not GameModeEquals default_time_limit
+                return dadmod_c2_t = 0
+            endif
+            GoalManager_GetTimeLeftInNetGame
+            if GotParam time_left
+                dadmod_c2_t = <time_left>
+            endif
+        endif
+    endif
+    return dadmod_c2_t = <dadmod_c2_t>
+endscript
+script dadmod_cars_after_zero
+    if InNetGame
+        if not GameModeEquals is_lobby
+            if not GameModeEquals default_time_limit
+                return dadmod_c2_t = 0
+            endif
+            GoalManager_GetTimeLeftInNetGame
+            if GotParam time_left
+                if ( <time_left> < 1 )
+                    return dadmod_c2_z = 1
+                endif
+            endif
+        endif
+    endif
+endscript
+script dadmod_cars_drive_ai
+    ClearAllWalkingExceptions
+    ClearExceptions
+    SetEventHandler ex = Vehicle_BodyCollision scr = Vehicle_BodyCollision
+    SetEventHandler ex = SkaterCollideBail scr = DrivingCollisionLost
+    SetEventHandler ex = MadeOtherSkaterBail scr = MadeOtherSkaterBailCar
+    if not GotParam dadmod_c2_z
+        SetException ex = RunHasEnded scr = dadmod_cars_run_ended
+    endif
+    SetException ex = GoalHasEnded scr = Goal_EndOfRun
+    block
+endscript
+script dadmod_cars_run_ended
+    ClearExceptions
+    SetEventHandler ex = Vehicle_BodyCollision scr = Vehicle_BodyCollision
+    SetEventHandler ex = SkaterCollideBail scr = DrivingCollisionLost
+    SetEventHandler ex = MadeOtherSkaterBail scr = MadeOtherSkaterBailCar
+    OnExitRun Script_ClearEndofRunStarted
+    EndOfRunStarted
+    if IsTrue THUGPRO_ObserveOn
+        ResetScorePot
+    else
+        LandSkaterTricks
+    endif
+    if InNetGame
+        if not GameIsOver
+            if GameModeEquals is_ctf
+                THUGPRO_DropFlag
+            endif
+        endif
+    endif
+    THUGRECOMP_Log text = "cars2: clock hit zero while driving, run ended, still driving"
+    wait 1 seconds
+    if IsTrue AlreadyEndedRun
+        Change AlreadyEndedRun = 0
+    else
+        FireEvent Type = EndOfRunDone
+        EndOfRunDone
+    endif
+    block
 endscript

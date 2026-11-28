@@ -388,6 +388,58 @@ static void PatchParticleNullVB() {
     DebugLog("crashlog: particle null vertex buffer guard applied (0x4D54B8)");
 }
 
+// IsAlive on a missing node online (2026-11-23): getting out of a car runs the stock
+// ToggleUserControlledVehicleMode_orig -> GoalManager_HideAllGoalPeds 0 -> goal_add_ped_arrow, which does
+// "IsAlive name = <trigger_obj_id>" with no NodeExists check. In net games IsAlive (0x5A4DA0) looks the node up
+// (0x45C1B0) and hands it to the AbsentInNetGames check 0x565BB0 without a NULL check, so a goal whose trigger node is
+// not in the level crashed at 0x476B41 reading 4 (Dev, Barcelona online, twice on car exit). A NULL node now answers
+// "not absent" and IsAlive carries on down its normal (offline) path, which handles a missing object.
+static volatile LONG g_nodeGuardLogged = 0;
+
+static void NodeGuardLogOnce() {
+    if (InterlockedExchange(&g_nodeGuardLogged, 1)) return;
+    char path[MAX_PATH], line[160];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    path[n] = 0;
+    char logp[MAX_PATH];
+    snprintf(logp, sizeof logp, "%sdadmod\\mainmenu.log", path);
+    SYSTEMTIME t; GetLocalTime(&t);
+    snprintf(line, sizeof line, "%02d:%02d:%02d node guard: IsAlive asked about an object this level doesn't have\r\n",
+             t.wHour, t.wMinute, t.wSecond);
+    HANDLE f = CreateFileA(logp, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) { Put(f, line); CloseHandle(f); }
+}
+
+static void PatchIsAliveMissingNode() {
+    BYTE* at = (BYTE*)0x565BB0;
+    static const BYTE orig[9] = { 0x8B, 0x4C, 0x24, 0x04, 0x68, 0xC6, 0x0A, 0x91, 0x68 };   // mov ecx,[esp+4]; push AbsentInNetGames
+    if (memcmp(at, orig, sizeof orig) != 0 || at[9] != 0xE8) {
+        DebugLog("crashlog: IsAlive missing node guard skipped, bytes at 0x565BB0 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, 4); s += 4;                                              // mov ecx, [esp+4]
+    *s++ = 0x85; *s++ = 0xC9;                                                // test ecx, ecx
+    *s++ = 0x74; *s++ = 0x0A;                                                // jz zero
+    memcpy(s, orig + 4, 5); s += 5;                                          // push AbsentInNetGames
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x565BB9 - (DWORD)(s + 5); s += 5;         // jmp 0x565BB9 (the original call)
+    *s = 0xE8; *(DWORD*)(s + 1) = (DWORD)&NodeGuardLogOnce - (DWORD)(s + 5); s += 5;   // zero: call NodeGuardLogOnce
+    *s++ = 0x33; *s++ = 0xC0;                                                // xor eax, eax
+    *s++ = 0xC2; *s++ = 0x04; *s++ = 0x00;                                   // ret 4
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x565BB0 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: IsAlive missing node guard applied (0x565BB0)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -398,6 +450,7 @@ static void Install() {
     PatchSkaterCamera();
     PatchGlobalFlags();
     PatchParticleNullVB();
+    PatchIsAliveMissingNode();
 }
 
 }  // namespace crashlog

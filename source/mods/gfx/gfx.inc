@@ -1468,9 +1468,10 @@ float3 skies(float3 d, float style, float t) {
     [branch] if (style < 13.5) return sky_blackhole(d, t, az, el);
     return sky_candy(d, t, az, el);
 }
-// time of day + sky boost for the extra skies; sky boost 5 (the default) leaves them as designed
+// time of day + sky boost for the extra skies; sky boost 0 (the default) leaves them as designed, 10 makes them richer.
+// 2026-11-24: boost 0 used to take 55% of the color out (the skies were tuned at 5), so vaporwave and cotton candy came out grey
 float3 skylook(float3 c, float3 d, float style, float t, float tod, float3 st10, float3 st06) {
-    float pop = sk.y, el = d.y;
+    float pop = 0.5 + sk.y * 0.5, el = d.y;
     bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;  // golden, vapor, rainbow, candy
     float lum = dot(c, L);
     c = max(lerp(lum.xxx, c, 1 + (pop - 0.5) * 1.1), 0) * (1 + (pop - 0.5) * 0.25);

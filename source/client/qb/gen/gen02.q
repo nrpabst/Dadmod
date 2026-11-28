@@ -48,6 +48,8 @@ script create_dadmod_gfx_items
     dadmod_ui_item id = gfx_wxamt key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up."
     dadmod_ui_item id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
     dadmod_ui_item id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
+    dadmod_ui_item id = gfx_lamplights key = "gfx_lamplights" label = "Lamp lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lamplights desc = "Street lamp light at night: bulb glow and light on the ground and walls. Off also saves work."
+    dadmod_ui_item id = gfx_lampposts key = "gfx_lampposts" label = "Extra lamp posts" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lampposts desc = "The extra lamp posts added to some maps, with their light. Hide keeps the map's own lamps lit."
     dadmod_ui_item id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number."
     dadmod_ui_item id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder."
     dadmod_ui_item id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture."
@@ -2971,6 +2973,7 @@ script dadmod_tod_watch
     begin
         wait 30 gameframes
         dadmod_tod_server_state
+        dadmod_serverlog_tick
         GetLevelStructureName
         if StructureContains structure = ( <level_structure_name> ) level
             FormatText TextName = lk "gfx_level_%a" a = ( <level_structure_name> . level )
@@ -4000,10 +4003,22 @@ script create_thugpro_level_menu_item {
         exclude = 1
     endif
     if GotParam level
+        if ScriptExists dadmod_level_files_ok
+            if ArrayContains array = dadmod_added_levels contains = <level>
+                dadmod_level_files_ok level = <level>
+                if not GotParam files_ok
+                    focusable = not_focusable
+                    exclude = 1
+                endif
+            endif
+        endif
         if InNetGame
             if ArrayContains array = dadmod_added_levels contains = <level>
                 if ScriptExists dadmod_level_online_ok
                     dadmod_level_online_ok level = <level>
+                endif
+                if THUGRECOMP_ServerMapsLocked
+                    RemoveParameter ok
                 endif
                 if not GotParam ok
                     focusable = not_focusable
@@ -4431,7 +4446,7 @@ script dadmod_cars_menu
     }
     make_thugpro_menu_item {
     text = "More Cars  >"
-    description_text = "20 more cars. DadMod players see them, others see a green car"
+    description_text = "20 more cars. DadMod players see them, others see them on a dadmod server"
     pad_choose_script = dadmod_cars_menu_extra
     }
     make_thugpro_menu_item {
@@ -4456,6 +4471,9 @@ script dadmod_cars_menu
     dadmod_cars_item t = "Sports Car" c = SportsCar
     dadmod_cars_item t = "Forklift" c = Forklift
     dadmod_cars_item t = "Blimp" c = Blimp
+    if ScriptExists dadmod_cars_stock_row
+        dadmod_cars_stock_row
+    endif
     thugpro_menu_finalize
 endscript
 
@@ -4480,8 +4498,17 @@ script dadmod_cars_can_drive
     if IsTrue THUGPRO_ObserveOn
         return dadmod_c2_no = "Not while observing"
     endif
-    if not ( ( GameModeEquals is_lobby ) or ( GameModeEquals is_singlesession ) )
-        return dadmod_c2_no = "Cars work in free skate only"
+    if InNetGame
+        if GameModeEquals is_horse
+            return dadmod_c2_no = "No cars in Horse"
+        endif
+        if GameModeEquals is_goal_attack
+            return dadmod_c2_no = "No cars in Goal Attack"
+        endif
+    else
+        if not ( ( GameModeEquals is_lobby ) or ( GameModeEquals is_singlesession ) )
+            return dadmod_c2_no = "Cars work in free skate only"
+        endif
     endif
     return dadmod_c2_ok = 1
 endscript
@@ -4497,6 +4524,7 @@ script dadmod_cars_pick
     endif
     exit_pause_menu
     KillSpawnedScript Name = dadmod_cars_go
+    Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
     SpawnScript dadmod_cars_go params = { dadmod_c2_c = <dadmod_c2_c> } NotSessionSpecific = 1
 endscript
 
@@ -4533,10 +4561,8 @@ script dadmod_cars_go
     endif
     dadmod_cars_boot
     GetVehicleSetup control_type = <dadmod_c2_c>
-    if not StructureContains structure = ( VehicleSetupMapping ) <dadmod_c2_c>
-        if StructureContains structure = ( dadmod_c2_extra_map ) <dadmod_c2_c>
-            VehicleSetup = ( dadmod_c2_extra_map . <dadmod_c2_c> )
-        endif
+    if StructureContains structure = ( dadmod_c2_extra_map ) <dadmod_c2_c>
+        VehicleSetup = ( dadmod_c2_extra_map . <dadmod_c2_c> )
     endif
     Skater : Obj_GetPosition
     VehicleSetup = { <VehicleSetup> control_type = <dadmod_c2_c> Pos = ( <Pos> + (0.0,20.0,0.0) ) }
@@ -4556,6 +4582,11 @@ script dadmod_cars_go
     if StructureContains structure = <VehicleSetup> make_skater_visible
         dadmod_c2_hide = 0
     endif
+    dadmod_c2_bf = 0
+    if StructureContains structure = <VehicleSetup> dadmod_bonefix
+        dadmod_c2_bf = 1
+    endif
+    THUGRECOMP_CarsDrive bonefix = <dadmod_c2_bf>
     THUGRECOMP_Log text = "cars2: get in"
     LoadSound "Shared\\Auto\\CarLoop" vol = 100 dropoff = 150 PosUpdateWithDoppler
     LoadSound "Vehicles\\Vehicle_Tire_Loop"
@@ -4580,6 +4611,7 @@ script dadmod_cars_go
             THUGRECOMP_Log text = "cars2: no PlayerVehicleCamera after 30 frames"
             dadmod_cars_msg text = "The car didn't start"
             Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
+            dadmod_cars_start_failed
             return
         endif
         dadmod_c2_k = ( <dadmod_c2_k> + 1 )
@@ -4588,9 +4620,19 @@ script dadmod_cars_go
     Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
     PlayerVehicleCamera : VehicleCamera_Reset
     SetActiveCamera id = PlayerVehicleCamera
+    dadmod_cars_after_zero
+    if GotParam dadmod_c2_z
+        MakeSkaterGoto dadmod_cars_drive_ai params = { dadmod_c2_z = 1 }
+        if ObjectExists id = skater
+            Skater : EnablePlayerInput
+        endif
+    else
+        MakeSkaterGoto dadmod_cars_drive_ai
+    endif
     dadmod_cars_prop_show VehicleSetup = <VehicleSetup>
     if ObjectExists id = skater
         Skater : SetTags dadmod_c2_hide = <dadmod_c2_hide>
+        Skater : SetTags dadmod_c2_ct = <dadmod_c2_c>
         if ( <dadmod_c2_hide> = 1 )
             Skater : hide
         endif
@@ -4611,6 +4653,10 @@ script dadmod_cars_wait_exit
 endscript
 
 script dadmod_cars_watch dadmod_c2_hide = 0
+    GetGameMode
+    dadmod_c2_gm = <gamemode>
+    dadmod_cars_time_left
+    dadmod_c2_tl = <dadmod_c2_t>
     begin
         dadmod_cars_beat dadmod_c2_hide = <dadmod_c2_hide>
         wait 3 gameframes
@@ -4642,10 +4688,31 @@ script dadmod_cars_watch dadmod_c2_hide = 0
         dadmod_cars_can_drive
         if GotParam dadmod_c2_no
             KillSpawnedScript Name = dadmod_cars_wait_exit
-            THUGRECOMP_Log text = "cars2: left free skate or level changing, getting out"
+            THUGRECOMP_Log text = "cars2: car not allowed here any more, getting out"
             dadmod_cars_exit_now
             break
         endif
+        GetGameMode
+        if not ( <gamemode> = <dadmod_c2_gm> )
+            if GameModeEquals is_lobby
+                dadmod_c2_gm = <gamemode>
+            else
+                KillSpawnedScript Name = dadmod_cars_wait_exit
+                THUGRECOMP_Log text = "cars2: a new game is starting, getting out"
+                dadmod_cars_exit_now
+                break
+            endif
+        endif
+        dadmod_cars_time_left
+        if not GameModeEquals is_lobby
+            if ( <dadmod_c2_t> > ( <dadmod_c2_tl> + 3000 ) )
+                KillSpawnedScript Name = dadmod_cars_wait_exit
+                THUGRECOMP_Log text = "cars2: a new round is starting, getting out"
+                dadmod_cars_exit_now
+                break
+            endif
+        endif
+        dadmod_c2_tl = <dadmod_c2_t>
     repeat
 endscript
 
@@ -4688,6 +4755,11 @@ script dadmod_cars_beat dadmod_c2_hide = 0
         THUGRECOMP_CarsDrive on = 1
         if GotParam horn
             dadmod_cars_horn
+        endif
+    endif
+    if GotParam cam_reset
+        if ObjectExists id = PlayerVehicleCamera
+            PlayerVehicleCamera : VehicleCamera_Reset
         endif
     endif
 endscript
@@ -4737,6 +4809,9 @@ script dadmod_cars_exit_now
     else
         dadmod_cars_cleanup
     endif
+    if not ObjectExists id = skater
+        return
+    endif
     if GotParam dadmod_c2_pos
         Skater : Obj_SetPosition position = ( <dadmod_c2_pos> + (0.0,10.0,0.0) )
     endif
@@ -4746,6 +4821,27 @@ script dadmod_cars_exit_now
     wait 2 gameframes
     if ObjectExists id = skater
         Skater : SetSpeed 0
+        THUGRECOMP_CarsDrive camfree = 1
+        dadmod_cars_after_zero
+        if GotParam dadmod_c2_z
+            if not GameIsOver
+                THUGRECOMP_Log text = "cars2: got out after the clock hit zero, ending the run"
+                MakeSkaterGoto EndOfRun params = { instant }
+            endif
+        endif
+    endif
+endscript
+
+script dadmod_cars_on_quit
+    KillSpawnedScript Name = dadmod_cars_go
+    KillSpawnedScript Name = dadmod_cars_wait_exit
+    KillSpawnedScript Name = dadmod_cars_watch
+    if not ObjectExists id = skater
+        return
+    endif
+    if Skater : Driving
+        THUGRECOMP_Log text = "cars2: leaving the game, getting out of the car first"
+        dadmod_cars_exit_now
     endif
 endscript
 
@@ -4998,6 +5094,11 @@ script dadmod_cars_remote_prop_one
     if ( <dadmod_c2_want> = 0 )
         if ObjectExists id = <dadmod_c2_pv>
             <dadmod_c2_pv> : Die
+            if GotParam dadmod_c2_car
+                if ObjectExists id = <dadmod_c2_car>
+                    <dadmod_c2_car> : unhide
+                endif
+            endif
         endif
         return
     endif
@@ -5031,8 +5132,104 @@ script dadmod_cars_remote_prop_one
     endif
 endscript
 
+script dadmod_cars_start_failed
+    dadmod_cars_hint_off
+    dadmod_cars_prop_hide
+    if not ObjectExists id = skater
+        return
+    endif
+    if Skater : Driving
+        dadmod_cars_exit_now
+        return
+    endif
+    if Skater : IsHidden
+        Skater : unhide
+    endif
+    Skater : GetCameraId
+    if ObjectExists id = <CameraId>
+        SetActiveCamera id = <CameraId>
+    endif
+    MakeSkaterGoto Switch_OnGroundAi params = { NewScript = OnGroundAi }
+endscript
+
+script dadmod_cars_time_left
+    dadmod_c2_t = 0
+    if InNetGame
+        if not GameModeEquals is_lobby
+            if not GameModeEquals default_time_limit
+                return dadmod_c2_t = 0
+            endif
+            GoalManager_GetTimeLeftInNetGame
+            if GotParam time_left
+                dadmod_c2_t = <time_left>
+            endif
+        endif
+    endif
+    return dadmod_c2_t = <dadmod_c2_t>
+endscript
+
+script dadmod_cars_after_zero
+    if InNetGame
+        if not GameModeEquals is_lobby
+            if not GameModeEquals default_time_limit
+                return dadmod_c2_t = 0
+            endif
+            GoalManager_GetTimeLeftInNetGame
+            if GotParam time_left
+                if ( <time_left> < 1 )
+                    return dadmod_c2_z = 1
+                endif
+            endif
+        endif
+    endif
+endscript
+
+script dadmod_cars_drive_ai
+    ClearAllWalkingExceptions
+    ClearExceptions
+    SetEventHandler ex = Vehicle_BodyCollision scr = Vehicle_BodyCollision
+    SetEventHandler ex = SkaterCollideBail scr = DrivingCollisionLost
+    SetEventHandler ex = MadeOtherSkaterBail scr = MadeOtherSkaterBailCar
+    if not GotParam dadmod_c2_z
+        SetException ex = RunHasEnded scr = dadmod_cars_run_ended
+    endif
+    SetException ex = GoalHasEnded scr = Goal_EndOfRun
+    block
+endscript
+
+script dadmod_cars_run_ended
+    ClearExceptions
+    SetEventHandler ex = Vehicle_BodyCollision scr = Vehicle_BodyCollision
+    SetEventHandler ex = SkaterCollideBail scr = DrivingCollisionLost
+    SetEventHandler ex = MadeOtherSkaterBail scr = MadeOtherSkaterBailCar
+    OnExitRun Script_ClearEndofRunStarted
+    EndOfRunStarted
+    if IsTrue THUGPRO_ObserveOn
+        ResetScorePot
+    else
+        LandSkaterTricks
+    endif
+    if InNetGame
+        if not GameIsOver
+            if GameModeEquals is_ctf
+                THUGPRO_DropFlag
+            endif
+        endif
+    endif
+    THUGRECOMP_Log text = "cars2: clock hit zero while driving, run ended, still driving"
+    wait 1 seconds
+    if IsTrue AlreadyEndedRun
+        Change AlreadyEndedRun = 0
+    else
+        FireEvent Type = EndOfRunDone
+        EndOfRunDone
+    endif
+    block
+endscript
+
 dadmod_car_hearse_setup = {
 control_type = dadmod_car_hearse
+dadmod_bonefix = 1
 model = "veh\\Veh_Hearse\\Veh_Hearse.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5052,14 +5249,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(36.0,28.0,1.4e+02)
-(-36.0,28.0,1.4e+02)
-(36.0,28.0,-44.0)
+(37.0,29.4,122.4)
+(-37.0,29.4,122.4)
+(37.0,29.4,-118.4)
 ]
 [
-(26.0,48.0,58.0)
-(-26.0,48.0,58.0)
-(26.0,48.0,4.0)
+(26.7,49.4,15.1)
+(-26.7,49.4,15.1)
+(26.7,49.4,-55.6)
 ]
 ]
 engine = {
@@ -5077,7 +5274,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 14.0
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -5126,6 +5323,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_woodie_setup = {
 control_type = dadmod_car_woodie
+dadmod_bonefix = 1
 model = "veh\\Veh_Woodie\\Veh_Woodie.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5145,14 +5343,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(36.0,28.0,1.4e+02)
-(-36.0,28.0,1.4e+02)
-(36.0,28.0,-44.0)
+(41.6,29.2,121.3)
+(-41.6,29.2,121.3)
+(41.6,29.2,-92.9)
 ]
 [
-(26.0,48.0,58.0)
-(-26.0,48.0,58.0)
-(26.0,48.0,4.0)
+(30.0,49.2,25.8)
+(-30.0,49.2,25.8)
+(30.0,49.2,-37.1)
 ]
 ]
 engine = {
@@ -5170,7 +5368,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 13.8
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -5219,6 +5417,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_sedan_setup = {
 control_type = dadmod_car_sedan
+dadmod_bonefix = 1
 model = "veh\\Veh_Sedan\\Veh_Sedan.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5238,14 +5437,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(29.0,3e+01,118.0)
-(-29.0,3e+01,118.0)
-(29.0,3e+01,-44.0)
+(27.7,29.4,119.4)
+(-27.7,29.4,119.4)
+(27.7,29.4,-40.8)
 ]
 [
-(24.0,56.0,65.0)
-(-24.0,56.0,65.0)
-(24.0,56.0,0.0)
+(22.9,55.4,67.0)
+(-22.9,55.4,67.0)
+(22.9,55.4,2.7)
 ]
 ]
 engine = {
@@ -5263,7 +5462,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 11
+radius = 14.0
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -5312,6 +5511,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_smart_setup = {
 control_type = dadmod_car_smart
+dadmod_bonefix = 1
 model = "veh\\Veh_Smart_car\\Veh_Smart_Car.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5331,14 +5531,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(29.0,3e+01,118.0)
-(-29.0,3e+01,118.0)
-(29.0,3e+01,-44.0)
+(29.7,30.9,97.9)
+(-29.7,30.9,97.9)
+(29.7,30.9,-33.4)
 ]
 [
-(24.0,56.0,65.0)
-(-24.0,56.0,65.0)
-(24.0,56.0,0.0)
+(24.6,56.9,55.0)
+(-24.6,56.9,55.0)
+(24.6,56.9,2.3)
 ]
 ]
 engine = {
@@ -5356,7 +5556,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 11
+radius = 14.0
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -5405,6 +5605,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_hippyvan_setup = {
 control_type = dadmod_car_hippyvan
+dadmod_bonefix = 1
 model = "veh\\veh_HippyVan\\veh_HippyVan.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -5422,14 +5623,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(33.9,7.3,40.1)
+(-33.9,7.3,40.1)
+(33.9,7.3,-26.6)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(17.8,33.3,8.4)
+(-17.8,33.3,8.4)
+(17.8,41.3,-24.9)
 ]
 ]
 engine = {
@@ -5447,7 +5648,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 13.9
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -5496,6 +5697,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_benzvan_setup = {
 control_type = dadmod_car_benzvan
+dadmod_bonefix = 1
 model = "veh\\veh_Benz_Van\\veh_Benz_Van.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -5513,14 +5715,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(34.6,7.5,68.9)
+(-34.6,7.5,68.9)
+(34.6,7.5,-51.0)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(18.1,33.5,12.0)
+(-18.1,33.5,12.0)
+(18.1,41.5,-48.0)
 ]
 ]
 engine = {
@@ -5538,7 +5740,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 14.0
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -5587,6 +5789,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_minivan_setup = {
 control_type = dadmod_car_minivan
+dadmod_bonefix = 1
 model = "veh\\Veh_Minivan\\Veh_Minivan.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -5604,14 +5807,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(35.3,6.1,70.4)
+(-35.3,6.1,70.4)
+(35.3,6.1,-53.2)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(18.5,32.1,11.7)
+(-18.5,32.1,11.7)
+(18.5,40.1,-50.1)
 ]
 ]
 engine = {
@@ -5629,7 +5832,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 12.7
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -5678,6 +5881,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_oldvan_setup = {
 control_type = dadmod_car_oldvan
+dadmod_bonefix = 1
 model = "veh\\Veh_OldVan\\Veh_OldVan.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -5695,14 +5899,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(27.2,5.6,26.4)
+(-27.2,5.6,26.4)
+(27.2,5.6,-64.6)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(14.2,31.6,-16.8)
+(-14.2,31.6,-16.8)
+(14.2,39.6,-62.3)
 ]
 ]
 engine = {
@@ -5720,7 +5924,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 12.2
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -5769,6 +5973,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_suv_setup = {
 control_type = dadmod_car_suv
+dadmod_bonefix = 1
 model = "veh\\Veh_SUV\\Veh_SUV.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -5786,14 +5991,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(38.5,12.8,72.1)
+(-38.5,12.8,72.1)
+(38.5,12.8,-55.1)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(20.2,38.8,11.7)
+(-20.2,38.8,11.7)
+(20.2,46.8,-51.9)
 ]
 ]
 engine = {
@@ -5811,7 +6016,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 19.3
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -5860,6 +6065,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_rust_setup = {
 control_type = dadmod_car_rust
+dadmod_bonefix = 1
 model = "veh\\veh_rust\\veh_rust.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5879,14 +6085,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(36.0,28.0,1.4e+02)
-(-36.0,28.0,1.4e+02)
-(36.0,28.0,-44.0)
+(39.6,30.0,177.6)
+(-39.6,30.0,177.6)
+(39.6,30.0,-54.5)
 ]
 [
-(26.0,48.0,58.0)
-(-26.0,48.0,58.0)
-(26.0,48.0,4.0)
+(28.6,50.0,74.2)
+(-28.6,50.0,74.2)
+(28.6,50.0,6.1)
 ]
 ]
 engine = {
@@ -5904,7 +6110,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 14.6
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -5953,6 +6159,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_liberty_setup = {
 control_type = dadmod_car_liberty
+dadmod_bonefix = 1
 model = "veh\\veh_liberty\\veh_liberty.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -5972,14 +6179,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(29.0,3e+01,118.0)
-(-29.0,3e+01,118.0)
-(29.0,3e+01,-44.0)
+(28.6,30.1,113.7)
+(-28.6,30.1,113.7)
+(28.6,30.1,-38.9)
 ]
 [
-(24.0,56.0,65.0)
-(-24.0,56.0,65.0)
-(24.0,56.0,0.0)
+(23.7,56.1,63.8)
+(-23.7,56.1,63.8)
+(23.7,56.1,2.6)
 ]
 ]
 engine = {
@@ -5997,7 +6204,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 11
+radius = 14.7
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -6046,6 +6253,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_bcntaxi_setup = {
 control_type = dadmod_car_bcntaxi
+dadmod_bonefix = 1
 model = "veh\\veh_barcelona_taxi\\veh_barcelona_taxi.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -6065,14 +6273,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(33.0,25.0,1.5e+02)
-(-33.0,25.0,1.5e+02)
-(33.0,25.0,-65.0)
+(34.3,25.3,148.5)
+(-34.3,25.3,148.5)
+(34.3,25.3,-57.6)
 ]
 [
-(28.0,55.0,62.0)
-(-28.0,55.0,62.0)
-(28.0,55.0,-2.0)
+(29.1,55.3,64.1)
+(-29.1,55.3,64.1)
+(29.1,55.3,2.8)
 ]
 ]
 engine = {
@@ -6090,7 +6298,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 14.0
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -6139,6 +6347,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_neon_setup = {
 control_type = dadmod_car_neon
+dadmod_bonefix = 1
 model = "veh\\Veh_NeonType\\Veh_NeonType.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -6158,14 +6367,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(29.0,3e+01,118.0)
-(-29.0,3e+01,118.0)
-(29.0,3e+01,-44.0)
+(25.9,28.2,113.4)
+(-25.9,28.2,113.4)
+(25.9,28.2,-37.2)
 ]
 [
-(24.0,56.0,65.0)
-(-24.0,56.0,65.0)
-(24.0,56.0,0.0)
+(21.4,54.2,64.1)
+(-21.4,54.2,64.1)
+(21.4,54.2,3.7)
 ]
 ]
 engine = {
@@ -6183,7 +6392,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 11
+radius = 12.8
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -6232,6 +6441,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_dctruck_setup = {
 control_type = dadmod_car_dctruck
+dadmod_bonefix = 1
 model = "veh\\Veh_DCShoeTruck\\Veh_DCShoeTruck.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -6249,14 +6459,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(35.9,14.7,87.8)
+(-35.9,14.7,87.8)
+(35.9,14.7,-66.3)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(18.8,40.7,14.6)
+(-18.8,40.7,14.6)
+(18.8,48.7,-62.5)
 ]
 ]
 engine = {
@@ -6274,7 +6484,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 21.3
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -6323,6 +6533,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_tourbus_setup = {
 control_type = dadmod_car_tourbus
+dadmod_bonefix = 1
 model = "veh\\Veh_TourBus\\Veh_TourBus.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -6342,14 +6553,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(39.5,25.0,212.0)
-(-39.5,25.0,212.0)
-(39.5,25.0,-85.0)
+(38.6,34.3,349.1)
+(-38.6,34.3,349.1)
+(38.6,34.3,-189.7)
 ]
 [
-(27.0,64.0,115.0)
-(-27.0,64.0,115.0)
-(27.0,64.0,-28.0)
+(26.4,73.3,173.1)
+(-26.4,73.3,173.1)
+(26.4,73.3,-86.3)
 ]
 ]
 engine = {
@@ -6367,7 +6578,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 25.8
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -6416,6 +6627,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_atv_setup = {
 control_type = dadmod_car_atv
+dadmod_bonefix = 1
 model = "veh\\Veh_ATV\\Veh_ATV.mdl"
 sounds = SE_ATV
 make_skater_visible
@@ -6438,14 +6650,14 @@ in_air_slerp_velocity_cutoff = 350
 vert_correction
 colliders = [
 [
-(37.0,3e+01,41.0)
-(-37.0,3e+01,41.0)
-(37.0,3e+01,-36.0)
+(24.5,27.0,37.8)
+(-24.5,27.0,37.8)
+(24.5,27.0,-31.2)
 ]
 [
-(12.0,64.0,16.0)
-(-12.0,64.0,16.0)
-(12.0,64.0,-28.0)
+(7.9,61.0,15.4)
+(-7.9,61.0,15.4)
+(7.9,61.0,-24.1)
 ]
 ]
 engine = {
@@ -6463,7 +6675,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 14
+radius = 11.2
 moment = 3570
 spring_rate = 200
 damping_rate = 16
@@ -6515,6 +6727,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_mardi_setup = {
 control_type = dadmod_car_mardi
+dadmod_bonefix = 1
 model = "veh\\Veh_Mardi\\Veh_Mardi.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -6532,14 +6745,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(34.6,10.3,51.6)
+(-34.6,10.3,51.6)
+(34.6,10.3,-116.1)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(18.1,36.3,-28.1)
+(-18.1,36.3,-28.1)
+(18.1,44.3,-111.9)
 ]
 ]
 engine = {
@@ -6557,7 +6770,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 16.9
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -6606,6 +6819,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_duck_setup = {
 control_type = dadmod_car_duck
+dadmod_bonefix = 1
 model = "veh\\Veh_Duck\\veh_duck.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -6623,14 +6837,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(34.6,8.6,96.3)
+(-34.6,8.6,96.3)
+(34.6,8.6,-71.4)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(18.1,34.6,16.6)
+(-18.1,34.6,16.6)
+(18.1,42.6,-67.3)
 ]
 ]
 engine = {
@@ -6648,7 +6862,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 15.2
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -6697,6 +6911,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_sub_setup = {
 control_type = dadmod_car_sub
+dadmod_bonefix = 1
 model = "veh\\veh_sub\\veh_sub.mdl"
 suspension_center_of_mass = (0.0,-1e+01,0.0)
 mass = 2943
@@ -6714,14 +6929,14 @@ in_air_slerp_time_delay = 10
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(42.0,12.0,8e+01)
-(-42.0,12.0,8e+01)
-(42.0,12.0,-8e+01)
+(51.7,12.3,72.6)
+(-51.7,12.3,72.6)
+(51.7,12.3,-95.9)
 ]
 [
-(22.0,38.0,4.0)
-(-22.0,38.0,4.0)
-(22.0,46.0,-76.0)
+(27.1,38.3,-7.4)
+(-27.1,38.3,-7.4)
+(27.1,46.3,-91.7)
 ]
 ]
 engine = {
@@ -6739,7 +6954,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 18.8
 moment = 3570
 spring_rate = 100
 damping_rate = 16
@@ -6788,6 +7003,7 @@ handbrake_locked_friction = 1.0
 
 dadmod_car_streetcar_setup = {
 control_type = dadmod_car_streetcar
+dadmod_bonefix = 1
 model = "veh\\veh_streetcar\\veh_streetcar.mdl"
 sounds = NY_JunkCar
 skater_pos = (0.0,0.0,0.0)
@@ -6807,14 +7023,14 @@ in_air_slerp_time_delay = 1
 in_air_slerp_velocity_cutoff = 350
 colliders = [
 [
-(39.5,25.0,212.0)
-(-39.5,25.0,212.0)
-(39.5,25.0,-85.0)
+(40.0,25.6,206.3)
+(-40.0,25.6,206.3)
+(40.0,25.6,-69.6)
 ]
 [
-(27.0,64.0,115.0)
-(-27.0,64.0,115.0)
-(27.0,64.0,-28.0)
+(27.4,64.6,116.2)
+(-27.4,64.6,116.2)
+(27.4,64.6,-16.6)
 ]
 ]
 engine = {
@@ -6832,7 +7048,7 @@ gear_ratios = [
 ]
 }
 all_wheels = {
-radius = 13
+radius = 17.1
 moment = 3570
 spring_rate = 200
 damping_rate = 28
@@ -10066,2299 +10282,5 @@ script dadmod_cars_load_sound
     default
         THUGRECOMP_Log text = "cars2: no engine sound entry for this car"
     endswitch
-endscript
-
-script dadmod_cars_boot_maps
-    Change VehicleSetupMapping = {
-JunkerCar = TransCarSetup
-RallyCar = CustomCarSetup
-ImpalaCar = ImpalaCarSetup
-TaxiNY = TaxiNYSetup
-PoliceCar = PoliceCarSetup
-SecurityCart = SecurityCartSetup
-GardnersCart = GardnersCartSetup
-ElCaminoCar = ElCaminoCarSetup
-Blimp = BlimpSetup
-LadaCar = LadaCarSetup
-MiniBajaCar = MiniBajaCarSetup
-LimoCar = LimoCarSetup
-Forklift = ForkliftSetup
-RCCar = RCCarSetup
-TaurusCar = TaurusCarSetup
-PickupTruck = PickupTruckSetup
-WranglerCar = WranglerCarSetup
-SportsCar = SportsCarSetup
-OffroadCar = OffroadCarSetup
-dadmod_car_hearse = dadmod_car_hearse_setup
-dadmod_car_woodie = dadmod_car_woodie_setup
-dadmod_car_sedan = dadmod_car_sedan_setup
-dadmod_car_smart = dadmod_car_smart_setup
-dadmod_car_hippyvan = dadmod_car_hippyvan_setup
-dadmod_car_benzvan = dadmod_car_benzvan_setup
-dadmod_car_minivan = dadmod_car_minivan_setup
-dadmod_car_oldvan = dadmod_car_oldvan_setup
-dadmod_car_suv = dadmod_car_suv_setup
-dadmod_car_rust = dadmod_car_rust_setup
-dadmod_car_liberty = dadmod_car_liberty_setup
-dadmod_car_bcntaxi = dadmod_car_bcntaxi_setup
-dadmod_car_neon = dadmod_car_neon_setup
-dadmod_car_dctruck = dadmod_car_dctruck_setup
-dadmod_car_tourbus = dadmod_car_tourbus_setup
-dadmod_car_atv = dadmod_car_atv_setup
-dadmod_car_mardi = dadmod_car_mardi_setup
-dadmod_car_duck = dadmod_car_duck_setup
-dadmod_car_sub = dadmod_car_sub_setup
-dadmod_car_streetcar = dadmod_car_streetcar_setup
-dadmod_prop_cone = dadmod_prop_cone_setup
-dadmod_prop_cart = dadmod_prop_cart_setup
-dadmod_prop_scooter = dadmod_prop_scooter_setup
-dadmod_prop_robot = dadmod_prop_robot_setup
-dadmod_prop_robot2 = dadmod_prop_robot2_setup
-dadmod_prop_chest = dadmod_prop_chest_setup
-dadmod_prop_bike = dadmod_prop_bike_setup
-dadmod_prop_mini = dadmod_prop_mini_setup
-dadmod_prop_halfpipe = dadmod_prop_halfpipe_setup
-}
-    Change PlayerVehicleSounds = {
-#"Default" = {
-EngineSound = CarLoop
-MinEngineVol = 150
-MaxEngineVol = 180
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 50
-BottomRPM = 60
-TopRPM = 100
-}
-{
-DownshiftPoint = 10
-UpshiftPoint = 75
-BottomRPM = 40
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 100
-BottomRPM = 20
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-SE_ATV = {
-EngineSound = CarLoop
-MinEngineVol = 150
-MaxEngineVol = 180
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 50
-BottomRPM = 60
-TopRPM = 100
-}
-{
-DownshiftPoint = 10
-UpshiftPoint = 75
-BottomRPM = 40
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 100
-BottomRPM = 20
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-NY_JunkCar = {
-EngineSound = CarLoop
-MinEngineVol = 150
-MaxEngineVol = 180
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 50
-BottomRPM = 60
-TopRPM = 100
-}
-{
-DownshiftPoint = 10
-UpshiftPoint = 75
-BottomRPM = 40
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 100
-BottomRPM = 20
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-BO_Gurney = {
-EngineSound = ShoppingCartLoop
-MinEngineVol = 0
-MaxEngineVol = 80
-MinEnginePitch = 80
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 1
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 200
-}
-BO_Segway = {
-EngineSound = SK6_BO_JesseRide_Loop
-MinEngineVol = 150
-MaxEngineVol = 180
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 100
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-BA_SteveOBull = {
-EngineSound = SK6_BA_SteveOElecLoop
-MinEngineVol = 0
-MaxEngineVol = 70
-MinEnginePitch = 50
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 100
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-BE_PaulieWheelchair = {
-EngineSound = SK6_BE_Paulie_Loop
-MinEngineVol = 0
-MaxEngineVol = 70
-MinEnginePitch = 50
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 100
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-AU_AborigineCart = {
-EngineSound = AU_KartLoop
-MinEngineVol = 90
-MaxEngineVol = 120
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 100
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-NO_Trike = {
-EngineSound = SK6_NO_TrikeSqueak
-MinEngineVol = 0
-MaxEngineVol = 70
-MinEnginePitch = 50
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 100
-BottomRPM = 0
-TopRPM = 100
-}
-]
-TireSound = Silent_Vehicle_Tire_Loop
-FullTireSlipVelocity = 1500
-MinTireVol = 0
-MaxTireVol = 300
-MinTirePitch = 80
-MaxTirePitch = 100
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_JunkerCar = {
-EngineSound = #"_8CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 125
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_RallyCar = {
-EngineSound = #"_4CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 150
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_ImpalaCar = {
-EngineSound = LowriderLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_PoliceCar = {
-EngineSound = #"_8CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 135
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_TaxiNY = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 125
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_SecurityCart = {
-EngineSound = SD_CartLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 80
-MaxEnginePitch = 130
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_GardnersCart = {
-EngineSound = SD_CartLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 80
-MaxEnginePitch = 130
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_ElCaminoCar = {
-EngineSound = #"_8CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_LadaCar = {
-EngineSound = MiniEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 65
-MaxEnginePitch = 135
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_MiniBajaCar = {
-EngineSound = AU_KartLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 150
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_LimoCar = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 105
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_TaurusCar = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 125
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_PickupTruck = {
-EngineSound = #"_8CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_WranglerCar = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_SportsCar = {
-EngineSound = #"_4CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 75
-MaxEnginePitch = 160
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_Forklift = {
-EngineSound = ParadeFloatEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_Blimp = {
-EngineSound = SJ_BlimpEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 80
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_hearse = {
-EngineSound = LowriderLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 105
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_woodie = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_sedan = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 125
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_smart = {
-EngineSound = MiniEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 140
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_hippyvan = {
-EngineSound = CarLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_benzvan = {
-EngineSound = UKBusEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_minivan = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_oldvan = {
-EngineSound = CarLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 55
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_suv = {
-EngineSound = #"_8CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_rust = {
-EngineSound = CarLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_liberty = {
-EngineSound = #"_6CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 125
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_bcntaxi = {
-EngineSound = #"_4CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 65
-MaxEnginePitch = 140
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_neon = {
-EngineSound = #"_4CylinderEngineLoop"
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 145
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_dctruck = {
-EngineSound = UKBusEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 100
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_tourbus = {
-EngineSound = UKBusEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 45
-MaxEnginePitch = 95
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_atv = {
-EngineSound = AU_KartLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 150
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_mardi = {
-EngineSound = ParadeFloatEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 100
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_duck = {
-EngineSound = FerryEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_sub = {
-EngineSound = UKBusEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_car_streetcar = {
-EngineSound = TramEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 60
-MaxEnginePitch = 110
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_cone = {
-EngineSound = ShoppingCartLoop
-MinEngineVol = 40
-MaxEngineVol = 110
-MinEnginePitch = 90
-MaxEnginePitch = 130
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_cart = {
-EngineSound = ShoppingCartLoop
-MinEngineVol = 40
-MaxEngineVol = 110
-MinEnginePitch = 85
-MaxEnginePitch = 120
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_scooter = {
-EngineSound = SK6_BA_Scooter_Engine
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 80
-MaxEnginePitch = 150
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_robot = {
-EngineSound = ZooTramEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 80
-MaxEnginePitch = 140
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_robot2 = {
-EngineSound = ZooTramEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 130
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_chest = {
-EngineSound = ShoppingCartLoop
-MinEngineVol = 40
-MaxEngineVol = 110
-MinEnginePitch = 80
-MaxEnginePitch = 115
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_bike = {
-EngineSound = MotoIdle01
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 145
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_mini = {
-EngineSound = MiniEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 70
-MaxEnginePitch = 140
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-dadmod_snd_dadmod_prop_halfpipe = {
-EngineSound = ParadeFloatEngineLoop
-MinEngineVol = 120
-MaxEngineVol = 190
-MinEnginePitch = 50
-MaxEnginePitch = 95
-MinEngineRPM = 0
-MaxEngineRPM = 100
-Gears = [
-{
-DownshiftPoint = 0
-UpshiftPoint = 35
-BottomRPM = 30
-TopRPM = 100
-}
-{
-DownshiftPoint = 25
-UpshiftPoint = 60
-BottomRPM = 45
-TopRPM = 100
-}
-{
-DownshiftPoint = 50
-UpshiftPoint = 82
-BottomRPM = 55
-TopRPM = 100
-}
-{
-DownshiftPoint = 72
-UpshiftPoint = 100
-BottomRPM = 60
-TopRPM = 100
-}
-]
-TireSound = Vehicle_Tire_Loop
-FullTireSlipVelocity = 1100
-MinTireVol = 0
-MaxTireVol = 220
-MinTirePitch = 85
-MaxTirePitch = 110
-CollideSound = { BonkMetal_11 minVol = 100 MaxVel = 300 minPitch = 80 maxPitch = 120 }
-FullCollision = 5000
-}
-}
 endscript
 

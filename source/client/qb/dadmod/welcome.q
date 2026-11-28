@@ -12,8 +12,8 @@ script dadmod_welcome
     }
     KillSpawnedScript Name = dadmod_welcome_matrix
     SpawnScript dadmod_welcome_matrix
-    KillSpawnedScript Name = dadmod_update_popup_wait
-    SpawnScript dadmod_update_popup_wait
+    Change dadmod_upd_front = 1
+    dadmod_update_watch_start
 endscript
 
 script dadmod_welcome_matrix

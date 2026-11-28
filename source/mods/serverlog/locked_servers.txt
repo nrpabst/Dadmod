@@ -1,0 +1,8 @@
+; Servers where dadmod maps are locked for players who are not the host.
+; One per line: an IP, IP:port, or the server name.
+; ELEVATED FCFS (24/7, open level select), Noah 2026-11-27
+47.6.1.27:5153
+ELEVATED FCFS
+; ELEVATED FCFS 2
+47.6.1.27:5155
+ELEVATED FCFS 2

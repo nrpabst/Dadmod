@@ -69,7 +69,8 @@ static std::string ExeDirFile(const char* file) {
 }
 static bool ReadWholeFile(const std::string& path, std::string& out) {
     out.clear();
-    HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+    // FILE_SHARE_DELETE: another open game can still swap the file in while this one reads it (2026-11-23)
+    HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) return false;
     char buf[8192];
@@ -80,14 +81,20 @@ static bool ReadWholeFile(const std::string& path, std::string& out) {
     return true;
 }
 static bool WriteWholeFile(const std::string& path, const std::string& data) {
-    std::string tmp = path + ".tmp";
+    // a temp name per game, so two open games saving at once never share one (2026-11-23)
+    std::string tmp = path + "." + std::to_string((unsigned long)GetCurrentProcessId()) + ".tmp";
     HANDLE f = CreateFileA(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) return false;
     DWORD wrote = 0;
     BOOL ok = WriteFile(f, data.data(), (DWORD)data.size(), &wrote, nullptr);
     CloseHandle(f);
     if (!ok || wrote != data.size()) { DeleteFileA(tmp.c_str()); return false; }
-    return MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+    for (int tries = 0; tries < 5; ++tries) {   // the other game may have the file open for a moment
+        if (MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) return true;
+        Sleep(2);
+    }
+    DeleteFileA(tmp.c_str());
+    return false;
 }
 
 #ifndef DADMOD_CLIENT_HAS_MAINMENU
@@ -116,31 +123,19 @@ static std::string Trim(const std::string& s) {
 // THUGRECOMP_SettingSave key="..." value=N / THUGRECOMP_SettingLoad key="..." -> value=N
 // Same store as the server build: gfx_* keys go to dadmod\gfx.ini (gfx.inc), the rest to
 // dadmod\panel_settings.txt.
-namespace gfx { bool SetKey(const char* key, int value); bool GetKey(const char* key, int* value); }
+namespace gfx { bool SetKey(const char* key, int value); bool GetKey(const char* key, int* value);
+                 bool PanelSet(const char* key, int value); bool PanelGet(const char* key, int* value); }  // panel_settings.txt (gfx.inc, 2026-11-23)
 static bool __cdecl CF_SettingSave(void* params, void*) {
     const char* key;
     if (!GetStringParam(params, "key", &key)) return false;
     int value = IntParam(params, "value", 0);
     if (!strncmp(key, "gfx_", 4)) return gfx::SetKey(key, value);
-    std::string path = ExeDirFile("panel_settings.txt"), data, out;
-    ReadWholeFile(path, data);
-    size_t s = 0;
-    while (s < data.size()) {
-        size_t e = data.find_first_of("\r\n", s);
-        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
-        s = e == std::string::npos ? data.size() : e + 1;
-        if (line.empty()) continue;
-        size_t sp = line.find(' ');
-        if (sp != std::string::npos && line.substr(0, sp) == key) continue;
-        out += line + "\r\n";
-    }
-    out += std::string(key) + " " + std::to_string(value) + "\r\n";
 #ifdef DADMOD_DIAG
-    bool ok = WriteWholeFile(path, out);
+    bool ok = gfx::PanelSet(key, value);
     Diag("setting save %s = %d: %s (error %lu)", key, value, ok ? "ok" : "FAILED", ok ? 0UL : GetLastError());
     return ok;
 #else
-    return WriteWholeFile(path, out);
+    return gfx::PanelSet(key, value);
 #endif
 }
 static bool __cdecl CF_SettingLoad(void* params, void* script) {
@@ -152,17 +147,8 @@ static bool __cdecl CF_SettingLoad(void* params, void* script) {
         RetInt(script, "value", v);
         return true;
     }
-    std::string data;
-    if (!ReadWholeFile(ExeDirFile("panel_settings.txt"), data)) return false;
-    size_t s = 0;
-    while (s < data.size()) {
-        size_t e = data.find_first_of("\r\n", s);
-        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
-        s = e == std::string::npos ? data.size() : e + 1;
-        size_t sp = line.find(' ');
-        if (sp == std::string::npos || line.substr(0, sp) != key) continue;
-        RetInt(script, "value", atoi(line.c_str() + sp + 1));
-        return true;
-    }
-    return false;
+    int v;
+    if (!gfx::PanelGet(key, &v)) return false;
+    RetInt(script, "value", v);
+    return true;
 }

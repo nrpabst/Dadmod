@@ -128,3 +128,70 @@ GTA 3 style handling, More Cars, Props, horn (2026-11-21, Noah: "make the handli
 - Build: cars2.q + cars2_gen.q + throw.q + throw_types.q are their own qb (qb\dadmod\dadmod_cars.qb), added to qdir.txt
   by add_qdir.py, because ButtonScripts.qb / procrastination.qb are at the 512 KB limit.
 - Not tested in game yet. Risks: prop bodies (static .mdl with the car skeleton), tuning numbers are a first guess.
+
+Bug fixes (2026-11-24, Noah: "fix all the bugs in dadmod cars 2.0"; from the logs and a code review)
+- Instant get-out: thugrecomp_debug.log 2026-11-23 19:05:10/11 shows "get in" then "get out" 1 s later (NY Cab), with
+  no Backspace line, so a Triangle / grind key still held from the menu pick made the stopped car fire
+  ExitVehicleRequest. cars2.inc Remap: Triangle (block +9) now counts only after it was released once since the remap
+  turned on (g_triArmed). DLL change, needs a restart.
+- Remote props: when another dadmod player stopped driving a prop but their vehicle object stayed (switching to a
+  normal car), our prop model went away but their car stayed hidden. dadmod_cars_remote_prop_one now unhides it.
+- "The car didn't start": the skater was left in the TransAm state with no car (hidden, no camera, maybe frozen).
+  New dadmod_cars_start_failed gets out properly if driving, else unhides, restores the skater camera and goes back
+  to OnGroundAi.
+- Picking a car while the previous pick was still starting killed dadmod_cars_go before it put vehicleCameraSetup
+  back, so stock level cars could get a Limo/Cab camera. dadmod_cars_pick resets it first.
+- dadmod_cars_exit_now: no Skater : calls after the toggle if the skater is gone (a "Skater :" on a missing skater
+  hangs).
+- Known, fixed elsewhere: online car exit crash in Barcelona (THUGPro+0x76B41, stock IsAlive on a missing goal node):
+  crashlog.inc PatchIsAliveMissingNode, private PR #74 / Dadmod #50. Untested in game.
+
+Respawn at the last safe spot + flip back (2026-11-24, Noah: "i drove into the water and my car respawned face down in a
+ramp"; picked "Last safe spot + flip back")
+- Cause: stock recovery is QB only. A water / kill trigger runs SK3_KillSkater(_Water) -> SK3_Killskater_Finish ->
+  SK3_Killskater_Finish3, which while Driving calls PlayerVehicle : Vehicle_MoveToRestart <node> (the trigger's restart
+  node or trg_playerrestart). Those are skater restart points, often on or next to ramps, and the car keeps its tilt and
+  spin there.
+- cars2.inc Track (hook on the input step call 0x43C1E9, every frame of the local player's car, object id PlayerVehicle):
+  every 0.5 s with all wheels down, upright (up.y > 0.9) and not dropping fast it remembers pos + heading (last 4).
+  When the car jumps (> 300 units at > 6000 units/s: the stock teleport) or has had no wheel down for 4 s while 2500
+  below the best spot, it puts the car back at the newest spot that is at least 1 s old (else the newest, else where you
+  got in), 15 units up, upright, same heading, no speed or spin. Tipped over (up.y < 0.3) and nearly still for 3 s: it
+  stands the car up where it is, 40 units up, same heading. Upright quaternion via the stock matrix <-> quat helpers
+  0x42E1F0 / 0x42BC40 (as the stock self-righting 0x438770 does).
+- Camera: THUGRECOMP_CarsDrive returns cam_reset = 1 after a move; dadmod_cars_beat runs PlayerVehicleCamera :
+  VehicleCamera_Reset.
+- Log: thugrecomp_debug.log "cars2: respawn at last safe spot (...)" and "cars2: flipped back". If the car's object id
+  can't be read, mainmenu.log says "cars2: car object has no PlayerVehicle id" and the tracker stays idle.
+- No menu option. Any stock car teleport while driving (also a pause menu restart) now lands at the last safe spot.
+- DLL change: needs a game restart. Not tested in game yet.
+
+Camera look after getting out (2026-11-24, Noah: "when you get out of a car it doesn't give you camera control back until
+you get off board")
+- Cause: skatercam0's cameralookaround component keeps a look lock (+0x18) that a pad button press flips; it keeps
+  updating under the car camera, so a press while driving could leave it locked. The skater camera clears it only in
+  its walking branch (0x4FA860), so stepping off the board brought the look back.
+- Fix: dadmod_cars_exit_now calls THUGRECOMP_CarsDrive camfree = 1, which clears the lock (and the look offset) and logs
+  "cars2: got out, skater camera look lock was N (override N), cleared" to thugrecomp_debug.log. DLL change: restart.
+
+More Cars model fix (2026-11-24, Noah: "a lot of more cars have their model placed wrong or they're invisible")
+- Cause: the stock car reads its parts from the body model's hierarchy BY POSITION (exe 0x43BA20 init, 0x43A070 pose):
+  part 1 = body, parts 2-5 = wheels 1-4, wheel k drawn from pose k. Every stock car lists Car_Shadow, Car,
+  Car_Wheel01-04 with an unturned body; many THUG2 traffic models don't (checked from the THUG2 .mdl.xbx files):
+    wheels in another order: Smart Car, Hippie Van, Delivery Van, Rust Bucket, Parade Float (back wheels steered)
+    body listed last: Liberty (body drawn at a wheel and spun, a wheel drawn where the body goes)
+    6 wheels, body 8th: Tour Bus (body pose read past the wheel list: garbage, invisible)
+    body part turned 90 degrees: Sedan, Delivery Van, Rust Bucket, Barcelona Taxi, Neon, Submarine (drawn on its side)
+    wheels on the middle line: Streetcar (tipped over at once)
+  Plus every More Car had its base car's wheel size and body boxes: big wheels sank (Tour Bus 26 vs 13, Box Truck,
+  SUV, Submarine, Duck Boat, Parade Float), small ones floated (ATV), and the boxes sat 50+ in off on models whose
+  origin is mid-car (Hearse, Woodie, Old Van, ATV, Tour Bus).
+- Fix, DLL (cars2.inc BoneFix, BonesGuard, PoseHook on the 4 pose call sites): for setups with dadmod_bonefix (QB sends
+  THUGRECOMP_CarsDrive bonefix=1 right before getting in, 0 for stock cars and props) init gets a reordered copy of
+  the list and the pose is mapped back by part NAME every frame: body = body pose turned by the body part's own bind
+  turn, wheels at their own spots, wheels 5/6 copy the nearest same-side wheel, anything else hidden. Middle-line
+  wheels are spread 35 out for the physics and drawn where they are. Logged once per get-in to mainmenu.log
+  ("cars2: More Cars fix: ..."). Test aid: THUGRECOMP_CarsDrive bfrot=0/1/2 (no turn / turn / transposed turn).
+- Fix, setups (gen_cars2.py fit_model): radius = the model's own axle height; body boxes moved and stretched from the
+  base car's wheel layout to the model's; dadmod_bonefix = 1. Read from the player's THUG2 files at generate time.
+- Stock cars and props are untouched. DLL change: needs a game restart. Untested in game yet.

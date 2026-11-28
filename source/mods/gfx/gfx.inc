@@ -75,6 +75,9 @@ static const Setting kSettings[] = {
     {"gfx_moonlight", 0, 0, 20, "moonlight: cool light on surfaces facing the moon at night x0.1 (default 0: Noah did not accept it, 2026-11-22)"},
     {"gfx_moonaz", 135, 0, 359, "moonlight: direction the moon light comes from (degrees around)"},
     {"gfx_lampbulbs", 1, 0, 1, "lamp bulbs and pools (mods/lamplights): 1 on, 0 off (for testing)"},
+    {"gfx_lamplights", 1, 0, 1, "Lamp lights (Sky & weather, Noah 2026-11-23): our night lamp light (bulbs, pools, the engine lights we add) 1 on, 0 off"},
+    {"gfx_lamptiles", 1, 0, 1, "lamp lights drawn by screen tile (speed, 2026-11-23): 1 on, 0 = one pass per lamp as before (for comparing)"},
+    {"gfx_lampposts", 1, 0, 1, "Extra lamp posts (Sky & weather, Noah 2026-11-23): the added lamp post models and their light 1 show, 0 hide"},
     {"gfx_bulbsize", 8, 1, 30, "lamp bulb glow size x0.1 (10 = normal)"},
     {"gfx_bulbstr", 7, 0, 30, "lamp bulb glow brightness x0.1 (10 = normal, 0 = no bulbs, pools stay)"},
     {"gfx_lampreach", 1000, 200, 3000, "lamp engine lights (amber wash on the level around each lamp): reach; applied within a second"},
@@ -103,6 +106,8 @@ static const int kCount = sizeof kSettings / sizeof kSettings[0];
 static int g_val[kCount];
 static volatile LONG g_dirtyPost = 1;
 static FILETIME g_iniTime = {};
+static int g_fileVal[kCount];  // multi-instance (2026-11-23): each value as gfx.ini held it when this game last read or wrote it
+static bool g_mine[kCount];    // changed in this game since its last save: a save writes these and keeps the file's other values
 
 static int Index(const char* key) {
     for (int i = 0; i < kCount; ++i) if (!_stricmp(kSettings[i].key, key)) return i;
@@ -279,6 +284,8 @@ static void SyncInput() {  // Dadmod > Controls -> padhub
 // lamp settings: written together at the end of gfx.ini under their own header (Noah 2026-11-22)
 struct LampKeyInfo { const char* key; const char* text; };
 static const LampKeyInfo kLampKeys[] = {
+    {"gfx_lamplights", "Lamp lights: our street lamp light at night (bulbs, light pools, light on walls): 1 on, 0 off"},
+    {"gfx_lampposts", "Extra lamp posts: the lamp posts added to some maps, with their light: 1 show, 0 hide"},
     {"gfx_lampbulbs", "lamp bulbs and light pools at night: 1 on, 0 off"},
     {"gfx_bulbsize", "size of the glow around each bulb: 1 .. 30, 8 = normal"},
     {"gfx_bulbstr", "brightness of the bulb glow: 0 .. 30, 7 = normal, 0 = no bulb glow (the pools stay)"},
@@ -298,6 +305,62 @@ static bool IsLampKey(const char* k) {
     for (const auto& l : kLampKeys) if (!_stricmp(k, l.key)) return true;
     return false;
 }
+// ---- two games open from one folder (Noah 2026-11-23: "the graphics settings change both instances"; one save file) ----
+// Both games share dadmod\gfx.ini and dadmod\panel_settings.txt. Every save a game writes starts with
+// "; dadmod game <pid> <hash>" (hash = FNV-1a of the rest of the file). A change with a good stamp came from a game,
+// so a running game ignores it and keeps its own values; anything else (THUGPro Manager, a text editor) still applies
+// live, but only the values that actually changed. A save writes only what this game changed, so the file always holds
+// the latest change from either game and the next launch starts with that.
+static unsigned StampHash(const char* p, size_t n) {
+    unsigned h = 2166136261u;
+    for (size_t i = 0; i < n; ++i) { h ^= (unsigned char)p[i]; h *= 16777619u; }
+    return h;
+}
+static std::string Stamped(const std::string& body) {
+    char s[64];
+    _snprintf(s, sizeof s, "; dadmod game %lu %08x\r\n", (unsigned long)GetCurrentProcessId(), StampHash(body.data(), body.size()));
+    s[sizeof s - 1] = 0;
+    return s + body;
+}
+static bool StampOk(const std::string& data) {
+    if (data.compare(0, 14, "; dadmod game ")) return false;
+    size_t e = data.find('\n');
+    if (e == std::string::npos) return false;
+    unsigned long pid = 0; unsigned h = 0;
+    if (sscanf(data.c_str() + 14, "%lu %x", &pid, &h) != 2) return false;
+    return h == StampHash(data.data() + e + 1, data.size() - e - 1);
+}
+static std::string StripStamp(const std::string& data) {
+    if (data.compare(0, 14, "; dadmod game ")) return data;
+    size_t e = data.find('\n');
+    return e == std::string::npos ? std::string() : data.substr(e + 1);
+}
+// the values in a gfx.ini text (has[i] = the file names that setting)
+static void ParseVals(const std::string& data, int* v, bool* has, std::string* shot, bool* hasShot) {
+    for (int i = 0; i < kCount; ++i) { v[i] = kSettings[i].def; has[i] = false; }
+    *hasShot = false;
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        if (!line.compare(0, 11, "gfx_shotdir")) {
+            size_t q = line.find('=');
+            if (q != std::string::npos) { *shot = mmenu::Trim(line.substr(q + 1)); *hasShot = true; }
+            continue;
+        }
+        size_t c = line.find(';');
+        if (c != std::string::npos) line = line.substr(0, c);
+        size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        int i = Index(mmenu::Trim(line.substr(0, eq)).c_str());
+        if (i < 0) continue;
+        int x = atoi(line.c_str() + eq + 1);
+        v[i] = x < kSettings[i].lo ? kSettings[i].lo : x > kSettings[i].hi ? kSettings[i].hi : x;
+        has[i] = true;
+    }
+}
+
 static FILETIME IniTime() {
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (GetFileAttributesExA(ExeDirFile("gfx.ini").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
@@ -378,6 +441,7 @@ static void Load() {
         int ws = Index("gfx_wxsrv");  // server weather never carries over from the last session
         if (ws >= 0 && g_val[ws]) { g_val[ws] = 0; migrate = true; }
     }
+    for (int i = 0; i < kCount; ++i) { g_fileVal[i] = g_val[i]; g_mine[i] = migrate; }
     if (migrate) Save();
     g_iniTime = IniTime();
     SyncInput();
@@ -385,19 +449,48 @@ static void Load() {
 }
 
 static void Save() {
+    // only what this game changed; every other value stays as the file has it (another open game may have changed it)
+    std::string cur, fshot;
+    int fv[kCount], w[kCount];
+    bool fh[kCount], fhs = false;
+    if (ReadWholeFile(ExeDirFile("gfx.ini"), cur)) ParseVals(cur, fv, fh, &fshot, &fhs);
+    else for (int i = 0; i < kCount; ++i) fh[i] = false;
+    for (int i = 0; i < kCount; ++i) w[i] = g_mine[i] || !fh[i] ? g_val[i] : fv[i];
+    std::string shotDir = fhs ? fshot : g_shotDir;
     std::string out = "; Dadmod graphics settings (Dadmod > Graphics in game, or THUGPro Manager). Changes apply live\r\n"
                       "; except MSAA and v-sync, which need a restart. Delete this file for the defaults.\r\n";
     for (int i = 0; i < kCount; ++i)
         if (!IsLampKey(kSettings[i].key))
-            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(g_val[i]) + "\r\n";
-    out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + g_shotDir + "\r\n";
+            out += std::string("; ") + kSettings[i].help + "\r\n" + kSettings[i].key + " = " + std::to_string(w[i]) + "\r\n";
+    out += "; folder for F11 screenshots (empty = dadmod\\screenshots)\r\ngfx_shotdir = " + shotDir + "\r\n";
     out += "\r\n; ---- Street lamps ----\r\n";
     for (const auto& l : kLampKeys) {
         int i = Index(l.key);
-        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(g_val[i]) + "\r\n";
+        if (i >= 0) out += std::string("; ") + l.text + "\r\n" + l.key + " = " + std::to_string(w[i]) + "\r\n";
     }
-    WriteWholeFile(ExeDirFile("gfx.ini"), out);
+    WriteWholeFile(ExeDirFile("gfx.ini"), Stamped(out));
+    for (int i = 0; i < kCount; ++i) { g_fileVal[i] = w[i]; g_mine[i] = false; }
     g_iniTime = IniTime();
+}
+// gfx.ini changed while this game runs: another open game's save is ignored (this game keeps its own settings);
+// an edit from THUGPro Manager or a text editor applies the values it changed. A deleted file means defaults (as before).
+static void ReloadChanged() {
+    std::string data, shot;
+    if (!ReadWholeFile(ExeDirFile("gfx.ini"), data)) { Load(); return; }
+    int fv[kCount];
+    bool fh[kCount], hs = false;
+    ParseVals(data, fv, fh, &shot, &hs);
+    if (!StampOk(data)) {
+        int n = 0;
+        for (int i = 0; i < kCount; ++i)
+            if (fh[i] && fv[i] != g_fileVal[i]) { g_val[i] = fv[i]; ++n; }
+        if (hs) g_shotDir = shot;
+        mmenu::Log("gfx: gfx.ini edited outside the game: %d setting(s) applied", n);
+    }
+    for (int i = 0; i < kCount; ++i) if (fh[i]) g_fileVal[i] = fv[i];
+    g_iniTime = IniTime();
+    SyncInput();
+    InterlockedExchange(&g_dirtyPost, 1);
 }
 
 static int TodNow();
@@ -547,17 +640,116 @@ bool SetKey(const char* key, int value) {
     if (i < 0) return false;
     int was = g_val[i];
     g_val[i] = value < kSettings[i].lo ? kSettings[i].lo : value > kSettings[i].hi ? kSettings[i].hi : value;
+    g_mine[i] = true;
     if (!_stricmp(key, "gfx_tricksfx") && was && !g_val[i]) StopSpecialStream("menu");
     if (!_stricmp(key, "gfx_tricksfx") && g_val[i] && was != g_val[i]) SetSpecialStreamVolume(g_trickBaseVol * g_val[i] / 100.0f);
     if (!_stricmp(key, "gfx_postfx")) {
         int set = Index("gfx_postfxset");
-        if (set >= 0) g_val[set] = 1;   // the row was used: dadmod now switches ReShade's own effects with it
+        if (set >= 0) { g_val[set] = 1; g_mine[set] = true; }   // the row was used: dadmod now switches ReShade's own effects with it
         if (was != g_val[i]) mmenu::Log("gfx: graphics effects -> %s (menu)", g_val[i] ? "ReShade (dadmod's screen effects skipped)" : "dadmod");
     }
     Save();
     SyncInput();
     InterlockedExchange(&g_dirtyPost, 1);
     return true;
+}
+// ---- dadmod\panel_settings.txt (THUGRECOMP_SettingSave/Load keys that are not gfx_*; modes.inc / client common.inc call
+// these). Read once, then answered from memory; a save changes only its own key in the file; a change another open game
+// made is ignored and one from a tool (panel tuner, THUGPro Manager) applies its changed keys (see StampOk above).
+typedef std::vector<std::pair<std::string, int>> PanelList;
+static PanelList g_panel, g_panelFile;
+static FILETIME g_panelTime = {};
+static bool g_panelRead = false;
+// File polls (Noah 2026-11-24, stutter hunt): the frame-end checks of gfx.ini and the request files take turns, one file
+// per frame at most and each about once a second (PollPick in EndFrame); panel_settings.txt is checked at most once a
+// second and never on a frame that already checked a file. Changes made in game don't go through these checks.
+enum { kPollIni, kPollShot, kPollFgDebug, kPollLastGame, kPollFireworks, kPollCount };
+static int g_pollSlot = -1;          // the file this frame may check (-1: none)
+static DWORD g_fileCheckTick = 0;    // GetTickCount of the last file check
+static DWORD g_panelCheckTick = 0;
+static void PollPick() {
+    static DWORD last = 0;
+    static int next = 0;
+    DWORD now = GetTickCount();
+    g_pollSlot = -1;
+    if (now - last < 1000 / kPollCount) return;
+    last = now;
+    g_pollSlot = next;
+    next = (next + 1) % kPollCount;
+    g_fileCheckTick = now;
+}
+static FILETIME PanelTime() {
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (GetFileAttributesExA(ExeDirFile("panel_settings.txt").c_str(), GetFileExInfoStandard, &a)) return a.ftLastWriteTime;
+    return FILETIME{};
+}
+static int* PanelFind(PanelList& l, const std::string& k) {
+    for (auto& e : l) if (e.first == k) return &e.second;
+    return nullptr;
+}
+static void PanelPut(PanelList& l, const std::string& k, int v) {
+    if (int* p = PanelFind(l, k)) *p = v; else l.push_back(std::make_pair(k, v));
+}
+static void PanelParse(const std::string& data, PanelList& out) {   // "key value" lines; the first line for a key counts
+    out.clear();
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        size_t sp = line.find(' ');
+        if (line.empty() || line[0] == ';' || sp == std::string::npos) continue;
+        std::string k = line.substr(0, sp);
+        if (!PanelFind(out, k)) out.push_back(std::make_pair(k, atoi(line.c_str() + sp + 1)));
+    }
+}
+static void PanelSync() {
+    if (g_panelRead) {
+        DWORD now = GetTickCount();
+        if (now - g_panelCheckTick < 1000 || now - g_fileCheckTick < 50) return;
+        g_panelCheckTick = g_fileCheckTick = now;
+    }
+    FILETIME t = PanelTime();
+    if (g_panelRead && !CompareFileTime(&t, &g_panelTime)) return;
+    std::string data;
+    bool ok = ReadWholeFile(ExeDirFile("panel_settings.txt"), data);
+    PanelList f;
+    if (ok) PanelParse(data, f);
+    if (!g_panelRead) g_panel = f;
+    else if (ok && !StampOk(data))
+        for (auto& e : f) { int* old = PanelFind(g_panelFile, e.first); if (!old || *old != e.second) PanelPut(g_panel, e.first, e.second); }
+    g_panelFile = f;
+    g_panelTime = t;
+    g_panelRead = true;
+}
+bool PanelGet(const char* key, int* value) {
+    PanelSync();
+    int* p = PanelFind(g_panel, key);
+    if (!p) return false;
+    *value = *p;
+    return true;
+}
+bool PanelSet(const char* key, int value) {
+    PanelSync();
+    PanelPut(g_panel, key, value);
+    std::string path = ExeDirFile("panel_settings.txt"), data, out;
+    ReadWholeFile(path, data);
+    data = StripStamp(data);
+    size_t s = 0;
+    while (s < data.size()) {
+        size_t e = data.find_first_of("\r\n", s);
+        std::string line = data.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        s = e == std::string::npos ? data.size() : e + 1;
+        if (line.empty()) continue;
+        size_t sp = line.find(' ');
+        if (sp != std::string::npos && line.substr(0, sp) == key) continue;
+        out += line + "\r\n";
+    }
+    out += std::string(key) + " " + std::to_string(value) + "\r\n";
+    bool ok = WriteWholeFile(path, Stamped(out));
+    PanelParse(out, g_panelFile);
+    g_panelTime = PanelTime();
+    return ok;
 }
 bool GetKey(const char* key, int* value) {
     if (tp::Get(key, value)) return true;
@@ -574,6 +766,7 @@ static bool __cdecl CF_GfxReset(void*, void*) {
         const char* k = kSettings[i].key;
         if (!_strnicmp(k, "gfx_wx", 6) || !_stricmp(k, "gfx_weather") || !_stricmp(k, "gfx_fireworks") || !_stricmp(k, "gfx_fwevery") || !_stricmp(k, "gfx_bginput") || !_stricmp(k, "gfx_deadzone") || !_stricmp(k, "gfx_abswap") || !_stricmp(k, "gfx_launchbinds") || !_stricmp(k, "gfx_padpopup")) continue;
         g_val[i] = kSettings[i].def;
+        g_mine[i] = true;
     }
     Save();
     InterlockedExchange(&g_dirtyPost, 1);
@@ -986,7 +1179,11 @@ float4 ps_look(float2 uv : TEXCOORD0) : COLOR {
     }
     c = lerp(c, float3(l, l, l), p3.y) * p4.rgb;
     c = c * (1 - p3.z) + p3.z;
-    if (p3.w > 0) c = pow(saturate(c), 1.0 / (1.0 + p3.w));  // Night: lift the darks so the level stays visible
+    // Night: lift the darks so the level stays visible. 2026-11-23: not on the bright replacement skies (golden hour,
+    // vaporwave, rainbow, cotton candy; s2 = depth when p9.z > 0): the lift washed them out to grey on a night server
+    bool brightSky = p9.z > 0 && (abs(p9.y - 8) < 0.5 || abs(p9.y - 9) < 0.5 || abs(p9.y - 12) < 0.5 || abs(p9.y - 14) < 0.5)
+                     && tex2D(s2, uv).r >= 0.99999;
+    if (p3.w > 0 && !brightSky) c = pow(saturate(c), 1.0 / (1.0 + p3.w));
     c = pow(saturate(c), p2.w);
     return float4(saturate(c), 1);
 }
@@ -1294,9 +1491,10 @@ float3 skies(float3 d, float style, float t) {
     [branch] if (style < 13.5) return sky_blackhole(d, t, az, el);
     return sky_candy(d, t, az, el);
 }
-// time of day + sky boost for the extra skies; sky boost 5 (the default) leaves them as designed
+// time of day + sky boost for the extra skies; sky boost 0 (the default) leaves them as designed, 10 makes them richer.
+// 2026-11-24: boost 0 used to take 55% of the color out (the skies were tuned at 5), so vaporwave and cotton candy came out grey
 float3 skylook(float3 c, float3 d, float style, float t, float tod, float3 st10, float3 st06) {
-    float pop = sk.y, el = d.y;
+    float pop = 0.5 + sk.y * 0.5, el = d.y;
     bool bright = (style > 7.5 && style < 9.5) || (style > 11.5 && style < 12.5) || style > 13.5;  // golden, vapor, rainbow, candy
     float lum = dot(c, L);
     c = max(lerp(lum.xxx, c, 1 + (pop - 0.5) * 1.1), 0) * (1 + (pop - 0.5) * 0.25);
@@ -1517,17 +1715,105 @@ float4 ps_bulbs(float2 uv : TEXCOORD0) : COLOR {
     return float4(c, 1);
 }
 // moonlight (after the night tint): lampc.x amount, lp[0].xyz direction to the moon; normals from the depth
+// 2026-11-23 (Noah: a dotted dark ring around the skater's shadow at night): the shadow decal's rim sits a little off
+// the ground in the depth buffer, so the normal worked out there (ddx/ddy) tipped sideways and those pixels lost or
+// gained moonlight: a broken ring around every skater shadow. Now each pixel takes the middle value (median) of the
+// moonlight at itself and at 4 points 3 pixels away, every one from a normal over 2-pixel spans (moon_ndl): a ring a
+// pixel or two wide is outvoted by the ground around it, while floors, walls and their edges keep their own light.
+// Tested in a College test copy (work/notes/shadow_rim): ring with the old shader at Moonlight 20, none at 0.
+float3 moon_p(float2 q) {
+    float d = tex2Dlod(s1, float4(q, 0, 0)).r;  // lod: fetched inside ps_moon's loop (INTZ has one level, same value)
+    float2 ndc = float2(q.x * 2 - 1, 1 - q.y * 2);
+    float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
+    return camp.xyz + dv * dist(d);
+}
+// one axis of the surface slope at P from the points 2 pixels to either side: across a thin raised sliver both halves
+// bend the opposite way by the same amount, so the whole span is used; across a real edge (floor to wall) one half is
+// much longer, so the shorter half is
+float3 moon_axis(float2 uv, float3 P, float2 o) {
+    float3 a = moon_p(uv + o) - P, b = P - moon_p(uv - o);
+    float la = dot(a, a), lb = dot(b, b);
+    if (la < lb * 4 && lb < la * 4) return a + b;
+    return la < lb ? a : b;
+}
+// moonlight at one screen point: 0 for the sky, else how much its surface faces the moon
+float moon_ndl(float2 q) {
+    float d = tex2Dlod(s1, float4(q, 0, 0)).r;
+    if (d >= 0.99999) return 0;
+    float3 P = moon_p(q);
+    float3 n = normalize(cross(moon_axis(q, P, float2(0, px.y * 2)), moon_axis(q, P, float2(px.x * 2, 0))));
+    if (dot(n, camp.xyz - P) < 0) n = -n;
+    return saturate(dot(n, lp[0].xyz));
+}
+float med5(float a, float b, float c, float d, float e) {
+    float t;
+    t = min(a, b); b = max(a, b); a = t;
+    t = min(d, e); e = max(d, e); d = t;
+    t = min(a, d); d = max(a, d); a = t;
+    t = min(b, e); e = max(b, e); b = t;
+    t = min(c, d); d = max(c, d); c = t;
+    t = min(b, c); c = max(b, c); b = t;
+    t = min(c, d); d = max(c, d); c = t;
+    return min(max(b, c), d);
+}
 float4 ps_moon(float2 uv : TEXCOORD0) : COLOR {
+    float3 c = tex2D(s0, uv).rgb;
+    // 2026-11-24 (512-slot rule): the 5 moon_ndl samples (self, +x, -x, +y, -y, 3 pixels) in one [loop] body instead of
+    // 5 inlined copies (596 -> 179 slots); same values in the same med5 order, bit-identical output (scratch mooncmp)
+    float4 m4 = 0;
+    float m5 = 0;
+    [loop] for (int i = 0; i < 5; ++i) {
+        float2 o = float2(i == 1 ? 1 : (i == 2 ? -1 : 0), i == 3 ? 1 : (i == 4 ? -1 : 0)) * px.xy * 3;
+        float v = moon_ndl(uv + o);
+        m4 += float4(i == 0, i == 1, i == 2, i == 3) * v;
+        m5 += (i == 4) * v;
+    }
+    float ndl = med5(m4.x, m4.y, m4.z, m4.w, m5);
+    if (tex2D(s1, uv).r >= 0.99999) ndl = 0;
+    c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
+    return float4(c, 1);
+}
+// ps_btile (2026-11-23 speed review): every lamp entry touching one screen tile in ONE pass (up to 24; more = another
+// pass on that tile), the same maths as ps_bpool / ps_bhalo in the same order. Entries split in two arrays so the
+// loop counter can index them: tA = lp[0] (position, drop), tB = lp[1] (colour or flood stretch, pool radius)
+float4 tA[24] : register(c30);
+float4 tB[24] : register(c54);
+float4 ps_btile(float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(s0, uv).rgb;
     float d0 = tex2D(s1, uv).r;
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
     float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
-    float3 P = camp.xyz + dv * dist(d0);
-    float3 n = normalize(cross(ddy(P), ddx(P)));
-    if (dot(n, camp.xyz - P) < 0) n = -n;
-    float ndl = saturate(dot(n, lp[0].xyz));
-    if (d0 >= 0.99999) ndl = 0;
-    c += (c * 0.9 + 0.03) * float3(0.55, 0.63, 0.78) * ndl * lampc.x;
+    float dd = dist(d0);
+    float far = length(dv) * dd;
+    float3 dn = normalize(dv);
+    float3 P = camp.xyz + dv * dd;
+    bool sky = d0 >= 0.99999;
+    [loop] for (int i = 0; i < 24; ++i) {
+        if (i >= lampc.y) break;
+        float4 A = tA[i];
+        float4 B = tB[i];
+        if (B.w > 1.0) {
+            if (!sky) {
+                float3 dl = P - (A.xyz - float3(0, A.w, 0));
+                float st = length(B.xyz);
+                if (st > 1.01) { float3 sn = B.xyz / st; dl -= sn * dot(dl, sn) * (1 - 1 / st); }
+                float x = saturate(1 - dot(dl, dl) / (B.w * B.w + 0.001));
+                float pl = x * x * lampc.x;
+                float lum = dot(c, float3(0.3, 0.5, 0.2));
+                c = lerp(c, c * float3(1.2, 0.95, 0.7), pl);
+                c += float3(1.0, 0.55, 0.16) * pl * (lum * lampc.z + lampc.w);
+            }
+        } else {
+            float tl = dot(A.xyz - camp.xyz, dn);
+            if (tl > 0 && tl < far + 30) {
+                float3 q = camp.xyz + dn * tl - A.xyz;
+                float r2 = dot(q, q);
+                float nr = saturate(tl / 600.0), fs = 1 + tl * 0.0015;
+                float cs = 100.0 * lerp(0.35, 1.0, nr) * fs * fs * camp.w * camp.w, hs = (1250.0 * nr * nr + 40.0) * fs * camp.w * camp.w;
+                c += (B.rgb * exp(-r2 / cs) * 0.9 + B.rgb * float3(1.0, 0.85, 0.62) * exp(-r2 / hs) * 0.2 * nr) * lampc.x;
+            }
+        }
+    }
     return float4(c, 1);
 }
 // one lamp entry per pass (lp[0] position, lp[1] color + pool radius): ps_bhalo = bulb glow only, ps_bpool = light pool only
@@ -1571,7 +1857,7 @@ float4 ps_lampcur(float2 uv : TEXCOORD0) : COLOR {
         float rr = lerp(45.0, 70.0, cur);
         float hr = length(P.xz - L.xz);
         float lw = 3 + far * 0.002;
-        bool near_ = d0 < 0.99999 && abs(P.y - L.y) < 150;
+        bool near_ = d0 < 0.99999 && abs(P.y - L.y) < 4 + far * 0.003;  // only the surface the lamp stands on (never up a wall)
         float ring = near_ ? saturate(1 - abs(hr - rr) / lw) : 0;
         float2 dq = abs(P.xz - L.xz);  // a small cross on the exact spot (cursor only)
         float armd = min(dq.x < 30 ? dq.y : 1000.0, dq.y < 30 ? dq.x : 1000.0);
@@ -1610,6 +1896,8 @@ float4 ps_bpool(float2 uv : TEXCOORD0) : COLOR {
     float2 ndc = float2(uv.x * 2 - 1, 1 - uv.y * 2);
     float3 dv = vr.xyz * (ndc.x / pj.x) + vu.xyz * (ndc.y / pj.y) - vb.xyz;
     float3 dl = camp.xyz + dv * dist(d0) - (lp[0].xyz - float3(0, lp[0].w, 0));
+    float st = length(lp[1].xyz);  // flood (lamp editor models): the pool is stretched st times along lp[1].xyz
+    if (st > 1.01) { float3 sn = lp[1].xyz / st; dl -= sn * dot(dl, sn) * (1 - 1 / st); }
     float x = saturate(1 - dot(dl, dl) / (lp[1].w * lp[1].w + 0.001));
     float pl = x * x * lampc.x;
     float lum = dot(c, float3(0.3, 0.5, 0.2));
@@ -1781,7 +2069,7 @@ static IDirect3DPixelShader9 *g_psFxaa = nullptr, *g_psBright = nullptr, *g_psDo
                              *g_psLook = nullptr, *g_psScreen = nullptr, *g_psGalaxy = nullptr,
                              *g_psAO = nullptr, *g_psAOBlur = nullptr, *g_psSky = nullptr,
                              *g_psSkyN[10] = {},  // skies 5-14, one small shader each (optional: a missing one shows the milky way)
-                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr, *g_psWindow = nullptr, *g_psWinComp = nullptr, *g_psBHalo = nullptr, *g_psBPool = nullptr, *g_psMoon = nullptr, *g_psWinVis = nullptr, *g_psLampCur = nullptr, *g_psLampProbe = nullptr,  // optional too
+                             *g_psWeather = nullptr, *g_psFireworks = nullptr, *g_psLamps = nullptr, *g_psBulbs = nullptr, *g_psWindow = nullptr, *g_psWinComp = nullptr, *g_psBHalo = nullptr, *g_psBPool = nullptr, *g_psMoon = nullptr, *g_psWinVis = nullptr, *g_psLampCur = nullptr, *g_psLampProbe = nullptr, *g_psBTile = nullptr,  // optional too
                              *g_psMirror = nullptr,  // optional: without it mirror mode does nothing
                              *g_psGroundMist = nullptr,  // optional: the Fog row (ground mist)
                              *g_psNightTint = nullptr;  // optional: without it night/evening buildings keep the game's lighting
@@ -1812,6 +2100,30 @@ static void FreeTargets() {
     g_w = g_h = 0;
     g_prevValid = false;
     g_intzBound = false;
+}
+
+// Files we no longer need: old shader cache entries and old frame generation recordings (Noah 2026-11-24: dadmod
+// must not fill players' disks). Player build: deleted. Dev build: moved to dadmod\archive\retired\ instead (nothing
+// on Noah's PC is deleted by our code; he empties that folder when he wants).
+static void Retire(const std::string& path, bool dir) {
+#ifdef DADMOD_CLIENT_HAS_MAINMENU
+    if (dir) {
+        WIN32_FIND_DATAA fd;
+        HANDLE h = FindFirstFileA((path + "\\*").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) DeleteFileA((path + "\\" + fd.cFileName).c_str()); } while (FindNextFileA(h, &fd));
+            FindClose(h);
+        }
+        RemoveDirectoryA(path.c_str());
+    } else DeleteFileA(path.c_str());
+#else
+    (void)dir;
+    CreateDirectoryA(ExeDirFile("archive").c_str(), nullptr);
+    CreateDirectoryA(ExeDirFile("archive\\retired").c_str(), nullptr);
+    size_t sl = path.find_last_of('\\');
+    std::string to = ExeDirFile("archive\\retired\\") + (sl == std::string::npos ? path : path.substr(sl + 1));
+    if (!MoveFileExA(path.c_str(), to.c_str(), 0)) MoveFileExA(path.c_str(), (to + "_" + std::to_string(GetTickCount())).c_str(), 0);
+#endif
 }
 
 // Compiled shader cache (Noah 2026-10-20: boot got ~10 s slower once the sky/weather/fog shaders grew;
@@ -1995,7 +2307,7 @@ static bool MakeShaders(IDirect3DDevice9* dev) {
     struct { const char* fn; IDirect3DPixelShader9** out; const char* lose; } optional[] = {
         {"ps_galaxy", &g_psGalaxy, "galaxy skies 1-4"},
         {"ps_sky", &g_psSky, "time of day / sky boost on the game's sky"}, {"ps_weather", &g_psWeather, "weather"},
-        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_wincomp", &g_psWinComp, "lit windows"}, {"ps_bhalo", &g_psBHalo, "lamp bulb glow"}, {"ps_bpool", &g_psBPool, "lamp light pools"}, {"ps_moon", &g_psMoon, "moonlight"}, {"ps_winvis", &g_psWinVis, "window light spill"}, {"ps_lampcur", &g_psLampCur, "lamp editor marks"}, {"ps_lampprobe", &g_psLampProbe, "lamp editor cursor probe"}, {"ps_mirror", &g_psMirror, "mirror picture"},
+        {"ps_fireworks", &g_psFireworks, "fireworks"}, {"ps_lamps", &g_psLamps, "street lamps"}, {"ps_bulbs", &g_psBulbs, "lamp bulbs"}, {"ps_wincomp", &g_psWinComp, "lit windows"}, {"ps_bhalo", &g_psBHalo, "lamp bulb glow"}, {"ps_bpool", &g_psBPool, "lamp light pools"}, {"ps_moon", &g_psMoon, "moonlight"}, {"ps_winvis", &g_psWinVis, "window light spill"}, {"ps_lampcur", &g_psLampCur, "lamp editor marks"}, {"ps_lampprobe", &g_psLampProbe, "lamp editor cursor probe"}, {"ps_btile", &g_psBTile, "lamp lights by screen tile"}, {"ps_mirror", &g_psMirror, "mirror picture"},
         {"ps_nighttint", &g_psNightTint, "night tint"}, {"ps_groundmist", &g_psGroundMist, "ground mist"}};
     for (auto& o : optional)
         if (!MakeOneShader(dev, compile, o.fn, "ps_3_0", false, (void**)o.out)) mmenu::Log("gfx: %s unavailable on this card", o.lose);
@@ -2270,6 +2582,7 @@ static bool LampsOn() { return g_lampAmt > 0.01f && g_lampN > 0; }
 // lamp bulbs (mods/lamplights): head positions sent by QB per level (THUGRECOMP_LampBulb), game coordinates = D3D world
 static std::vector<Lamp> g_bulbs;
 static std::vector<float> g_bulbDrop;  // pool center = bulb - drop (height)
+static std::vector<char> g_bulbPost;  // per g_bulbs entry: 1 = it belongs to an added lamp post (Extra lamp posts hides it)
 static std::vector<Lamp> g_edBulbs;     // lamp editor (dev only): the placed lamps' bulb + pool entries, kept apart from
 static std::vector<float> g_edDrop;     // the level's list so editing never has to rebuild it (set by lampeditor.inc)
 static std::vector<float> g_edAll;      // the placed lamps for the editor marks: ground x y z, bulb height
@@ -2279,13 +2592,15 @@ static const int kBulbMax = 192;   // drawn in passes of 24 (ps_bulbs loop)
 static float g_bulbC[2 + 2 * kBulbMax][4];
 static int g_bulbN = 0;
 static void WinCacheClear();
-static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear(); WinCacheClear(); }
+static void BulbClear() { g_bulbs.clear(); g_bulbDrop.clear(); g_bulbPost.clear(); g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear(); WinCacheClear(); }
 // lamplights' level hook (2026-11-23): loading = a level load is starting (windows off until the level is known),
 // else the level that just loaded (nullptr = the last level SetLevel saw)
 static void WinLevelHook(const char* lv, bool loading);
-static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b) {
-    if (g_bulbs.size() >= 1024) return;
+static void BulbAdd(float x, float y, float z, float pool, float drop, float r, float g, float b, bool post = false) {
+    if (g_bulbs.size() >= 4096) return;  // 2026-11-23: room for every map getting lamps (was 1024)
     g_bulbDrop.push_back(drop);
+    g_bulbPost.resize(g_bulbs.size(), 0);
+    g_bulbPost.push_back(post ? 1 : 0);
     Lamp l; l.x = x; l.y = y; l.z = z; l.r = pool; l.cr = r; l.cg = g; l.cb = b;
     g_bulbs.push_back(l);
 }
@@ -2331,6 +2646,23 @@ static int g_edMarkN = 0;
 static const float kEdAmber[3] = {1.0f, 176 / 255.0f, 80 / 255.0f};
 // placed lamps: v = n x (ground x, y, z, bulb height, pool radius, bulb x, y, z); pool center 150 over the ground
 // under the bulb (a lamp model's bulb hangs at its arm, not over the base)
+// lamp editor lights, v = n x (bulb x y z, pool centre x y z, pool radius, stretch x y z): the stretch (length > 1)
+// makes a flood's pool long along its aim (ps_bpool); zero = an ordinary round pool
+static void EdLamps10(const float* v, int n, std::vector<Lamp>& bl, std::vector<float>* drop) {
+    bl.clear(); if (drop) drop->clear();
+    for (int i = 0; i < n; ++i) {
+        const float* l = v + i * 10;
+        bl.push_back(Lamp{l[0], l[1], l[2], 0, kEdAmber[0], kEdAmber[1], kEdAmber[2]});
+        bl.push_back(Lamp{l[3], l[4], l[5], l[6], l[7], l[8], l[9]});
+        if (drop) { drop->push_back(0); drop->push_back(0); }
+    }
+}
+static std::vector<Lamp> g_curLamps;  // the cursor lamp's lights (every head, floods aimed), drawn instead of g_bulbCursor
+static void EdLampsSet(const float* v, int n) { g_edAll.clear(); EdLamps10(v, n, g_edBulbs, &g_edDrop); }
+static void CursorLamps(const float* v, int n) {
+    EdLamps10(v, n, g_curLamps, nullptr);
+    for (size_t i = 0; i + 1 < g_curLamps.size(); i += 2) { g_curLamps[i].cr = 0.5f; g_curLamps[i].cg = 0.9f; g_curLamps[i].cb = 1.0f; }
+}
 static void EdLamps(const float* v, int n) {
     g_edBulbs.clear(); g_edDrop.clear(); g_edAll.clear();
     for (int i = 0; i < n; ++i) {
@@ -2346,13 +2678,25 @@ static void BulbCursor(bool on, float x, float ground, float z, float h, float p
     g_edMark[0][0] = x; g_edMark[0][1] = ground; g_edMark[0][2] = z; g_edMark[0][3] = beam ? h : 0;
     float bx = bulb ? bulb[0] : x, by = bulb ? bulb[1] : ground + h, bz = bulb ? bulb[2] : z;
     g_bulbCursor = Lamp{bx, by, bz, 0, 0.5f, 0.9f, 1.0f};
-    g_bulbCursorPool = Lamp{bx, ground + 150, bz, pool, 0, 0, 0};
+    g_bulbCursorPool = Lamp{bx, ground + (bulb && beam ? h : 0) + 150, bz, pool, 0, 0, 0};  // a raised / lowered model lamp: the pool follows its base
+}
+// the cursor lamp's other heads (a two-headed model: Noah 2026-11-23 saw one head lit and the other doubled once
+// placed): bulb + pool for each, v = n x (x y z), pool centre 150 over poolY
+static std::vector<Lamp> g_curExtra;
+static void BulbCursorExtra(const float* v, int n, float poolY, float pool) {
+    g_curExtra.clear();
+    for (int i = 0; i < n; ++i) {
+        g_curExtra.push_back(Lamp{v[i * 3], v[i * 3 + 1], v[i * 3 + 2], 0, 0.5f, 0.9f, 1.0f});
+        g_curExtra.push_back(Lamp{v[i * 3], poolY + 150, v[i * 3 + 2], pool, 0, 0, 0});
+    }
 }
 // lamp models (mods/lampeditor/lampmodels.inc, dev build only): drawn at the end of the 3D scene, the editor's
 // preview after the HUD, their state block let go before a device reset
 static void (*g_lmScene)(IDirect3DDevice9*) = nullptr;
 static void (*g_lmFrameEnd)(IDirect3DDevice9*) = nullptr;
 static void (*g_lmFree)() = nullptr;
+// skatelink (mods/skatelink, Grand Thug Auto, dev build only): reads the local skater once a frame
+static void (*g_skFrame)() = nullptr;
 // the lamp editor's cursor spot: the world point at the screen's middle, read back from a 1x1 float target each frame
 static IDirect3DTexture9* g_probeTex = nullptr;
 static IDirect3DSurface9 *g_probeRT = nullptr, *g_probeSys = nullptr;
@@ -2505,13 +2849,20 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     auto w = [](int t) { return t == 4 || t == 5 || t == 6 ? 1.0f : t == 3 ? 0.25f : 0.0f; };
     float want = g_mainMenu ? 0.0f : w(todA) + (w(todB) - w(todA)) * blend;
     g_bulbNight = want > 0.5f;
+    if (!V("gfx_lamplights")) want = 0.0f;  // Lamp lights Off: nothing to draw, the passes stop (BulbsOn)
     if (g_bulbCursorOn) want = 1.0f;  // lamp editor open: preview by day too
+    bool postsOn = V("gfx_lampposts") != 0;
     struct EdPush {  // the editor's placed lamps and its cursor lamp (bulb + pool) join the list for this update only
         size_t n0;
         EdPush() : n0(g_bulbs.size()) {
-            g_bulbs.insert(g_bulbs.end(), g_edBulbs.begin(), g_edBulbs.end());
-            g_bulbDrop.insert(g_bulbDrop.end(), g_edDrop.begin(), g_edDrop.end());
-            if (g_bulbCursorOn) { g_bulbs.push_back(g_bulbCursor); g_bulbs.push_back(g_bulbCursorPool); g_bulbDrop.push_back(0); g_bulbDrop.push_back(0); }
+            if (V("gfx_lampposts")) {  // the editor's placed lamps are extra posts too
+                g_bulbs.insert(g_bulbs.end(), g_edBulbs.begin(), g_edBulbs.end());
+                g_bulbDrop.insert(g_bulbDrop.end(), g_edDrop.begin(), g_edDrop.end());
+            }
+            if (g_bulbCursorOn) {
+                if (g_curLamps.empty()) { g_bulbs.push_back(g_bulbCursor); g_bulbs.push_back(g_bulbCursorPool); g_bulbDrop.push_back(0); g_bulbDrop.push_back(0); }
+                for (const auto& e : g_curLamps) { g_bulbs.push_back(e); g_bulbDrop.push_back(0); }
+            }
         }
         ~EdPush() { g_bulbs.resize(n0); g_bulbDrop.resize(n0); }
     } edPush;
@@ -2528,6 +2879,7 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
     static std::vector<std::pair<float, int>> bnear;
     bnear.clear();
     for (size_t i = 0; i < g_bulbs.size(); ++i) {
+        if (!postsOn && i < g_bulbPost.size() && g_bulbPost[i]) continue;  // Extra lamp posts: Hide
         const Lamp& l = g_bulbs[i];
         float d = (l.x - cx) * (l.x - cx) + (l.y - cy) * (l.y - cy) + (l.z - cz) * (l.z - cz);
         if (d < 20000.0f * 20000.0f) bnear.push_back(std::make_pair(d, (int)i));
@@ -2549,6 +2901,7 @@ static void UpdateBulbs(int todA, int todB, float blend, float dt) {
         a[0] = l.x; a[1] = l.y; a[2] = l.z; a[3] = g_bulbDrop[bi];
         float bs = V("gfx_bulbstr") / 10.0f;  // the halo uses the color, the pool its own amber
         c[0] = l.cr * bs; c[1] = l.cg * bs; c[2] = l.cb * bs; c[3] = l.r * V("gfx_lamppool") / 10.0f * poolFade;
+        if (l.r > 0) { c[0] = l.cr; c[1] = l.cg; c[2] = l.cb; }  // a pool's colour slots hold its flood stretch, unscaled
     }
 }
 // lamps light up in the evening and at night (a little at sunset); picks the 24 nearest to the camera
@@ -2686,12 +3039,14 @@ static void UpdateWorld() {
 
     // fireworks: a won game (last_game.txt is rewritten), THUGPro Manager's Launch now, or the timer
     int fwm = V("gfx_fireworks");
-    if ((g_presents & 31) == 0) {
+    if (g_pollSlot == kPollLastGame) {
         WIN32_FILE_ATTRIBUTE_DATA fa;
         FILETIME t = {};
         if (GetFileAttributesExA(ExeDirFile("last_game.txt").c_str(), GetFileExInfoStandard, &fa)) t = fa.ftLastWriteTime;
         if (!g_lastGameInit) { g_lastGame = t; g_lastGameInit = true; }
         else if (CompareFileTime(&t, &g_lastGame)) { g_lastGame = t; if (fwm) FireworksShow(14, "game over"); }
+    }
+    if (g_pollSlot == kPollFireworks) {
         std::string req = ExeDirFile("gfx_fireworks.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); FireworksShow(12, "THUGPro Manager"); }
     }
@@ -3016,7 +3371,67 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         float hdr[4] = {g_bulbC[0][0], 1.0f, g_bulbC[0][2], g_bulbC[0][3]};
         dev->SetPixelShaderConstantF(28, hdr, 1);
         dev->SetPixelShaderConstantF(29, g_bulbC[1], 1);
-        for (int i = 0; i < g_bulbN; ++i) {
+        // 2026-11-23 speed review: one pass per screen tile with every entry touching it (ps_btile), instead of one
+        // pass + copy-back per entry (35-160 a frame, 15-30 screens of pixels). Same maths, same order per pixel.
+        // gfx_lamptiles 0 (or a card without ps_btile) = the old per-entry path below.
+        bool tiled = g_psBTile && V("gfx_lamptiles");
+        if (tiled) {
+            const int TX = 8, TY = 6;
+            static std::vector<int> bin[TX * TY];
+            static std::vector<RECT> erect;
+            for (auto& b : bin) b.clear();
+            erect.assign(g_bulbN, RECT{0, 0, 0, 0});
+            for (int i = 0; i < g_bulbN; ++i) {
+                const float* a = g_bulbC[2 + i * 2];
+                const float* c = g_bulbC[3 + i * 2];
+                float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
+                float tl = sqrtf(dx * dx + dy * dy + dz * dz), fs = 1 + tl * 0.0015f;
+                float hr = (2.2f * sqrtf((1250.0f + 40.0f) * fs) + 2.2f * sqrtf(100.0f) * fs) * g_bulbC[1][3];
+                bool pool = c[3] > 1.0f;
+                if (!pool && c[0] + c[1] + c[2] <= 0.001f) continue;
+                RECT r;
+                bool any = !g_haveProj ? (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true)
+                         : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3] * (std::max)(1.0f, sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2])), g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
+                if (!any) continue;
+                erect[i] = r;
+                int x0 = (int)(r.left * TX / (LONG)g_w), x1 = (int)((r.right - 1) * TX / (LONG)g_w);
+                int y0 = (int)(r.top * TY / (LONG)g_h), y1 = (int)((r.bottom - 1) * TY / (LONG)g_h);
+                for (int ty = (std::max)(0, y0); ty <= (std::min)(TY - 1, y1); ++ty)
+                    for (int tx = (std::max)(0, x0); tx <= (std::min)(TX - 1, x1); ++tx) bin[ty * TX + tx].push_back(i);
+            }
+            dev->StretchRect(srcS, nullptr, dstS, nullptr, D3DTEXF_NONE);  // tiles with no lamp stay as they were
+            static float ta[24][4], tb[24][4];
+            for (int t = 0; t < TX * TY; ++t) {
+                const auto& list = bin[t];
+                if (list.empty()) continue;
+                RECT tr = {(LONG)((t % TX) * g_w / TX), (LONG)((t / TX) * g_h / TY), (LONG)((t % TX + 1) * g_w / TX), (LONG)((t / TX + 1) * g_h / TY)};
+                RECT u = erect[list[0]];  // only the part of the tile the lamps reach
+                for (int k : list) { const RECT& e = erect[k]; u.left = (std::min)(u.left, e.left); u.top = (std::min)(u.top, e.top); u.right = (std::max)(u.right, e.right); u.bottom = (std::max)(u.bottom, e.bottom); }
+                RECT r = {(std::max)(tr.left, u.left), (std::max)(tr.top, u.top), (std::min)(tr.right, u.right), (std::min)(tr.bottom, u.bottom)};
+                if (r.right <= r.left || r.bottom <= r.top) continue;
+                for (size_t s0 = 0; s0 < list.size(); s0 += 24) {
+                    int n = (int)(std::min)((size_t)24, list.size() - s0);
+                    for (int k = 0; k < n; ++k) { memcpy(ta[k], g_bulbC[2 + list[s0 + k] * 2], 16); memcpy(tb[k], g_bulbC[3 + list[s0 + k] * 2], 16); }
+                    float h2[4] = {hdr[0], (float)n, hdr[2], hdr[3]};
+                    dev->SetPixelShaderConstantF(28, h2, 1);
+                    dev->SetPixelShaderConstantF(30, ta[0], n);
+                    dev->SetPixelShaderConstantF(54, tb[0], n);
+                    if (s0) dev->StretchRect(dstS, &r, srcS, &r, D3DTEXF_NONE);  // a second batch on this tile builds on the first
+                    dev->SetScissorRect(&r);
+                    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+                    g_passScissor = &r;
+                    Pass(dev, g_psBTile, dstS, g_w, g_h, g_w, g_h, srcT, g_intz);
+                    g_passScissor = nullptr;
+                    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+                    ++drawn;
+                    area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
+                }
+            }
+            dev->SetPixelShaderConstantF(28, hdr, 1);
+            static bool once2 = false;
+            if (!once2) { once2 = true; mmenu::Log("gfx: lamp lights drawn by screen tile (ps_btile)"); }
+        }
+        for (int i = 0; i < (tiled ? 0 : g_bulbN); ++i) {
             const float* a = g_bulbC[2 + i * 2];
             const float* c = g_bulbC[3 + i * 2];
             float dx = a[0] - g_bulbC[1][0], dy = a[1] - g_bulbC[1][1], dz = a[2] - g_bulbC[1][2];
@@ -3026,7 +3441,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
             bool pool = c[3] > 1.0f;  // pool entry (no glow) or bulb entry (glow only)
             if (!pool && c[0] + c[1] + c[2] <= 0.001f) continue;
             bool any = !g_haveProj ? (r = RECT{0, 0, (LONG)g_w, (LONG)g_h}, true)
-                     : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3], g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
+                     : pool ? SphereRect(a[0], a[1] - a[3], a[2], c[3] * (std::max)(1.0f, sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2])), g_w, g_h, r) : SphereRect(a[0], a[1], a[2], hr, g_w, g_h, r);
             if (!any) continue;
             dev->SetPixelShaderConstantF(30, a, 2);
             dev->SetScissorRect(&r);
@@ -3039,8 +3454,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
             ++drawn;
             area += (double)(r.right - r.left) * (r.bottom - r.top) / ((double)g_w * g_h);
         }
-        (void)dstT;
-        cur = srcT;
+        cur = tiled ? dstT : srcT;
         if (timing) { g_lqDrawn = drawn; g_lqArea = area; }
     }
     if (timing) g_lqB->Issue(D3DISSUE_END);
@@ -3072,7 +3486,7 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         IDirect3DTexture9* dst = cur == g_texA ? g_texB : g_texA;
         Pass(dev, g_psLampCur, cur == g_texA ? sB : sA, g_w, g_h, g_w, g_h, cur, g_intz);
         cur = dst;
-        LampProbe(dev);  // where the cursor is, for the next frame
+        // LampProbe(dev) is not run any more: the editor reads the stock editor camera's own cursor (lampeditor.inc)
     }
     if (timing) { g_lqW->Issue(D3DISSUE_END); g_lqDis->Issue(D3DISSUE_END); g_lqFreq->Issue(D3DISSUE_END); g_lqState = 1; }
     if (g_lqState == 1) {
@@ -3080,9 +3494,20 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         if (g_lqDis->GetData(&dis, sizeof dis, 0) == S_OK && g_lqFreq->GetData(&f, sizeof f, 0) == S_OK &&
             g_lqA->GetData(&t0, sizeof t0, 0) == S_OK && g_lqM->GetData(&tm, sizeof tm, 0) == S_OK &&
             g_lqB->GetData(&tb, sizeof tb, 0) == S_OK && g_lqW->GetData(&tw, sizeof tw, 0) == S_OK) {
-            if (!dis && f)
-                mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
-                           (tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, g_lqDrawn, g_bulbN, g_lqArea, (tw - tb) * 1000.0 / f, g_winDrawsLast);
+            if (!dis && f) {
+                // logged only when the numbers change a lot (or every 10 minutes), not every 5 s (Noah 2026-11-24: small logs)
+                static double lastMs[3] = {-1, -1, -1}, lastAt = 0;
+                static int lastBulbs = -1;
+                double ms[3] = {(tm - t0) * 1000.0 / f, (tb - tm) * 1000.0 / f, (tw - tb) * 1000.0 / f};
+                bool big = g_bulbN != lastBulbs || NowS() - lastAt > 600.0;
+                for (int i = 0; i < 3 && !big; ++i) { double d = fabs(ms[i] - lastMs[i]); big = d > 0.5 && d > 0.5 * lastMs[i]; }
+                if (big) {
+                    mmenu::Log("gfx: GPU ms: moonlight %.2f, lamps %.2f (%d of %d bulbs, %.2f screens), windows+spill %.2f (%d window redraws in the scene)",
+                               ms[0], ms[1], g_lqDrawn, g_bulbN, g_lqArea, ms[2], g_winDrawsLast);
+                    for (int i = 0; i < 3; ++i) lastMs[i] = ms[i];
+                    lastBulbs = g_bulbN; lastAt = NowS();
+                }
+            }
             g_lqState = 0; g_lqNext = NowS() + 5.0;
         }
     }
@@ -3121,7 +3546,8 @@ static void RunScene(IDirect3DDevice9* dev, bool atPresent = false) {
         Pass(dev, g_psFxaa, ds, g_w, g_h, g_w, g_h, cur);
         cur = dst;
     }
-    Pass(dev, g_psLook, bb, g_w, g_h, g_w, g_h, cur, V("gfx_bloom") ? g_texC : nullptr);
+    // s2 = depth (when readable) so ps_look can keep the night lift off the bright replacement skies
+    Pass(dev, g_psLook, bb, g_w, g_h, g_w, g_h, cur, V("gfx_bloom") ? g_texC : nullptr, g_c[9][2] > 0 ? g_intz : nullptr);
     if (V("gfx_mblur")) { dev->StretchRect(bb, nullptr, sP, nullptr, D3DTEXF_NONE); g_prevValid = true; }
     dev->SetDepthStencilSurface(oldDS);
     g_sb->Apply();
@@ -3278,13 +3704,43 @@ static void RunScreen(IDirect3DDevice9* dev) {
 static void NoteDeviceLost(HRESULT hr);  // used by framegen.inc, defined below
 #include "framegen.inc"  // frame generation (Noah 2026-11-21)
 
+// Shader cache cleanup (Noah 2026-11-24): every build writes new cache files (the name holds a hash of the shader
+// source) and nothing removed the old ones. Once per start, on a worker thread, files whose hash is not the current
+// gfx or frame generation one are retired (see Retire).
+static DWORD WINAPI ShaderCachePruneThread(LPVOID) {
+    char cur[2][24];
+    wsprintfA(cur[0], "_%08X%08X.bin", (DWORD)(ShaderSourceHash() >> 32), (DWORD)ShaderSourceHash());
+    unsigned long long fh = FgSourceHash();
+    wsprintfA(cur[1], "_%08X%08X.bin", (DWORD)(fh >> 32), (DWORD)fh);
+    std::vector<std::string> old;
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(ExeDirFile("shadercache\\*.bin").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        std::string n = fd.cFileName;
+        bool keep = false;
+        for (auto& c : cur) if (n.size() > strlen(c) && !_stricmp(n.c_str() + n.size() - strlen(c), c)) keep = true;
+        if (!keep && !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) old.push_back(n);
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    EnterCriticalSection(CompileLock());
+    for (auto& n : old) Retire(ExeDirFile("shadercache") + "\\" + n, false);
+    LeaveCriticalSection(CompileLock());
+    if (!old.empty()) mmenu::Log("gfx: shader cache: %d old file(s) from earlier versions cleaned up", (int)old.size());
+    return 0;
+}
+static void ShaderCachePrune() {
+    HANDLE t = CreateThread(nullptr, 0, ShaderCachePruneThread, nullptr, 0, nullptr);
+    if (t) CloseHandle(t);
+}
+
 // ---- per-frame hooks ---------------------------------------------------------------------------
 static void CheckKeysAndIni() {
-    if ((g_presents & 63) == 0) {  // ~once a second: pick up edits THUGPro Manager made to gfx.ini
+    if (g_pollSlot == kPollIni) {  // once a second: pick up edits THUGPro Manager (or another open game) made to gfx.ini
         FILETIME t = IniTime();
         if (CompareFileTime(&t, &g_iniTime)) {
             int trick = V("gfx_tricksfx"), postfx = V("gfx_postfx");
-            Load();
+            ReloadChanged();
             if (trick && !V("gfx_tricksfx")) InterlockedExchange(&g_trickStopPending, 1);
             else if (V("gfx_tricksfx") && trick != V("gfx_tricksfx")) InterlockedExchange(&g_trickVolPending, 1);
             if (postfx != V("gfx_postfx"))
@@ -3301,9 +3757,11 @@ static void CheckKeysAndIni() {
     bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
     if (now && !down && shift) FgDebugAsk();  // Shift+F11: frame generation debugger records the next frames (framegen.inc)
     else if (now && !down && V("gfx_shotkey")) g_shotPending = true;
-    if ((g_presents & 31) == 0) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
+    if (g_pollSlot == kPollShot) {  // dadmod\gfx_shot.txt: a tool (or THUGPro Manager) asks for a screenshot
         std::string req = ExeDirFile("gfx_shot.txt");
         if (GetFileAttributesA(req.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(req.c_str()); g_shotPending = true; }
+    }
+    if (g_pollSlot == kPollFgDebug) {
         std::string fq = ExeDirFile("fgdebug.txt");  // ... or a frame generation recording
         if (GetFileAttributesA(fq.c_str()) != INVALID_FILE_ATTRIBUTES) { DeleteFileA(fq.c_str()); FgDebugAsk(); }
     }
@@ -3418,7 +3876,8 @@ static void ApplyWeatherFog(IDirect3DDevice9* dev) {
 
 static void EndFrame(IDirect3DDevice9* dev) {
     g_winDrawsLast = g_winDraws; g_winDraws = 0;
-    if (++g_presents == 1) mmenu::Log("gfx: first frame presented");
+    if (++g_presents == 1) { mmenu::Log("gfx: first frame presented"); ShaderCachePrune(); }
+    PollPick();
     g_fgInEnd = true;
     if (!g_sceneDone) {  // nothing 2D was drawn this frame
         dev->BeginScene();
@@ -3429,6 +3888,7 @@ static void EndFrame(IDirect3DDevice9* dev) {
     g_fgInEnd = false;
     RunScreen(dev);
     if (g_lmFrameEnd) g_lmFrameEnd(dev);  // lamp editor's model preview (dev build), over the HUD
+    if (g_skFrame) g_skFrame();  // skatelink: local skater snapshot (dev build)
     CheckKeysAndIni();
     UpdateWorld();
     ApplyWeatherFog(dev);

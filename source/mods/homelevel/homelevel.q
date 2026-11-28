@@ -19,6 +19,9 @@ script dadmod_homelevel_tick
     if ScreenElementExists id = root_window
         root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
     endif
+    if ObjectExists id = dadmod_lampeditor
+        dadmod_hl_go = 0
+    endif
     if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open

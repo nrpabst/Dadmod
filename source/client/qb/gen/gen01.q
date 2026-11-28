@@ -1,5 +1,80 @@
 dadmod_gen01_names = [ IsTrue GotParam ScreenElementExists ]
 
+script dadmod_pause_gfx_group
+    Change dadmod_pause_group_last = <group>
+    g = ( dadmod_pause_gfx_groups [ <group> ] )
+    dialog_box_exit
+    generic_menu_cleanup
+    thugpro_menu_create {
+    menu_name = dadmod_gfx_group
+    menu_title = ( <g> . title )
+    menu_style = MENU_STYLE_LEFT
+    pad_back_script = dadmod_pause_graphics
+    helper_text = generic_helper_text
+    show_description_panel
+    show_gradient
+    boxed
+    }
+    names = ( <g> . items )
+    GetArraySize <names>
+    i = 0
+    begin
+        if (<i> = <array_size>)
+            break
+        endif
+        dadmod_layout_item name = ( <names> [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
+        i = ( <i> + 1 )
+    repeat
+    thugpro_menu_finalize
+endscript
+
+dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_lamplights" "gfx_lampposts" "gfx_skydef" ]
+
+script dadmod_pause_weather
+    dadmod_pause_skywx_menu
+    return
+    dialog_box_exit
+    generic_menu_cleanup
+    thugpro_menu_create {
+    menu_name = dadmod_weather
+    menu_title = "weather"
+    menu_style = MENU_STYLE_LEFT
+    pad_back_script = dadmod_pause_skywx_menu
+    pad_back_params = { focus_id = dadmod_pause_wx }
+    helper_text = generic_helper_text
+    show_description_panel
+    show_gradient
+    boxed
+    }
+    GetArraySize dadmod_pause_weather_items
+    i = 0
+    begin
+        if (<i> = <array_size>)
+            break
+        endif
+        dadmod_layout_item name = ( dadmod_pause_weather_items [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
+        i = ( <i> + 1 )
+    repeat
+    thugpro_menu_finalize
+endscript
+
+script dadmod_free_cam
+    exit_quick_menu
+    SpawnScript dadmod_free_cam_on
+endscript
+
+script dadmod_free_cam_on
+    wait 2 gameframes
+    if IsTrue view_mode
+        if InNetGame
+            ToggleViewMode
+        endif
+    endif
+    if not IsTrue view_mode
+        ToggleViewMode
+    endif
+endscript
+
 script thugpro_mark_save
     index = 0
     mark_level = "east_la"
@@ -6809,6 +6884,7 @@ script choose_selected_server
     console_hide
     KillSpawnedScript Name = dadmod_join_fade
     SpawnScript dadmod_join_fade NotSessionSpecific = 1
+    THUGRECOMP_ServerLogJoin <...>
     ChooseServer <...>
     DestroyScreenElement id = current_menu_anchor
 endscript
@@ -10175,6 +10251,8 @@ dadmod_gfx_lists = [
 { list = gfx_fireworks names = ["Off" "On wins" "Every 1 min" "Every 3 min" "Every 5 min" "Every 10 min"] }
 { list = gfx_fps names = ["Off" "On" "Tiny, in the corner"] }
 { list = gfx_shotkey names = ["Off" "On"] }
+{ list = gfx_lamplights names = ["Off" "On"] }
+{ list = gfx_lampposts names = ["Hide" "Show"] }
 { list = gfx_shothud names = ["Off" "On"] }
 { list = gfx_vsync names = ["Game default" "On" "Off"] }
 { list = gfx_framegen names = ["Off" "Auto (your monitor)" "120 Hz" "144 Hz" "165 Hz" "180 Hz" "240 Hz"] }

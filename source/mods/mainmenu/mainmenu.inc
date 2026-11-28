@@ -511,11 +511,8 @@ static void Log(const char* fmt, ...) {
     line[sizeof line - 1] = 0;
     SYSTEMTIME t; GetLocalTime(&t);
     char stamp[32]; sprintf(stamp, "%04d-%02d-%02d %02d:%02d:%02d ", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
-    std::string path = ExeDirFile("mainmenu.log");
-    HANDLE f = CreateFileA(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return;
     std::string s = std::string(stamp) + line + "\r\n";
-    DWORD w; WriteFile(f, s.data(), (DWORD)s.size(), &w, nullptr); CloseHandle(f);
+    logcap::Append(ExeDirFile("mainmenu.log").c_str(), s.data(), (DWORD)s.size(), logcap::kMainMenu);  // trims itself at 2 MB (logcap.inc)
 }
 
 static std::string Trim(const std::string& s) {
@@ -4276,6 +4273,8 @@ static const char kLayoutDefault[] =
 "  item|gfx_wxamt|||\n"
 "  item|gfx_fireworks|||\n"
 "  item|gfx_fwnow|||\n"
+"  item|gfx_lamplights|||\n"
+"  item|gfx_lampposts|||\n"
 "  item|gfx_skydef|||\n"
 "menu||Controls||Controller settings: background input, stick dead zone, button swap, launcher layout, key and button bindings, controller popups\n"
 "  item|gfx_bginput|||\n"

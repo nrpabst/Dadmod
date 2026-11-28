@@ -125,13 +125,16 @@ script dadmod_throw_menu
     text = "DadMod players see these"
     not_focusable
     }
-    dadmod_throw_item t = "Cars" a = dadmod_throw_cars d = "Throw cars, a different one each time. DadMod players see the car, others a COMBO O"
-    dadmod_throw_item t = "Random Animal" a = dadmod_throw_animals d = "Throw animals, a different one each time. Others see a COMBO O"
-    dadmod_throw_item t = "Random Pedestrian" a = dadmod_throw_peds d = "Throw people, a different one each time. Others see a COMBO O"
-    dadmod_throw_item t = "Random Junk" a = dadmod_throw_junk d = "Throw junk, a different thing each time. Others see a COMBO O"
-    dadmod_throw_item t = "Skateboard" a = dadmod_throw_board d = "Throw skateboards. DadMod players see the board, others a COMBO O"
-    dadmod_throw_item t = "Bowling Ball" a = dadmod_throw_ball d = "Throw a heavy ball. DadMod players see it, others a COMBO O"
-    dadmod_throw_item t = "Mystery Box" a = dadmod_throw_mystery d = "Every throw is a surprise: cars, animals, people, junk. Others see a COMBO O"
+    dadmod_throw_item t = "Cars" a = dadmod_throw_cars d = "Throw cars, a different one each time. DadMod players see the car, others see it on a dadmod server"
+    dadmod_throw_item t = "Random Animal" a = dadmod_throw_animals d = "Throw animals, a different one each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Random Pedestrian" a = dadmod_throw_peds d = "Throw people, a different one each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Random Junk" a = dadmod_throw_junk d = "Throw junk, a different thing each time. Others see it on a dadmod server"
+    dadmod_throw_item t = "Skateboard" a = dadmod_throw_board d = "Throw skateboards. DadMod players see the board, others see it on a dadmod server"
+    dadmod_throw_item t = "Bowling Ball" a = dadmod_throw_ball d = "Throw a heavy ball. DadMod players see it, others see it on a dadmod server"
+    dadmod_throw_item t = "Mystery Box" a = dadmod_throw_mystery d = "Every throw is a surprise: cars, animals, people, junk. Others see it on a dadmod server"
+    if ScriptExists dadmod_throw_stock_row
+        dadmod_throw_stock_row
+    endif
     thugpro_menu_finalize
 endscript
 script dadmod_throw_item
@@ -158,6 +161,7 @@ script dadmod_throw_go
         dadmod_throw_msg_clear
         return
     endif
+    dadmod_throw_stock_register
     dadmod_throw_random_go a = <a> t = <t>
     skater : SetAmmo 0
     skater : give_skater_ammo Type = <a> num = 99
@@ -313,4 +317,107 @@ script dadmod_throw_next_car
     endif
     dadmod_throw_random_car dadmod_tlast = <ammo_type> dadmod_tr = <dadmod_throw_rand>
     skater : SetAmmoType <dadmod_tc>
+endscript
+script dadmod_throw_stock_row
+    if THUGRECOMP_ThrowStockOn
+        dadmod_tst = "Show to players without dadmod: On"
+    else
+        dadmod_tst = "Show to players without dadmod: Off"
+    endif
+    make_thugpro_menu_item {
+    text = <dadmod_tst>
+    description_text = "Players without dadmod see the real thing thrown, not a COMBO O (or nothing): on your host and on hosts without dadmod"
+    pad_choose_script = dadmod_throw_stock_toggle
+    }
+endscript
+script dadmod_throw_stock_toggle
+    if THUGRECOMP_ThrowStockOn
+        THUGRECOMP_ThrowStockOn set = 0
+    else
+        THUGRECOMP_ThrowStockOn set = 1
+    endif
+    dadmod_throw_menu
+endscript
+script dadmod_throw_stock_register
+    if THUGRECOMP_ThrowStockType
+        return
+    endif
+    dadmod_ta = dadmod_throw_all
+    GetArraySize <dadmod_ta>
+    dadmod_ti = 0
+    begin
+        THUGRECOMP_ThrowStockType type = ( <dadmod_ta> [ <dadmod_ti> ] )
+        dadmod_ti = ( <dadmod_ti> + 1 )
+    repeat <array_size>
+endscript
+script dadmod_throw_cstock_send
+    if not InNetGame
+        return
+    endif
+    if OnServer
+        return
+    endif
+    if not THUGRECOMP_ThrowStockOn
+        return
+    endif
+    if not THUGRECOMP_ThrowHostStock
+        return
+    endif
+    if not GotParam vel
+        return
+    endif
+    if not GotParam owner_id
+        return
+    endif
+    if not GotParam model
+        return
+    endif
+    if not ObjectExists id = skater
+        return
+    endif
+    skater : Obj_GetId
+    if not ( <objID> = <owner_id> )
+        return
+    endif
+    if GotParam skater_pos
+        dadmod_sp = <skater_pos>
+    else
+        if not GotParam Pos
+            return
+        endif
+        dadmod_sp = <Pos>
+    endif
+    FormatText ChecksumName = dadmod_tqname "dadmod_tq_%a_%b" a = <owner_id> b = <dadmod_tsn>
+    dadmod_tsc = ( client_projectile_composite_structure + <model> )
+    THUGRECOMP_ThrowSendToServer run = CreateCompositeObject params = { Components = <dadmod_tsc> params = { Name = <dadmod_tqname> owner_id = <owner_id> Pos = <dadmod_sp> vel = <vel> radius = 24 scale = 1.0 orient_to_vel NeverSuspend SystemLifetime = 1 DieUponSettling death_script = projectile_die } }
+    THUGRECOMP_ThrowSendToServer run = create_panel_block params = { id = dadmod_tqs_wake text = " " Pos = (-1000.0,-1000.0) style = generic_menu_pad_choose params = { callback = RunScriptOnObject id = <dadmod_tqname> generic_menu_pad_choose params = { callback = RigidBody_Wake } } }
+endscript
+script dadmod_throw_stock_send
+    if not InNetGame
+        return
+    endif
+    if not OnServer
+        return
+    endif
+    if not THUGRECOMP_ThrowStockOn
+        return
+    endif
+    if not GotParam vel
+        return
+    endif
+    if not GotParam owner_id
+        return
+    endif
+    if GotParam skater_pos
+        dadmod_sp = <skater_pos>
+    else
+        if not GotParam Pos
+            return
+        endif
+        dadmod_sp = <Pos>
+    endif
+    FormatText ChecksumName = dadmod_tsname "dadmod_tp_%i" i = <dadmod_tsn>
+    dadmod_tsc = ( client_projectile_composite_structure + <model> )
+    THUGRECOMP_ThrowPushStock run = CreateCompositeObject params = { Components = <dadmod_tsc> params = { Name = <dadmod_tsname> owner_id = <owner_id> Pos = <dadmod_sp> vel = <vel> radius = 24 scale = 1.0 orient_to_vel NeverSuspend SystemLifetime = 1 DieUponSettling death_script = projectile_die } }
+    THUGRECOMP_ThrowPushStock run = create_panel_block params = { id = dadmod_tps_wake text = " " Pos = (-1000.0,-1000.0) style = generic_menu_pad_choose params = { callback = RunScriptOnObject id = <dadmod_tsname> generic_menu_pad_choose params = { callback = RigidBody_Wake } } }
 endscript

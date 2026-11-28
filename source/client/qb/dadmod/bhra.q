@@ -131,7 +131,7 @@ script Land2 {
         ClearException WallPush
         SetQueueTricks NoTricks
         if GotParam bhra_keepz
-            OnExceptionRun dadmod_bhra_land2_out
+            OnExceptionRun dadmod_bhra_land2_out_z
         endif
     endif
     if GotParam NoReverts
@@ -350,7 +350,11 @@ script dadmod_bhra_pivot_land
         endif
     endif
     if GotParam bhra_arm
-        OnExceptionRun dadmod_bhra_land2_out
+        if GotParam bhra_keepz
+            OnExceptionRun dadmod_bhra_land2_out_z
+        else
+            OnExceptionRun dadmod_bhra_land2_out
+        endif
     else
         OnExceptionRun LandSkaterTricks
     endif

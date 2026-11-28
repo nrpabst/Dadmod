@@ -70,9 +70,9 @@ static void WriteLine(const char* s) {
         if (g_file == INVALID_HANDLE_VALUE) return;
     }
     DWORD w; WriteFile(g_file, s, (DWORD)strlen(s), &w, nullptr);
-    if (++g_lines % 500 == 0 && GetFileSize(g_file, nullptr) > 20u * 1024 * 1024) {   // keep it to ~40 MB: one old file
+    if (++g_lines % 500 == 0 && GetFileSize(g_file, nullptr) > logcap::kSoundLog) {   // over 5 MB: cut the oldest half in place, no .old copy (logcap.inc)
         CloseHandle(g_file); g_file = INVALID_HANDLE_VALUE;
-        MoveFileExA(DadmodFile("soundlog.txt").c_str(), DadmodFile("soundlog.old.txt").c_str(), MOVEFILE_REPLACE_EXISTING);
+        logcap::TrimLocked(DadmodFile("soundlog.txt").c_str(), logcap::kSoundLog / 2);
     }
 }
 static void Log(const char* fmt, ...) {
@@ -189,7 +189,10 @@ static DWORD __fastcall SfxPlayHook(void* self, void*, DWORD sum, float* vol, fl
         return h;
     }
     int voice = -1;
-    for (int k = 0; k < n; ++k) if (*(DWORD*)(kHandles + k * 0x3C) == h) { voice = k; break; }
+    // the voice picker leaves the cursor on the voice it just used; fall back to a playing row with this id (stale rows
+    // of finished voices can carry the same id, which made earlier logs show sounds "ending" after 0-60 ms)
+    { int c = (int)*(DWORD*)kCursor; if (c >= 0 && c < n && *(DWORD*)(kHandles + c * 0x3C) == h && VoiceBusy(c)) voice = c; }
+    for (int k = 0; voice < 0 && k < n; ++k) if (*(DWORD*)(kHandles + k * 0x3C) == h && VoiceBusy(k)) voice = k;
     if (steal >= 0 && voice == steal)
         Log("STEAL  voice %d: all %d voices busy, cut off %s (playing %lu ms) to start %s", steal, n,
             stolenSum ? Name(stolenSum).c_str() : "(started before logging)", stolenAge, nm.c_str());

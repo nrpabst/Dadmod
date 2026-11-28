@@ -388,6 +388,424 @@ static void PatchParticleNullVB() {
     DebugLog("crashlog: particle null vertex buffer guard applied (0x4D54B8)");
 }
 
+// IsAlive on a missing node online (2026-11-23): getting out of a car runs the stock
+// ToggleUserControlledVehicleMode_orig -> GoalManager_HideAllGoalPeds 0 -> goal_add_ped_arrow, which does
+// "IsAlive name = <trigger_obj_id>" with no NodeExists check. In net games IsAlive (0x5A4DA0) looks the node up
+// (0x45C1B0) and hands it to the AbsentInNetGames check 0x565BB0 without a NULL check, so a goal whose trigger node is
+// not in the level crashed at 0x476B41 reading 4 (Dev, Barcelona online, twice on car exit). A NULL node now answers
+// "not absent" and IsAlive carries on down its normal (offline) path, which handles a missing object.
+static volatile LONG g_nodeGuardLogged = 0;
+
+static void NodeGuardLogOnce() {
+    if (InterlockedExchange(&g_nodeGuardLogged, 1)) return;
+    char path[MAX_PATH], line[160];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    path[n] = 0;
+    char logp[MAX_PATH];
+    snprintf(logp, sizeof logp, "%sdadmod\\mainmenu.log", path);
+    SYSTEMTIME t; GetLocalTime(&t);
+    snprintf(line, sizeof line, "%02d:%02d:%02d node guard: IsAlive asked about an object this level doesn't have\r\n",
+             t.wHour, t.wMinute, t.wSecond);
+    HANDLE f = CreateFileA(logp, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) { Put(f, line); CloseHandle(f); }
+}
+
+static void PatchIsAliveMissingNode() {
+    BYTE* at = (BYTE*)0x565BB0;
+    static const BYTE orig[9] = { 0x8B, 0x4C, 0x24, 0x04, 0x68, 0xC6, 0x0A, 0x91, 0x68 };   // mov ecx,[esp+4]; push AbsentInNetGames
+    if (memcmp(at, orig, sizeof orig) != 0 || at[9] != 0xE8) {
+        DebugLog("crashlog: IsAlive missing node guard skipped, bytes at 0x565BB0 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, 4); s += 4;                                              // mov ecx, [esp+4]
+    *s++ = 0x85; *s++ = 0xC9;                                                // test ecx, ecx
+    *s++ = 0x74; *s++ = 0x0A;                                                // jz zero
+    memcpy(s, orig + 4, 5); s += 5;                                          // push AbsentInNetGames
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x565BB9 - (DWORD)(s + 5); s += 5;         // jmp 0x565BB9 (the original call)
+    *s = 0xE8; *(DWORD*)(s + 1) = (DWORD)&NodeGuardLogOnce - (DWORD)(s + 5); s += 5;   // zero: call NodeGuardLogOnce
+    *s++ = 0x33; *s++ = 0xC0;                                                // xor eax, eax
+    *s++ = 0xC2; *s++ = 0x04; *s++ = 0x00;                                   // ret 4
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x565BB0 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: IsAlive missing node guard applied (0x565BB0)");
+}
+
+
+// Screen-element morph to a missing element (2026-11-23 scan): CF_DoScreenElementMorph (0x4AD540) resolves the id
+// with 0x4AD1E0 into [esp+4]; unlike its sibling CF_SetScreenElementProps (0x4AD4C0, which null-checks), it then does
+// mov edx,[ecx] / call [edx+0x24] with no check, so a missing id crashes at 0x4AD579 reading 0 (work\crash_analysis.md;
+// also reachable from the network -- thugpro.dll's 0x48 handler lets other players run DoScreenElementMorph on you).
+// The 18 bytes from 0x4AD575 to 0x4AD587 become a jump to a stub that mirrors the sibling: set the SEH state var, then
+// run the vtable call only when the element pointer is non-NULL. A missing element now does nothing.
+// Fixed 2026-11-23: the stub sets the state var BEFORE its push esi, so the offset is 0x18, not the original 0x1C;
+// 0x1C overwrote the SEH frame and crashed at boot.
+static void PatchScreenMorphNull() {
+    BYTE* at = (BYTE*)0x4AD575;
+    static const BYTE orig[18] = { 0x8B,0x4C,0x24,0x04, 0x8B,0x11, 0x56, 0xC7,0x44,0x24,0x1C,0x00,0x00,0x00,0x00, 0xFF,0x52,0x24 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: screen morph null guard skipped, bytes at 0x4AD575 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0x4C; *s++ = 0x24; *s++ = 0x04;                      // mov ecx,[esp+4]
+    *s++ = 0xC7; *s++ = 0x44; *s++ = 0x24; *s++ = 0x18; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00; *s++ = 0x00;  // mov [esp+0x18],0 (= original [esp+0x1C] after its push esi)
+    *s++ = 0x85; *s++ = 0xC9;                                                // test ecx,ecx
+    *s++ = 0x74; *s++ = 0x06;                                                // jz +6 (skip the vtable call)
+    *s++ = 0x8B; *s++ = 0x11;                                                // mov edx,[ecx]
+    *s++ = 0x56;                                                            // push esi
+    *s++ = 0xFF; *s++ = 0x52; *s++ = 0x24;                                   // call [edx+0x24]
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x4AD587 - (DWORD)(s + 5); s += 5;         // jmp 0x4AD587
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x4AD575 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: screen morph null guard applied (0x4AD575)");
+}
+
+// Host level-change send to a player who just left (2026-11-23 scan): the net message queue (0x457EB0) resolves a
+// connection by id with 0x457910 (returns 0 when the slot is empty), then at 0x458148 reads byte [edi+0x60] with no
+// null check, crashing while the host changes level as someone drops (Dev crash.log, reading 0x60 ecx=0). The 6 bytes
+// at 0x458146 (mov edi,eax; test byte [edi+0x60],8) become a jump to a stub that skips to the loop-continue 0x4581D4
+// when the connection is NULL and otherwise runs the test and returns to the original jne.
+static void PatchLevelChangeSendNull() {
+    BYTE* at = (BYTE*)0x458146;
+    static const BYTE orig[6] = { 0x8B,0xF8, 0xF6,0x47,0x60,0x08 };          // mov edi,eax; test byte [edi+0x60],8
+    if (memcmp(at, orig, sizeof orig) != 0 || at[6] != 0x0F || at[7] != 0x85) {
+        DebugLog("crashlog: level-change send null guard skipped, bytes at 0x458146 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0xF8;                                                // mov edi,eax
+    *s++ = 0x85; *s++ = 0xFF;                                                // test edi,edi
+    *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x4581D4 - (DWORD)(s + 4); s += 4; // jz 0x4581D4
+    *s++ = 0xF6; *s++ = 0x47; *s++ = 0x60; *s++ = 0x08;                      // test byte [edi+0x60],8
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x45814C - (DWORD)(s + 5); s += 5;         // jmp 0x45814C (original jne)
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x458146 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: level-change send null guard applied (0x458146)");
+}
+
+
+// Per-letter text effect buffer overflow (2026-11-23 scan): the text setter at 0x48D530 keeps one fixed 96-byte
+// buffer (allocated once with 0x5BAFC0(0x60,...)) and strcpy's the string into it with no length check (loop at
+// 0x48D580), so a string of 96+ bytes overruns the heap block and corrupts it (shows up later as a 0x5BA0CA free
+// crash). The copy loop (17 bytes at 0x48D579) becomes a jump to a stub that copies at most 95 chars then NUL-
+// terminates, so a long string is clipped instead of overflowing.
+static void PatchPerLetterTextOverflow() {
+    BYTE* at = (BYTE*)0x48D579;
+    static const BYTE orig[17] = { 0x8B,0x4C,0x24,0x08, 0x8B,0x56,0x0C, 0x8A,0x01, 0x41, 0x88,0x02, 0x42, 0x84,0xC0, 0x75,0xF6 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: per-letter text overflow guard skipped, bytes at 0x48D579 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x8B; *s++ = 0x4C; *s++ = 0x24; *s++ = 0x08;   // 0x00 mov ecx,[esp+8]  (src)
+    *s++ = 0x8B; *s++ = 0x56; *s++ = 0x0C;                // 0x04 mov edx,[esi+0xC] (dest)
+    *s++ = 0x8D; *s++ = 0x42; *s++ = 0x5F;                // 0x07 lea eax,[edx+0x5F] (limit = dest+95)
+    *s++ = 0x50;                                          // 0x0A push eax
+    *s++ = 0x3B; *s++ = 0x14; *s++ = 0x24;                // 0x0B cmp edx,[esp]      (LOOP)
+    *s++ = 0x73; *s++ = 0x0C;                             // 0x0E jae TERM(0x1C)
+    *s++ = 0x8A; *s++ = 0x01;                             // 0x10 mov al,[ecx]
+    *s++ = 0x41;                                          // 0x12 inc ecx
+    *s++ = 0x88; *s++ = 0x02;                             // 0x13 mov [edx],al
+    *s++ = 0x42;                                          // 0x15 inc edx
+    *s++ = 0x84; *s++ = 0xC0;                             // 0x16 test al,al
+    *s++ = 0x75; *s++ = 0xF1;                             // 0x18 jne LOOP(0x0B)
+    *s++ = 0xEB; *s++ = 0x03;                             // 0x1A jmp DONE(0x1F)
+    *s++ = 0xC6; *s++ = 0x02; *s++ = 0x00;                // 0x1C mov byte [edx],0  (TERM)
+    *s++ = 0x58;                                          // 0x1F pop eax           (DONE)
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x48D58A - (DWORD)(s + 5); s += 5;   // 0x20 jmp 0x48D58A
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x48D579 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: per-letter text overflow guard applied (0x48D579)");
+}
+
+// Missing level object used as a parameter source (2026-11-23 scan): a node looked up by name (0x45C1B0) returns NULL
+// when it isn't in the level, and several goal / trigger / rail paths then read parameters off it. GetChecksum/GetParam
+// (0x476950, __thiscall, ret 0xC) and GotParam (0x476B40, __thiscall, ret 4) both read [ecx+4] with no null check, so a
+// NULL struct crashes at 0x476953 / 0x476B41 reading 0x4 (e.g. a converted/P8 level trigger face with no TriggerScript
+// node). Each entry becomes a jump to a stub that returns "not found" (0) for a NULL this and otherwise runs the
+// original code. This covers the online- and custom-map-reachable node reads in one place (the IsAlive goal path is
+// also guarded separately at 0x565BB0).
+static void PatchGetParamNullThis() {
+    BYTE* at = (BYTE*)0x476950;
+    static const BYTE orig[6] = { 0x51, 0x53, 0x56, 0x8B,0x71,0x04 };       // push ecx; push ebx; push esi; mov esi,[ecx+4]
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: GetParam null-this guard skipped, bytes at 0x476950 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xC9;                             // 0x00 test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                             // 0x02 jz ZERO(0x0F)
+    *s++ = 0x51; *s++ = 0x53; *s++ = 0x56;                // 0x04 push ecx; push ebx; push esi
+    *s++ = 0x8B; *s++ = 0x71; *s++ = 0x04;                // 0x07 mov esi,[ecx+4]
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x476956 - (DWORD)(s + 5); s += 5;   // 0x0A jmp 0x476956
+    *s++ = 0x32; *s++ = 0xC0;                             // 0x0F xor al,al   (ZERO)
+    *s++ = 0xC2; *s++ = 0x0C; *s++ = 0x00;                // 0x11 ret 0xC
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x476950 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: GetParam null-this guard applied (0x476950)");
+}
+
+static void PatchGotParamNullThis() {
+    BYTE* at = (BYTE*)0x476B40;
+    static const BYTE orig[6] = { 0x56, 0x8B,0x71,0x04, 0x85,0xF6 };        // push esi; mov esi,[ecx+4]; test esi,esi
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: GotParam null-this guard skipped, bytes at 0x476B40 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xC9;                             // 0x00 test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                             // 0x02 jz ZERO(0x0F)
+    *s++ = 0x56;                                          // 0x04 push esi
+    *s++ = 0x8B; *s++ = 0x71; *s++ = 0x04;                // 0x05 mov esi,[ecx+4]
+    *s++ = 0x85; *s++ = 0xF6;                             // 0x08 test esi,esi
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x476B46 - (DWORD)(s + 5); s += 5;   // 0x0A jmp 0x476B46
+    *s++ = 0x33; *s++ = 0xC0;                             // 0x0F xor eax,eax  (ZERO)
+    *s++ = 0xC2; *s++ = 0x04; *s++ = 0x00;                // 0x11 ret 4
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x476B40 + 5);
+    at[5] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: GotParam null-this guard applied (0x476B40)");
+}
+
+
+// Missing model geometry over the network (2026-11-23 scan): the per-model geometry walk at 0x45D3A0 loads a geometry
+// slot (edi = [ebx + index*12 + 0x1000C]) and reads [edi+4] with no null check, so a model whose geometry didn't load
+// crashes at 0x45D3B5 reading 0x4 (a car/model a client doesn't have; CreateCompositeObject is also reachable from the
+// network). The 9 bytes at 0x45D3B5 become a jump to a stub that skips this model's draw (straight to the epilogue at
+// 0x45D3DA) when the geometry slot is NULL and otherwise runs the original. The "stock models only online" rule stays
+// the first line of defense; this stops a bad model name from the network from crashing the receiver.
+static void PatchModelGeometryNull() {
+    BYTE* at = (BYTE*)0x45D3B5;
+    static const BYTE orig[9] = { 0x8B,0x47,0x04, 0x33,0xF6, 0x85,0xC0, 0x76,0x1C };   // mov eax,[edi+4]; xor esi,esi; test eax,eax; jbe 0x45D3DA
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: model geometry null guard skipped, bytes at 0x45D3B5 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    *s++ = 0x85; *s++ = 0xFF;                             // 0x00 test edi,edi
+    *s++ = 0x0F; *s++ = 0x84; *(DWORD*)s = 0x45D3DA - (DWORD)(s + 4); s += 4;   // 0x02 jz 0x45D3DA (skip draw)
+    *s++ = 0x8B; *s++ = 0x47; *s++ = 0x04;                // 0x08 mov eax,[edi+4]
+    *s++ = 0x33; *s++ = 0xF6;                             // 0x0B xor esi,esi
+    *s++ = 0x85; *s++ = 0xC0;                             // 0x0D test eax,eax
+    *s++ = 0x0F; *s++ = 0x86; *(DWORD*)s = 0x45D3DA - (DWORD)(s + 4); s += 4;   // 0x0F jbe 0x45D3DA
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x45D3BE - (DWORD)(s + 5); s += 5;            // 0x15 jmp 0x45D3BE (loop body)
+    FlushInstructionCache(GetCurrentProcess(), stub, 32);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x45D3B5 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: model geometry null guard applied (0x45D3B5)");
+}
+
+// The other screen-element CFuncs (2026-11-23, Noah's go): like DoScreenElementMorph, these resolve the element id with
+// 0x4AD1E0 into a local smart pointer and then use it without a NULL check, so a missing id crashes. Each one gets a
+// jump right after the lookup to a stub that checks the pointer: when it is NULL the stub leaves through the function's
+// own cleanup (same stack and SEH state as the original exit; "true" for setters/getters, "false" where the stock
+// function already has a false exit); otherwise it runs the moved instructions and jumps back. Offsets were checked
+// against each function's disassembly (stack at the patch point, pushed registers the exit pops).
+struct ScreenGuard {
+    DWORD at; const char* orig; const char* check; const char* fail; DWORD failTo; DWORD back; const char* name;
+};
+
+static int HexBytes(const char* hex, BYTE* out) {
+    int n = 0;
+    auto val = [](char c) -> int { return c <= '9' ? c - '0' : (c | 0x20) - 'a' + 10; };
+    for (const char* h = hex; h[0] && h[1]; ) {
+        if (*h == ' ') { ++h; continue; }
+        out[n++] = (BYTE)(val(h[0]) * 16 + val(h[1]));
+        h += 2;
+    }
+    return n;
+}
+
+static void PatchScreenElementGuards() {
+    static const ScreenGuard g[] = {
+        // RunScriptOnScreenElement, CFunc-callback branch: mov ecx,[esp+0x18]; mov eax,[ecx]
+        { 0x4AD418, "8b4c2418 8b01",        "837c241800", "",     0x4AD48B, 0x4AD41E, "RunScriptOnScreenElement" },
+        // SetScreenElementLock: push 0xD443A2BC (exit pops esi first)
+        { 0x4AD5F5, "68bca243d4",           "837c240400", "5e",   0x4AD61D, 0x4AD5FA, "SetScreenElementLock" },
+        // GetScreenElementDims: mov esi,[esp+0xC]; fld dword [esi+0x160]
+        { 0x4AD687, "8b74240c d98660010000", "837c240c00", "",     0x4AD6E1, 0x4AD691, "GetScreenElementDims" },
+        // TextElementConcatenate: push 1; lea ecx,[esp+0xC] (exit returns al)
+        { 0x4AD746, "6a01 8d4c240c",        "837c240c00", "33c0", 0x4AD7A9, 0x4AD74C, "TextElementConcatenate" },
+        // TextElementBackspace: mov ecx,[esp+4]; mov eax,[ecx+0x18] (exit returns al)
+        { 0x4AD835, "8b4c2404 8b4118",      "837c240400", "33c0", 0x4AD899, 0x4AD83C, "TextElementBackspace" },
+        // GetTextElementString: mov ecx,[esp]; mov eax,[ecx+0x18]
+        { 0x4AD916, "8b0c24 8b4118",        "833c2400",   "",     0x4AD978, 0x4AD91C, "GetTextElementString" },
+        // GetTextElementLength: mov ecx,[esp]; mov eax,[ecx+0x18]
+        { 0x4AD9F4, "8b0c24 8b4118",        "833c2400",   "",     0x4ADA50, 0x4AD9FA, "GetTextElementLength" },
+        // GetScreenElementPosition: mov ecx,[esp+8]; lea edx,[esp]
+        { 0x4ADAB4, "8b4c2408 8d1424",      "837c240800", "",     0x4ADAE8, 0x4ADABB, "GetScreenElementPosition" },
+        // MenuSelectedIndexIs: mov ecx,[esp+0x10]; mov esi,[ecx+0x178]
+        { 0x4ADB57, "8b4c2410 8bb178010000", "837c241000", "",     0x4ADB7E, 0x4ADB61, "MenuSelectedIndexIs" },
+    };
+    BYTE* mem = (BYTE*)VirtualAlloc(nullptr, 64 * (sizeof g / sizeof g[0]), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!mem) return;
+    int applied = 0;
+    char msg[160];
+    for (int i = 0; i < (int)(sizeof g / sizeof g[0]); ++i) {
+        BYTE orig[16], check[8], fail[8];
+        int no = HexBytes(g[i].orig, orig), nc = HexBytes(g[i].check, check), nf = HexBytes(g[i].fail, fail);
+        BYTE* at = (BYTE*)g[i].at;
+        if (no < 5 || memcmp(at, orig, no) != 0) {
+            snprintf(msg, sizeof msg, "crashlog: %s null guard skipped, bytes at 0x%06lX differ", g[i].name, g[i].at);
+            DebugLog(msg);
+            continue;
+        }
+        BYTE* stub = mem + i * 64;
+        BYTE* s = stub;
+        memcpy(s, check, nc); s += nc;                                           // cmp dword [esp+N],0
+        *s++ = 0x75; *s++ = (BYTE)(nf + 5);                                      // jne OK
+        memcpy(s, fail, nf); s += nf;                                            // (pop esi / xor eax,eax)
+        *s = 0xE9; *(DWORD*)(s + 1) = g[i].failTo - (DWORD)(s + 5); s += 5;      // jmp the function's cleanup
+        memcpy(s, orig, no); s += no;                                            // OK: the moved instructions
+        *s = 0xE9; *(DWORD*)(s + 1) = g[i].back - (DWORD)(s + 5); s += 5;        // jmp back
+        DWORD old;
+        if (!VirtualProtect(at, no, PAGE_EXECUTE_READWRITE, &old)) continue;
+        at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (g[i].at + 5);
+        for (int k = 5; k < no; ++k) at[k] = 0x90;
+        VirtualProtect(at, no, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), at, no);
+        ++applied;
+    }
+    FlushInstructionCache(GetCurrentProcess(), mem, 64 * (sizeof g / sizeof g[0]));
+    snprintf(msg, sizeof msg, "crashlog: screen element null guards applied (%d of %d)", applied, (int)(sizeof g / sizeof g[0]));
+    DebugLog(msg);
+}
+
+// Stuck terrain sounds (Noah 2026-11-24: a grind / roll sound kept playing for minutes). Each voice has a handle row at
+// 0x6F7A68 (stride 0x3C: +0 handle id, +4 base id). When a voice finishes, 0x47C810 clears only its busy byte and the row
+// keeps its old id. The id-in-use check 0x47BAB0, the update-by-id 0x47B7C0 and the object-list stops 0x47BB50/0x47BC30 stop
+// at the FIRST row with that id, so a stale row makes the game hand one id to two playing sounds; stopping one then stops the
+// wrong copy and the skater loop (0x513BED) loses its real voice, which plays forever. The 10 bytes at 0x47C846 (dec the
+// playing count + clear busy) become a jump to a stub that does the same and also zeroes the finished voice's handle row
+// (+0 and +4), so no stale ids are left. edi = voice index there; edx is free.
+static void PatchSoundStaleHandles() {
+    BYTE* at = (BYTE*)0x47C846;
+    static const BYTE orig[10] = { 0xA1,0x48,0x8A,0x6F,0x00, 0x48, 0xC6,0x46,0x10,0x00 };  // mov eax,[6F8A48]; dec eax; mov byte [esi+10],0
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: sound stale handle fix skipped, bytes at 0x47C846 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, sizeof orig); s += sizeof orig;                          // original 3 instructions
+    *s++ = 0x6B; *s++ = 0xD7; *s++ = 0x3C;                                   // imul edx,edi,0x3C
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A68; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A68],0
+    *s++ = 0xC7; *s++ = 0x82; *(DWORD*)s = 0x6F7A6C; s += 4; *(DWORD*)s = 0; s += 4;  // mov dword [edx+6F7A6C],0
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x47C850 - (DWORD)(s + 5); s += 5;         // jmp 0x47C850 (mov [6F8A48],eax)
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x47C846 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: sound stale handle fix applied (0x47C846)");
+}
+
+// Walking camera with no skater (2026-11-27 Dev crash, THUGPro+0x125030 writing 0x70C): when the skater switches from
+// skating to walking (SkaterPhysicsControl_SwitchSkatingToWalking -> 0x517940), the walk camera copies the skater
+// camera's state in 0x524FF0 and clears a byte in its target's SkaterCorePhysics ([esi+0xA0]+0x70C). That pointer is
+// NULL whenever the walk camera was unhooked from the skater (skatercam0 retarget 0x53A910 calls SetSkater(0) when the
+// camera is on anything but the local skater). Seen when quitting to the menu while driving a car. The 20 bytes at
+// 0x525022 become a jump to a stub that does the same work but skips that one write when the pointer is NULL.
+static volatile LONG g_walkCamLogged = 0;
+
+static void WalkCamGuardLogOnce() {
+    if (InterlockedExchange(&g_walkCamLogged, 1)) return;
+    char path[MAX_PATH], line[160];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    path[n] = 0;
+    char logp[MAX_PATH];
+    snprintf(logp, sizeof logp, "%sdadmod\\mainmenu.log", path);
+    SYSTEMTIME t; GetLocalTime(&t);
+    snprintf(line, sizeof line, "%02d:%02d:%02d walk camera guard: switched to walking while the walk camera had no skater\r\n",
+             t.wHour, t.wMinute, t.wSecond);
+    HANDLE f = CreateFileA(logp, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) { Put(f, line); CloseHandle(f); }
+}
+
+static void PatchWalkCameraNoSkater() {
+    BYTE* at = (BYTE*)0x525022;
+    static const BYTE orig[20] = { 0x8B,0x8E,0xA0,0x00,0x00,0x00, 0x33,0xC0, 0x89,0x56,0x20, 0x88,0x46,0x1C,
+                                   0x88,0x81,0x0C,0x07,0x00,0x00 };
+    if (memcmp(at, orig, sizeof orig) != 0) {
+        DebugLog("crashlog: walk camera no-skater guard skipped, bytes at 0x525022 differ");
+        return;
+    }
+    BYTE* stub = (BYTE*)VirtualAlloc(nullptr, 48, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stub) return;
+    BYTE* s = stub;
+    memcpy(s, orig, 14); s += 14;                          // mov ecx,[esi+0xA0]; xor eax,eax; mov [esi+0x20],edx; mov [esi+0x1C],al
+    *s++ = 0x85; *s++ = 0xC9;                              // test ecx,ecx
+    *s++ = 0x74; *s++ = 0x0B;                              // jz none (skip the 6-byte write + 5-byte jmp)
+    memcpy(s, orig + 14, 6); s += 6;                       // mov [ecx+0x70C],al
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x525036 - (DWORD)(s + 5); s += 5;            // jmp 0x525036
+    *s = 0xE8; *(DWORD*)(s + 1) = (DWORD)&WalkCamGuardLogOnce - (DWORD)(s + 5); s += 5;   // none: call WalkCamGuardLogOnce
+    *s++ = 0x33; *s++ = 0xC0;                              // xor eax,eax (the code after 0x525036 stores eax = 0)
+    *s = 0xE9; *(DWORD*)(s + 1) = 0x525036 - (DWORD)(s + 5); s += 5;            // jmp 0x525036
+    FlushInstructionCache(GetCurrentProcess(), stub, 48);
+    DWORD old;
+    if (!VirtualProtect(at, sizeof orig, PAGE_EXECUTE_READWRITE, &old)) return;
+    at[0] = 0xE9; *(DWORD*)(at + 1) = (DWORD)stub - (0x525022 + 5);
+    for (int i = 5; i < (int)sizeof orig; ++i) at[i] = 0x90;
+    VirtualProtect(at, sizeof orig, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), at, sizeof orig);
+    DebugLog("crashlog: walk camera no-skater guard applied (0x525022)");
+}
+
 static void Install() {
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)&Handler, &g_self);
@@ -398,6 +816,16 @@ static void Install() {
     PatchSkaterCamera();
     PatchGlobalFlags();
     PatchParticleNullVB();
+    PatchIsAliveMissingNode();
+    PatchScreenMorphNull();
+    PatchLevelChangeSendNull();
+    PatchPerLetterTextOverflow();
+    PatchGetParamNullThis();
+    PatchGotParamNullThis();
+    PatchModelGeometryNull();
+    PatchScreenElementGuards();
+    PatchSoundStaleHandles();
+    PatchWalkCameraNoSkater();
 }
 
 }  // namespace crashlog

@@ -55,5 +55,10 @@ launch_quick_menu_keyboard
 entered_chat_message
 cancel_enter_chat_menu
 cancel_chat_menu
+# menukeep.q (Noah 2026-11-24): a game mode starting leaves an open pause menu open (its sub-page removers skip it too)
+sound_options_exit
+edit_tricks_menu_exit
+# menukeep.q (Noah 2026-11-24): an open chat box stays open when a game mode starts (no blink, no lost keys)
+destroy_onscreen_keyboard
 # carexit.q (qb/dadmod/carexit.q): the game's own car exit puts back the shadow the launcher setting picks (stock always gave the full-body one)
 ToggleUserControlledVehicleMode

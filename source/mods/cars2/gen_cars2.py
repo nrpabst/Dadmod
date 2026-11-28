@@ -254,6 +254,120 @@ def clone(base_body, model, ct, sk, extra_top=None, drop=()):
     return out
 
 
+# ---- More Cars model fit (2026-11-24, Noah: "a lot of more cars have their model placed wrong or they're invisible") ----
+# The stock car reads its wheel / body spots from the body model's hierarchy BY POSITION (bone 1 = body, bones 2-5 =
+# wheels 1-4, exe 0x43BA20 / pose 0x43A070). Many THUG2 traffic models list their parts in another order, turn the body
+# part sideways, have 6 wheels, or put the wheels on the middle line; the DLL (cars2.inc BoneFix, switched on by the
+# dadmod_bonefix field below) maps them by NAME instead. What the setup has to match the model itself is done here:
+#   radius     = the model's own axle height (the cloned base car's radius left big wheels sunk in the ground and
+#                small ones floating)
+#   colliders  = the base car's body boxes moved and stretched from the base car's wheel layout to this model's (the
+#                base boxes sat 50+ in off on models whose origin is mid-car, like the Hearse or Woodie)
+# Read from the player's own THUG2 files (THUG Pro needs THUG2 installed); nothing is copied or shipped.
+THUG2_MODELS = [os.environ.get('THUG2_MODELS', ''), r"E:\Tony Hawk's Underground 2\Game\Data\models",
+                os.path.expanduser("~/mnt/Tony Hawk's Underground 2/Game/Data/models")]
+
+
+def ci_path(root, rel):
+    """root + a Windows-style relative path; on Linux (the Cowork shell) found case-insensitively"""
+    p = os.path.join(root, rel)
+    if os.sep == BS or os.path.exists(p) or not os.path.isdir(root):
+        return p
+    cur = root
+    for part in rel.replace(BS, '/').split('/'):
+        hit = [e for e in os.listdir(cur) if e.lower() == part.lower()] if os.path.isdir(cur) else []
+        if not hit:
+            return p
+        cur = os.path.join(cur, hit[0])
+    return cur
+
+
+def qkey(n):
+    c = 0xFFFFFFFF
+    for b in n.lower().encode():
+        c ^= b
+        for _ in range(8):
+            c = (c >> 1) ^ (0xEDB88320 if c & 1 else 0)
+    return c
+
+
+def model_parts(model):
+    """{name: (x, y, z)} of the model's hierarchy parts (file axes: z up, front wheels at -y)"""
+    import struct
+    rel = model.replace(BS * 2, BS).replace(BS, os.sep) + '.xbx'
+    f = next((os.path.join(r, rel) for r in THUG2_MODELS if r and os.path.isfile(os.path.join(r, rel))), None)
+    if not f:   # case-insensitive lookup (Linux)
+        for r in THUG2_MODELS:
+            if not r or not os.path.isdir(r):
+                continue
+            cur = r
+            for part in rel.split(os.sep):
+                hit = [e for e in os.listdir(cur) if e.lower() == part.lower()] if os.path.isdir(cur) else []
+                cur = os.path.join(cur, hit[0]) if hit else None
+                if not cur:
+                    break
+            if cur and os.path.isfile(cur):
+                f = cur
+                break
+    if not f:
+        raise SystemExit('gen_cars2: THUG2 model not found: ' + model + ' (set THUG2_MODELS to THUG2 Game\\Data\\models)')
+    b = open(f, 'rb').read()
+    names = ['Car_Shadow', 'Car'] + ['Car_Wheel%02d' % i for i in range(1, 7)]
+    K = {qkey(n): n for n in names}
+    root = qkey('Car_Shadow')
+    for s0 in range(0, len(b) - 0x50, 1):
+        if struct.unpack_from('<III', b, s0) != (root, 0, 0xFFFF):
+            continue
+        out, k = {}, 1
+        while s0 + (k + 1) * 0x50 <= len(b):
+            cs, par, idx = struct.unpack_from('<III', b, s0 + k * 0x50)
+            if par != root or idx >> 16 != k:
+                break
+            if cs in K:
+                out[K[cs]] = struct.unpack_from('<3f', b, s0 + k * 0x50 + 0x40)
+            k += 1
+        if 'Car' in out and all('Car_Wheel%02d' % i in out for i in range(1, 5)):
+            return out
+    raise SystemExit('gen_cars2: no car hierarchy in ' + f)
+
+
+def layout(parts):
+    """the physics wheel layout the DLL uses: front z, rear z, half track, axle height (setup axes: z = forward)"""
+    w = [list(parts['Car_Wheel%02d' % i]) for i in range(1, 5)]
+    if abs(w[0][0]) < 5 and abs(w[1][0]) < 5:    # wheels on the middle line (Streetcar): the DLL spreads them 35 out
+        for a, c in ((0, 1), (2, 3)):
+            m = (w[a][1] + w[c][1]) / 2
+            w[a][0], w[c][0], w[a][1], w[c][1] = 35.0, -35.0, m, m
+    fz = -(w[0][1] + w[1][1]) / 2
+    rz = -(w[2][1] + w[3][1]) / 2
+    half = (abs(w[0][0] - w[1][0]) + abs(w[2][0] - w[3][0])) / 4
+    axle = sum(x[2] for x in w) / 4
+    return fz, rz, half, axle
+
+
+def fit_model(body, model, base_body):
+    bm = re.search(r'^model = "(.*)"$', base_body, re.M).group(1)
+    nf, nr, nh, na = layout(model_parts(model))
+    bf, br, bh, ba = layout(model_parts(bm))
+    zs = (nf - nr) / (bf - br)
+    xs = nh / bh
+    out, inc = [], 0
+    for ln in body:
+        if ln.startswith('colliders = ['):
+            inc = 1
+        elif inc:
+            inc += ln.count('[') - ln.count(']')
+            m = re.match(r'^\((\S+),(\S+),(\S+)\)$', ln)
+            if m:
+                x, y, z = (float(v) for v in m.groups())
+                z2 = (nf + nr) / 2 + (z - (bf + br) / 2) * zs
+                ln = '(%s,%s,%s)' % (num(round(x * xs, 1)), num(round(y + na - ba, 1)), num(round(z2, 1)))
+        if ln.startswith('radius = '):
+            ln = 'radius = %s' % num(round(na, 1))
+        out.append(ln)
+    return out[:1] + ['dadmod_bonefix = 1'] + out[1:]
+
+
 # Engine sounds (Noah 2026-11-21 "just go with thug 2 sounds for now"): only loops every player has (THUG2's
 # Game\Data\sounds, read through thug2_path, or THUG Pro's own data\sounds). Never GTA audio.
 # loop key -> (sound name, LoadSound path under sounds\)
@@ -309,9 +423,10 @@ def sounds_q():
     """dadmod_c2_sounds: one PlayerVehicleSounds entry per car (added to PlayerVehicleSounds by dadmod_cars_boot),
     dadmod_c2_car_sounds: control_type -> entry name, dadmod_cars_load_sound: LoadSound of the car's engine loop"""
     roots = [r"E:\Tony Hawk's Underground 2\Game\Data\sounds",
+             os.path.expanduser("~/mnt/Tony Hawk's Underground 2/Game/Data/sounds"),
              os.path.join(WORK, '..', 'THUG Pro Kali v2 - 1.2 Original', 'data', 'sounds')]
     missing = [p for _, p in list(LOOPS.values()) + [SKID]
-               if not any(os.path.isfile(os.path.join(r, p) + '.snd') for r in roots)]
+               if not any(os.path.isfile(ci_path(r, p + '.snd')) for r in roots)]
     if missing:
         raise SystemExit('gen_cars2: sound files not found: ' + ', '.join(missing))
     # 2026-11-21 (Noah: "not all cars have sounds"): the car sound component needs a looping sound; a .snd without a
@@ -319,7 +434,7 @@ def sounds_q():
     # Chunks are walked like the game does (no pad byte after an odd-sized chunk).
     def has_loop(path):
         for r in roots:
-            f = os.path.join(r, path) + '.snd'
+            f = ci_path(r, path + '.snd')
             if os.path.isfile(f):
                 b = open(f, 'rb').read()
                 i = 12
@@ -514,6 +629,7 @@ def main():
     for key, label, model, base, prof, d, h, a in EXTRA_CARS:
         ct = 'dadmod_car_' + key
         body = clone(B[base], model, ct, None)
+        body = fit_model(body, model, B[base])
         q += ['dadmod_car_%s_setup = {' % key] + body + ['}']
         w, aw, gears, top = stock_info(B[base])
         tunes += ['%s = {' % ct] + tune(prof, w, aw, gears, top) + ['}']

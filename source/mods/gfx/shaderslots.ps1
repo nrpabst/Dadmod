@@ -1,9 +1,10 @@
 # Compiles every shader in gfx.inc's kShaders with d3dx9_43 (same compiler the DLL uses) and prints how many
 # instruction slots each one takes. NVIDIA's D3D9 driver rejects ps_3_0 shaders over about 4096 slots
-# (2026-11-21: ps_sky at ~4022 made a player's galaxy sky crash), so anything near that is flagged.
+# (2026-11-21: ps_sky at ~4022 made a player's galaxy sky crash). Since 2026-11-24 Noah's rule is every shader fits
+# D3D9's 512-slot minimum (ps_3_0 / vs_3_0), so -Limit defaults to 512 and anything over is flagged.
 # Must run in 32-bit PowerShell (d3dx9_43 is 32-bit):
-#   C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File shaderslots.ps1 [-Inc gfx.inc] [-Limit 3500]
-param([string]$Inc = (Join-Path $PSScriptRoot 'gfx.inc'), [int]$Limit = 3500, [string]$Names = '')
+#   C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File shaderslots.ps1 [-Inc gfx.inc] [-Limit 512]
+param([string]$Inc = (Join-Path $PSScriptRoot 'gfx.inc'), [int]$Limit = 512, [string]$Names = '')
 # -Names a,b,c checks only those pixel shaders (framegen.inc: -Inc framegen.inc -Limit 512 -Names ps_fg_copy,...)
 $ErrorActionPreference = 'Stop'
 if ([IntPtr]::Size -ne 4) { Write-Host 'shaderslots: needs 32-bit PowerShell (SysWOW64)'; exit 2 }
@@ -37,7 +38,7 @@ public static class DxSlots {
   }
 }
 '@
-$list = @(,@('vs_main','vs_3_0')) +(@('ps_fxaa','ps_bright','ps_down','ps_blur','ps_scene','ps_look','ps_screen','ps_galaxy','ps_ao','ps_aoblur','ps_sky','ps_sky5','ps_sky6','ps_sky7','ps_sky8','ps_sky9','ps_sky10','ps_sky11','ps_sky12','ps_sky13','ps_sky14','ps_weather','ps_fireworks','ps_lamps','ps_bulbs','ps_nighttint','ps_wincomp','ps_bhalo','ps_bpool','ps_moon','ps_winvis','ps_lampcur','ps_lampprobe','ps_mirror') | ForEach-Object { ,@($_, 'ps_3_0') }) + @(,@('ps_window','ps_2_0'))
+$list = @(,@('vs_main','vs_3_0')) +(@('ps_fxaa','ps_bright','ps_down','ps_blur','ps_scene','ps_look','ps_screen','ps_galaxy','ps_ao','ps_aoblur','ps_sky','ps_sky5','ps_sky6','ps_sky7','ps_sky8','ps_sky9','ps_sky10','ps_sky11','ps_sky12','ps_sky13','ps_sky14','ps_weather','ps_fireworks','ps_lamps','ps_bulbs','ps_nighttint','ps_wincomp','ps_bhalo','ps_bpool','ps_moon','ps_winvis','ps_lampcur','ps_lampprobe','ps_btile','ps_mirror','ps_groundmist') | ForEach-Object { ,@($_, 'ps_3_0') }) + @(,@('ps_window','ps_2_0'))
 if ($Names) { $list = @($Names.Split(',') | ForEach-Object { ,@($_.Trim(), 'ps_3_0') }) }
 $bad = 0
 foreach ($s in $list) {
@@ -45,7 +46,7 @@ foreach ($s in $list) {
   if ($t.StartsWith('ERROR')) { Write-Host ("shader {0,-13} {1}" -f $s[0], $t); $bad++; continue }
   $m = [regex]::Match($t, 'approximately (\d+) instruction slots? used')
   $n = if ($m.Success) { [int]$m.Groups[1].Value } else { -1 }
-  $flag = if ($n -gt $Limit) { "  <-- OVER $Limit (NVIDIA rejects about 4096+)" } else { '' }
+  $flag = if ($n -gt $Limit) { "  <-- OVER $Limit" } else { '' }
   if ($n -gt $Limit) { $bad++ }
   Write-Host ("shader {0,-13} {1,5} slots{2}" -f $s[0], $n, $flag)
 }

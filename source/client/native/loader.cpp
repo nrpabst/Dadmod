@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include "widefile.inc"   // all file calls go through the wide Windows functions
+#include "../../mods/logcap/logcap.inc"  // capped logs: every log trims itself in place (Noah 2026-11-24)
 
 #ifdef _MSC_VER
 #define THISCALL __thiscall
@@ -150,10 +151,8 @@ static void Diag(const char*, ...) {}
 static void Log(const char* fmt, ...) {
     char line[600]; va_list ap; va_start(ap, fmt); _vsnprintf(line, sizeof line - 3, fmt, ap); va_end(ap);
     line[sizeof line - 3] = 0; strcat(line, "\r\n");
-    HANDLE f = CreateFileA(g_logPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, 0, NULL);  // share write: two threads logging at once used to drop a line
-    if (f != INVALID_HANDLE_VALUE) { DWORD n; WriteFile(f, line, (DWORD)strlen(line), &n, NULL); CloseHandle(f); }
+    logcap::Append(g_logPath, line, logcap::kClient);  // trims itself at 2 MB (mods/logcap/logcap.inc)
 #ifdef DADMOD_DIAG
-    else Diag("client.log write FAILED (error %lu): %s", GetLastError(), line);
     Diag("log: %.300s", line);
 #endif
 }
@@ -429,14 +428,18 @@ static void __cdecl LoadStartupHook(void) {
 #include "menulevels.inc"                        // main menu scenes put together from the player's own files
 #include "../../mods/balance/balancelock.inc"   // infinite balance (gfx.inc forwards gfx_balancelock); client build: offline only, enforced by the client menu scripts
 #include "../../mods/skinsync/skinsync.inc"      // live skater looks online after Load Skater (dadmod to dadmod)
+#include "../../mods/throw/throwsend.inc"        // thrown props reach players without dadmod on a host without dadmod (0x48 via the host)
 #include "../../mods/cars2/cars2.inc"        // Cars: while driving, up/down also press gas/brake (gfx.inc ReadControlsHook calls it)
 #include "../../mods/gfx/gfx.inc"                // graphics settings (dadmod\gfx.ini)
 #define SOUNDLOG_NO_LOGGER   // no sound logger in the player build (Noah 2026-11-21)
 #include "../../mods/soundlog/soundlog.inc"      // level/teleporter sound volumes, sound logger (dadmod\soundlog.txt)
 #include "../../mods/skatercopy/skatercopy.inc"  // Copy Scales From / Copy Tricks From another saved skater (reads Save\*.SKA)
 #include "../../mods/fullscreen/fullscreen.inc"    // Graphics > Display live (THUGRECOMP_DisplayLive) + Alt+Enter fullscreen toggle (Noah 2026-11-21: in the player build)
+#include "../../mods/lamplights/lampsrc.inc"      // lamp post models built from the player's own THUG2 / THUG Pro files
+#include "../../mods/lamplights/lampmodels.inc"   // lamp posts drawn per map (merged per model part)
 #include "../../mods/lamplights/lamplights.inc"    // street lamps + lit windows at night (Chicago): engine LevelLights, bulbs/pools/windows drawn by gfx.inc
 #include "update.inc"                             // in-game updater: release check at boot, Update dadmod
+#include "../../mods/serverlog/serverlog.inc"     // servers joined log + dadmod maps locked on listed servers (Noah 2026-11-27)
 
 // ---- script functions
 struct CFuncEntry { const char* name; bool (__cdecl* fn)(void*, void*); };
@@ -511,7 +514,26 @@ static bool __cdecl CF_ModelExists(void* params, void* script) {
     return false;
 }
 
+// THUGRECOMP_GameFileExists file="data\\pre\\P8Suburbsscn.prx"  true when that file is in the game folder (a path
+// relative to THUGPro.exe's folder; no "..", no drive). Noah 2026-11-23: the extra maps come in separate map packs
+// the installer fetches; a level whose files aren't there yet is greyed out in level select instead of loading.
+static bool __cdecl CF_GameFileExists(void* params, void* script) {
+    (void)script;
+    const char* m = NULL;
+    if (!GetStringParam(params, "file", &m) || !m || !*m || strstr(m, "..") || strchr(m, ':') || m[0] == '\\' || m[0] == '/') return false;
+    char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if (!len || len >= MAX_PATH) return false;
+    char* slash = strrchr(path, '\\');
+    if (!slash) return false;
+    slash[1] = 0;
+    std::string f = std::string(path) + m;
+    DWORD a = GetFileAttributesA(f.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 static struct CFuncEntry g_cfuncs[] = {
+    { "THUGRECOMP_GameFileExists", CF_GameFileExists },
     { "THUGRECOMP_ModelExists", CF_ModelExists },
     { "THUGRECOMP_ClientLog", CF_ClientLog },
     { "THUGRECOMP_SafeStartInfo", CF_SafeStartInfo },
@@ -525,7 +547,16 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_AddLevelLight", lamplights::CF_AddLevelLight },
     { "THUGRECOMP_LampBulbsClear", lamplights::CF_LampBulbsClear },
     { "THUGRECOMP_LampBulb", lamplights::CF_LampBulb },
+    { "THUGRECOMP_LampPost", lamplights::CF_LampPost },
     { "THUGRECOMP_LampNight", lamplights::CF_LampNight },
+    { "THUGRECOMP_ThrowSendToServer", throwsend::CF_ThrowSendToServer },
+    { "THUGRECOMP_ThrowHostStock", throwsend::CF_ThrowHostStock },
+    { "THUGRECOMP_ThrowStockOn", throwsend::CF_ClientStockOn },
+    { "THUGRECOMP_ThrowStockType", throwsend::CF_ClientStockType },
+    { "THUGRECOMP_ServerLogJoin", srvlog::CF_ServerLogJoin },
+    { "THUGRECOMP_ServerLogTick", srvlog::CF_ServerLogTick },
+    { "THUGRECOMP_ServerCurrent", srvlog::CF_ServerCurrent },
+    { "THUGRECOMP_ServerMapsLocked", srvlog::CF_ServerMapsLocked },
     { "THUGRECOMP_SkinHello", skin::CF_SkinHello },
     { "THUGRECOMP_SkinSend", skin::CF_SkinSend },
     { "THUGRECOMP_SkinLocalZero", skin::CF_SkinLocalZero },
@@ -604,6 +635,8 @@ static struct CFuncEntry g_cfuncs[] = {
     { "THUGRECOMP_UpdateInfo", dupdate::CF_UpdateInfo },
     { "THUGRECOMP_UpdateStart", dupdate::CF_UpdateStart },
     { "THUGRECOMP_UpdateDownload", dupdate::CF_UpdateDownload },
+    { "THUGRECOMP_UpdateCheck", dupdate::CF_UpdateCheck },
+    { "THUGRECOMP_UpdateNotes", dupdate::CF_UpdateNotes },
 };
 
 static void __cdecl RegisterCFuncsHook(struct CFuncEntry* table, unsigned count) {

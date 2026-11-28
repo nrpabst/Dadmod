@@ -34,6 +34,10 @@ static volatile LONG g_testDir, g_testReads;  // test aid: pretend forward (1) /
 static volatile LONG g_testKey, g_testKeyReads;  // test aid: pretend this DIK key is down for N reads
 static DWORD g_exitSince;             // Backspace pressed: hold Triangle from then
 static bool g_backWas;
+// 2026-11-24 (log 2026-11-23 19:05: got in the NY Cab and was out again 1 s later): a Triangle / grind key still held
+// from the menu pick made the stopped car ask to get out at once. Triangle now counts only after it was let go once
+// since the remap turned on (each car you get in).
+static bool g_triArmed;
 
 static const char* State() {
     if (!g_on) return "turned off: not driving, or a menu is open";
@@ -76,7 +80,7 @@ static void Remap(BYTE* out) {
     bool active = off == nullptr;
     if (active != g_active) {
         g_active = active;
-        if (active) mmenu::Log("cars2: driving remap on (forward = gas, back = brake, Space/RB handbrake, Backspace out)");
+        if (active) { g_triArmed = false; mmenu::Log("cars2: driving remap on (forward = gas, back = brake, Space/RB handbrake, Backspace out)"); }
         else mmenu::Log("cars2: driving remap off (%s)", off);
     }
     if (g_testKeyReads > 0) --g_testKeyReads;
@@ -100,6 +104,10 @@ static void Remap(BYTE* out) {
     g_backWas = back;
     if (g_exitSince && GetTickCount() - g_exitSince > kExitHoldMs) g_exitSince = 0;
 
+    if (!g_triArmed) {             // Triangle held since before getting in: ignore it until it is let go
+        if (out[9] == 0) g_triArmed = true;
+        else out[9] = 0;
+    }
     if (g_exitSince) {             // stock exit: Triangle brakes to a stop, then ExitVehicleRequest
         out[6] = 0;
         out[9] = 0xFF;
@@ -173,7 +181,8 @@ static void __fastcall SteerHook(BYTE* comp) {
 }
 
 // 2026-11-21 (Noah: "ok nvm lets just use thugpro stock handling"): the GTA 3 steering hook is no longer installed
-// (SteerHook stays as reference, unused). Install() only adds the wheel-bone guard below.
+// (SteerHook stays as reference, unused). 2026-11-24: the same call site 0x43C1E9 now goes to TrackHook (stock input step,
+// then the respawn / flip-back tracker below); Install() also adds the wheel-bone guard.
 //
 // Wheel-bone guard (props crashed at 0x43BA80 reading 0x1D0): the vehicle's finalize step 0x43BA20 asks the body
 // model for its bone list (call 0x493040 at 0x43BA62, ECX = model's skeleton data) and reads the four wheel
@@ -181,18 +190,327 @@ static void __fastcall SteerHook(BYTE* comp) {
 // a zeroed dummy list instead, so a bad body model can never crash (its wheels just all sit at the middle).
 static const DWORD kBonesCall = 0x43BA62, kBonesFn = 0x493040;
 static BYTE g_dummyBones[0x800];
+// ---- More Cars model fix (2026-11-24, Noah: "a lot of more cars have their model placed wrong or they're invisible") ----
+// The car takes its parts from the body model's hierarchy list (8 x 0x50-byte entries: +0 name checksum, +4 parent,
+// +8 index << 16, +0x10 4x4 bind matrix, translation at +0x40) BY POSITION, never by name:
+//   init 0x43BA20: entry 1 = body (offset), entries 2-5 = wheels 1-4 (spots, wheel base), setup Wheels[] in the same order
+//   pose 0x43A070: output bone 0 = zero (shadow hidden), 1 = body (fixed axis matrix + body offset), k >= 2 = wheel k-2
+//                  (reads past the 4 wheels for k >= 6: garbage)
+// Every stock car lists Car_Shadow, Car, Car_Wheel01-04 with an unturned body. Many THUG2 traffic models don't:
+//   wheels in another order (Smart Car, Hippie Van, Delivery Van, Rust Bucket, Parade Float: the back wheels steered),
+//   body listed last (Liberty: body drawn at a wheel, a wheel drawn as the body), 6 wheels with the body 8th (Tour
+//   Bus: body read garbage, invisible), body part turned 90 degrees (Sedan, Delivery Van, Rust Bucket, Barcelona Taxi,
+//   Neon, Submarine: drawn on its side / nose), wheels on the middle line (Streetcar: tipped over at once).
+// For setups with dadmod_bonefix (QB sends THUGRECOMP_CarsDrive bonefix=1 right before getting in, only for More Cars):
+//   init gets a reordered copy of the list (body 1, Car_Wheel01-04 as 2-5; middle-line wheels spread 35 out), and after
+//   every stock pose call the pose is mapped back to the model's own order by name: body -> the body pose turned by the
+//   body part's own bind turn, wheel -> its wheel's pose moved to its own spot, wheels 5/6 -> the nearest same-side
+//   wheel's pose moved to their spot, anything else (shadow, extra parts) hidden like stock bone 0.
+// Stock cars and props never get the fix (bonefix=0 clears it), so their stock behavior is untouched.
+static const DWORD kPoseFn = 0x43A070, kPoseSkipByte = 0x7D1EC0;
+static const DWORD kPoseCalls[] = { 0x43ADA7, 0x43BEC7, 0x43C269, 0x43C523 };
+struct BoneFix {
+    BYTE* list;           // the model's own hierarchy list this fix was built for
+    BYTE* comp;           // the vehicle component using it (first pose call after init)
+    bool pending, hasRot;
+    int n;                // hierarchy entries
+    int role[8];          // stock pose index to copy: 0 = hidden, 1 = body, 2-5 = wheel 1-4
+    float delta[8][3];    // added to the copied translation (vehicle axes)
+    float rot[9];         // body part bind turn (rows)
+    BYTE copy[8 * 0x50];  // reordered list handed to init
+};
+static BoneFix g_bf;
+static volatile LONG g_bfRot = 1;     // test aid: THUGRECOMP_CarsDrive bfrot=0 (no turn) / 1 (bind turn) / 2 (its transpose)
+static DWORD QbKey(const char* s);
+static volatile LONG g_bonefixNext;   // THUGRECOMP_CarsDrive bonefix=
+
+static void BindPos(const BYTE* e, float out[3]) {   // file axes (x, y = back, z = up) -> the car's (-x, z, -y)
+    const float* t = (const float*)(e + 0x40);
+    out[0] = -t[0]; out[1] = t[2]; out[2] = -t[1];
+}
+
+static void BuildBoneFix(BYTE* list) {
+    BYTE* keep = g_bf.list;
+    bool want = InterlockedExchange(&g_bonefixNext, 0) != 0 || (keep && keep == list);
+    memset(&g_bf, 0, sizeof g_bf);
+    if (!want || !list || IsBadReadPtr(list, 6 * 0x50)) return;
+    static DWORD kCar, kW[6];
+    if (!kCar) { kCar = QbKey("Car"); char nm[16]; for (int i = 0; i < 6; ++i) { _snprintf(nm, sizeof nm, "Car_Wheel0%d", i + 1); kW[i] = QbKey(nm); } }
+    DWORD root = *(DWORD*)list;
+    int n = 1;
+    while (n < 8 && !IsBadReadPtr(list + n * 0x50, 0x50) && *(DWORD*)(list + n * 0x50 + 4) == root &&
+           (*(DWORD*)(list + n * 0x50 + 8) >> 16) == (DWORD)n) ++n;
+    int body = -1, w[6] = { -1, -1, -1, -1, -1, -1 };
+    for (int k = 1; k < n; ++k) {
+        DWORD c = *(DWORD*)(list + k * 0x50);
+        if (c == kCar) body = k;
+        for (int i = 0; i < 6; ++i) if (c == kW[i]) w[i] = k;
+    }
+    if (n < 6 || body < 0 || w[0] < 0 || w[1] < 0 || w[2] < 0 || w[3] < 0) {
+        mmenu::Log("cars2: More Cars fix: model parts not recognized (%d parts), left stock", n);
+        return;
+    }
+    g_bf.list = list; g_bf.pending = true; g_bf.n = n;
+    memcpy(g_bf.copy, list, n * 0x50);
+    memcpy(g_bf.copy + 0x50, list + body * 0x50, 0x50);
+    for (int j = 0; j < 4; ++j) memcpy(g_bf.copy + (2 + j) * 0x50, list + w[j] * 0x50, 0x50);
+    float* t[4];
+    for (int j = 0; j < 4; ++j) t[j] = (float*)(g_bf.copy + (2 + j) * 0x50 + 0x40);
+    bool spread = fabsf(t[0][0]) < 5.f && fabsf(t[1][0]) < 5.f;
+    if (spread) {   // wheels on the middle line: give the physics a 70 wide track, each pair at its middle
+        for (int a = 0; a < 4; a += 2) {
+            float m = (t[a][1] + t[a + 1][1]) * 0.5f;
+            t[a][0] = 35.f; t[a + 1][0] = -35.f; t[a][1] = t[a + 1][1] = m;
+        }
+    }
+    float phys[4][3];
+    for (int j = 0; j < 4; ++j) BindPos(g_bf.copy + (2 + j) * 0x50, phys[j]);
+    for (int k = 0; k < n; ++k) {
+        g_bf.role[k] = 0;
+        if (k == body) { g_bf.role[k] = 1; continue; }
+        for (int i = 0; i < 6; ++i) {
+            if (k != w[i]) continue;
+            int j = i;
+            if (i >= 4) {   // extra wheel: copy the nearest wheel on the same side
+                float own[3]; BindPos(list + k * 0x50, own);
+                float best = 1e30f;
+                for (int c = 0; c < 4; ++c) {
+                    if ((phys[c][0] < 0.f) != (own[0] < 0.f)) continue;
+                    float d = fabsf(phys[c][2] - own[2]);
+                    if (d < best) { best = d; j = c; }
+                }
+                if (j >= 4) j = 2;
+            }
+            float own[3]; BindPos(list + k * 0x50, own);
+            g_bf.role[k] = 2 + j;
+            for (int a = 0; a < 3; ++a) g_bf.delta[k][a] = own[a] - phys[j][a];
+        }
+    }
+    const float* m = (const float*)(list + body * 0x50 + 0x10);
+    for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) g_bf.rot[r * 3 + c] = m[r * 4 + c];
+    for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c)
+        if (fabsf(g_bf.rot[r * 3 + c] - (r == c ? 1.f : 0.f)) > 0.01f) g_bf.hasRot = true;
+    mmenu::Log("cars2: More Cars fix: %d parts, body %d, wheels %d %d %d %d (+%d %d), body turned %d, middle-line wheels %d",
+               n, body, w[0], w[1], w[2], w[3], w[4], w[5], g_bf.hasRot ? 1 : 0, spread ? 1 : 0);
+}
+
 static void* __fastcall BonesGuard(void* ecx, void* /*edx*/) {
     void* r = ecx ? ((void*(__thiscall*)(void*))kBonesFn)(ecx) : nullptr;
     if (!r) {
         static DWORD s_logAt;
         if (GetTickCount() - s_logAt > 5000) { s_logAt = GetTickCount(); mmenu::Log("cars2: car body model has no wheel bones, using a blank set (no crash)"); }
         memset(g_dummyBones, 0, sizeof g_dummyBones);
+        g_bf.list = nullptr; g_bf.comp = nullptr; g_bf.pending = false;
         return g_dummyBones;
     }
-    return r;
+    BuildBoneFix((BYTE*)r);
+    return g_bf.list ? (void*)g_bf.copy : r;
+}
+
+static void __fastcall PoseHook(BYTE* comp, void* /*edx*/) {
+    ((void(__thiscall*)(BYTE*))kPoseFn)(comp);
+    if (!g_bf.list || !comp) return;
+    if (g_bf.pending) { g_bf.comp = comp; g_bf.pending = false; }
+    if (comp != g_bf.comp) return;
+    if (*(BYTE*)kPoseSkipByte || *(DWORD*)(comp + 0x131C) == 2) return;
+    BYTE* mdl = *(BYTE**)(comp + 0x1310);
+    if (!mdl || IsBadReadPtr(mdl, 0x1C)) return;
+    BYTE* obj = ((BYTE*(__thiscall*)(BYTE*))0x5480F0)(mdl);
+    if (!obj || IsBadReadPtr(obj, 0x18)) return;
+    float* buf = ((float*(__thiscall*)(BYTE*))0x5480C0)(obj);
+    int n = ((int(__thiscall*)(BYTE*))0x4A2BA0)(obj);
+    if (!buf || n != g_bf.n || IsBadWritePtr(buf, n * 64)) return;
+    float src[8][16];
+    memcpy(src, buf, n * 64);
+    for (int k = 0; k < n; ++k) {
+        float* o = buf + k * 16;
+        int r = g_bf.role[k];
+        if (r == 0) { memset(o, 0, 64); continue; }
+        memcpy(o, src[r], 64);
+        if (r == 1 && g_bf.hasRot && g_bfRot) {
+            float R[9];
+            for (int i = 0; i < 9; ++i) R[i] = g_bfRot == 2 ? g_bf.rot[(i % 3) * 3 + i / 3] : g_bf.rot[i];
+            for (int i = 0; i < 3; ++i) for (int c = 0; c < 4; ++c)
+                o[i * 4 + c] = R[i * 3] * src[1][c] + R[i * 3 + 1] * src[1][4 + c] + R[i * 3 + 2] * src[1][8 + c];
+        }
+        o[12] += g_bf.delta[k][0]; o[13] += g_bf.delta[k][1]; o[14] += g_bf.delta[k][2];
+    }
+}
+
+
+// ---- Respawn at the last safe spot + flip back (Noah 2026-11-24: "i drove into the water and my car respawned face
+// down in a ramp") ----
+// Stock recovery is all QB: a water / kill trigger runs SK3_KillSkater(_Water) -> SK3_Killskater_Finish (hides the car
+// 0.5 s for water) -> SK3_Killskater_Finish3, which while Driving does PlayerVehicle : Vehicle_MoveToRestart <node>
+// (the trigger's restart node, else trg_playerrestart: skater restart points, often on or next to ramps) and
+// PlayerVehicleCamera : VehicleCamera_Reset. The car is dropped there with whatever spin it had.
+// Vehicle component (ECX of the input step 0x4376B0, called first thing in the update 0x43C1D0 at 0x43C1E9):
+//   +0x18 pos, +0x28 momentum, +0x38 orientation quaternion (x y z w), +0x48 angular momentum, +0x58 awake (1),
+//   +0x5C sleep timer, +0x64 matrix rows right / up (+0x74, up.y = +0x78) / forward (+0x84) / +0x94 (0 0 0 1),
+//   +0xA4 velocity, +0xB4 angular velocity, +0x114 wheels touching, +0x190 wheel count, +0x11A stock self-right state.
+//   Quaternion <-> matrix: 0x42E1F0 (thiscall, ECX = quat out, arg = matrix), 0x42BC40 (ECX = quat, arg = matrix out),
+//   both used by the stock self-righting 0x438770 (which builds the upright matrix right = (fz,0,-fx), up = (0,1,0),
+//   forward = (fx,0,fz) the same way as below).
+// What we do, only on the local player's car (object id PlayerVehicle) while the driving beat runs:
+//   - every 0.5 s with all wheels down, up.y > 0.9 and not dropping fast: remember pos + heading (4 kept)
+//   - the car jumps (stock recovery teleport: > 300 units at > 6000 units/s) or has had no wheel down for 4 s and is
+//     2500 below the best spot: put it back at the newest spot at least 1 s old (else the newest, else where you got
+//     in), lifted a bit, upright, facing that heading, no speed or spin; the QB beat then resets the car camera
+//   - tipped (up.y < 0.3), nearly still for 3 s: stand it up at the same spot, lifted, same heading
+static const DWORD kSafeSampleMs = 500, kFallMs = 4000, kTipMs = 3000;
+struct Spot { float p[3]; float fx, fz; DWORD t; };
+static Spot g_spots[4];
+static int g_nSpots;
+static Spot g_entry;
+static BYTE* g_tComp;
+static DWORD g_tSeen, g_sampleAt, g_airSince, g_tipSince, g_ignoreUntil;
+static float g_tLast[3];
+static LARGE_INTEGER g_tT;
+static volatile LONG g_camReset;
+static DWORD g_pvId;
+static bool g_idWarned;
+
+static DWORD QbKey(const char* s) {
+    DWORD c = 0xFFFFFFFF;
+    for (; *s; ++s) {
+        BYTE b = (BYTE)*s; if (b >= 'A' && b <= 'Z') b += 32;
+        c ^= b;
+        for (int k = 0; k < 8; ++k) c = (c >> 1) ^ (0xEDB88320 & (0 - (c & 1)));
+    }
+    return c;
+}
+static bool IsPlayerVehicle(BYTE* comp) {
+    if (!g_pvId) g_pvId = QbKey("PlayerVehicle");
+    BYTE* obj = *(BYTE**)(comp + 0xC);
+    if (!obj || IsBadReadPtr(obj, 0x40)) return false;
+    for (int o = 4; o < 0x40; o += 4) if (*(DWORD*)(obj + o) == g_pvId) return true;
+    if (!g_idWarned) { g_idWarned = true; mmenu::Log("cars2: car object has no PlayerVehicle id, respawn tracker idle for it"); }
+    return false;
+}
+static void Heading(BYTE* comp, float& fx, float& fz) {
+    const float* m = (const float*)(comp + 0x64);
+    fx = m[8]; fz = m[10];
+    float l = sqrtf(fx * fx + fz * fz);
+    if (l < 0.3f) { fx = m[4]; fz = m[6]; l = sqrtf(fx * fx + fz * fz); }   // standing on its nose: use the roof
+    if (l < 0.01f) { fx = 0.f; fz = 1.f; return; }
+    fx /= l; fz /= l;
+}
+static void PlaceUpright(BYTE* comp, const float p[3], float lift, float fx, float fz) {
+    float l = sqrtf(fx * fx + fz * fz);
+    if (l < 0.01f) { fx = 0.f; fz = 1.f; } else { fx /= l; fz /= l; }
+    float m[16] = { fz, 0.f, -fx, 0.f,  0.f, 1.f, 0.f, 0.f,  fx, 0.f, fz, 0.f,  0.f, 0.f, 0.f, 1.f };
+    float q[4] = { 0.f, 0.f, 0.f, 1.f };
+    ((void(__thiscall*)(float*, float*))0x42E1F0)(q, m);
+    float* f = (float*)comp;
+    f[0x18 / 4] = p[0]; f[0x1C / 4] = p[1] + lift; f[0x20 / 4] = p[2];
+    for (int i = 0; i < 3; ++i) { f[0x28 / 4 + i] = 0.f; f[0x48 / 4 + i] = 0.f; f[0xA4 / 4 + i] = 0.f; f[0xB4 / 4 + i] = 0.f; }
+    for (int i = 0; i < 4; ++i) f[0x38 / 4 + i] = q[i];
+    ((void(__thiscall*)(float*, float*))0x42BC40)(f + 0x38 / 4, f + 0x64 / 4);
+    f[0x94 / 4] = 0.f; f[0x98 / 4] = 0.f; f[0x9C / 4] = 0.f; f[0xA0 / 4] = 1.f;
+    comp[0x11A] = 0;
+    *(int*)(comp + 0x58) = 1; *(int*)(comp + 0x5C) = 0;
+    g_tLast[0] = p[0]; g_tLast[1] = p[1] + lift; g_tLast[2] = p[2];
+    g_ignoreUntil = GetTickCount() + 1000;
+    g_airSince = 0; g_tipSince = 0;
+    InterlockedExchange(&g_camReset, 1);
+}
+static const Spot& BestSpot() {
+    DWORD now = GetTickCount();
+    for (int i = g_nSpots - 1; i >= 0; --i) if (now - g_spots[i].t >= 1000) return g_spots[i];
+    if (g_nSpots) return g_spots[g_nSpots - 1];
+    return g_entry;
+}
+static void Respawn(BYTE* comp, const char* why) {
+    const Spot& s = BestSpot();
+    char line[200];
+    _snprintf(line, sizeof line, "cars2: respawn at last safe spot (%s) %.0f %.0f %.0f%s", why, s.p[0], s.p[1], s.p[2],
+              g_nSpots ? "" : " (where you got in)");
+    line[sizeof line - 1] = 0;
+    Spot c = s;
+    PlaceUpright(comp, c.p, 15.f, c.fx, c.fz);
+    ::DebugLog(line);
+}
+static void Track(BYTE* comp) {
+    DWORD now = GetTickCount();
+    if (*(volatile BYTE*)kPausedByte || now - g_beat > 5000 || !IsPlayerVehicle(comp)) return;
+    const float* f = (const float*)comp;
+    const float* pos = f + 0x18 / 4;
+    LARGE_INTEGER t; QueryPerformanceCounter(&t);
+    if (!g_freq.QuadPart) QueryPerformanceFrequency(&g_freq);
+    if (comp != g_tComp || now - g_tSeen > 1000) {
+        g_tComp = comp; g_nSpots = 0; g_airSince = 0; g_tipSince = 0; g_sampleAt = now;
+        g_entry.p[0] = pos[0]; g_entry.p[1] = pos[1]; g_entry.p[2] = pos[2]; g_entry.t = now;
+        Heading(comp, g_entry.fx, g_entry.fz);
+        g_ignoreUntil = now + 1500;
+        g_tLast[0] = pos[0]; g_tLast[1] = pos[1]; g_tLast[2] = pos[2]; g_tT = t; g_tSeen = now;
+        return;
+    }
+    g_tSeen = now;
+    float dt = (float)((double)(t.QuadPart - g_tT.QuadPart) / (double)g_freq.QuadPart);
+    g_tT = t;
+    float dx = pos[0] - g_tLast[0], dy = pos[1] - g_tLast[1], dz = pos[2] - g_tLast[2];
+    float d = sqrtf(dx * dx + dy * dy + dz * dz);
+    g_tLast[0] = pos[0]; g_tLast[1] = pos[1]; g_tLast[2] = pos[2];
+    bool ignore = (LONG)(now - g_ignoreUntil) < 0;
+    if (!ignore && dt > 0.f && d > 300.f && d / dt > 6000.f) { Respawn(comp, "stock recovery moved the car"); return; }
+
+    float upY = f[0x78 / 4];
+    const float* vel = f + 0xA4 / 4;
+    float sp = sqrtf(vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]);
+    int touch = *(const int*)(comp + 0x114), wheels = *(const int*)(comp + 0x190);
+    if (touch == 0) {
+        if (!g_airSince) g_airSince = now;
+        const Spot& b = BestSpot();
+        if (!ignore && now - g_airSince > kFallMs && pos[1] < b.p[1] - 2500.f) { Respawn(comp, "fell under the level"); return; }
+    } else g_airSince = 0;
+
+    if (wheels > 0 && touch >= wheels && upY > 0.9f && vel[1] > -300.f && now - g_sampleAt >= kSafeSampleMs) {
+        g_sampleAt = now;
+        if (g_nSpots == 4) { memmove(g_spots, g_spots + 1, 3 * sizeof(Spot)); g_nSpots = 3; }
+        Spot& s = g_spots[g_nSpots++];
+        s.p[0] = pos[0]; s.p[1] = pos[1]; s.p[2] = pos[2]; s.t = now;
+        Heading(comp, s.fx, s.fz);
+    }
+
+    if (upY < 0.3f && sp < 150.f) {
+        if (!g_tipSince) g_tipSince = now;
+        if (now - g_tipSince > kTipMs) {
+            float fx, fz; Heading(comp, fx, fz);
+            float p[3] = { pos[0], pos[1], pos[2] };
+            PlaceUpright(comp, p, 40.f, fx, fz);
+            char line[160];
+            _snprintf(line, sizeof line, "cars2: flipped back (up %.2f) %.0f %.0f %.0f", upY, p[0], p[1], p[2]);
+            line[sizeof line - 1] = 0;
+            ::DebugLog(line);
+        }
+    } else g_tipSince = 0;
+}
+static void __fastcall TrackHook(BYTE* comp) {
+    ((void(__fastcall*)(BYTE*))kSteerFn)(comp);
+    if (comp) Track(comp);
 }
 
 static void Install() {
+    {
+        BYTE* s = (BYTE*)kSteerCall;
+        DWORD old;
+        if (s[0] != 0xE8 || (DWORD)(kSteerCall + 5 + *(LONG*)(s + 1)) != kSteerFn) mmenu::Log("cars2: respawn tracker site changed, not installed");
+        else if (VirtualProtect(s, 5, PAGE_EXECUTE_READWRITE, &old)) {
+            *(LONG*)(s + 1) = (LONG)((DWORD)TrackHook - (kSteerCall + 5));
+            VirtualProtect(s, 5, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), s, 5);
+        }
+    }
+    for (DWORD site : kPoseCalls) {
+        BYTE* c = (BYTE*)site;
+        DWORD old;
+        if (c[0] != 0xE8 || (DWORD)(site + 5 + *(LONG*)(c + 1)) != kPoseFn) { mmenu::Log("cars2: More Cars pose site %08X changed, not installed", site); continue; }
+        if (VirtualProtect(c, 5, PAGE_EXECUTE_READWRITE, &old)) {
+            *(LONG*)(c + 1) = (LONG)((DWORD)PoseHook - (site + 5));
+            VirtualProtect(c, 5, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), c, 5);
+        }
+    }
     BYTE* p = (BYTE*)kBonesCall;
     if (p[0] != 0xE8 || (DWORD)(kBonesCall + 5 + *(LONG*)(p + 1)) != kBonesFn) { mmenu::Log("cars2: wheel-bone guard site changed, not installed"); return; }
     DWORD old;
@@ -210,7 +528,28 @@ static void HornPoll() {
     g_hornWas = h;
 }
 
-// THUGRECOMP_CarsDrive on=1|0  -> driving remap heartbeat / off. Returns active = 1 when the remap applies now.
+// Camera look after getting out (Noah 2026-11-24: "when you get out of a car it doesn't give you camera control back
+// until you get off board"). skatercam0 has a 'cameralookaround' component (0x81C7122D, vtable 0x64B28C, update
+// 0x4E4060): +0x18 = look lock, flipped by a pad button press (input pad +0x130) while it keeps updating under the car
+// camera; +0x19 = SC_SetSkaterCamOverride; +0x20 / +0x24 heading / tilt. While +0x18 is set the right stick / mouse
+// look does nothing. The skater camera update 0x4FA860 clears +0x18 only in its walking branch, which is why stepping
+// off the board brought it back. Getting out (dadmod_cars_exit_now) now clears it the same way.
+static void FreeSkaterCamLook() {
+    void* mgr = *(void**)0x6F0FC0;
+    if (!mgr || IsBadReadPtr(mgr, 0x10)) return;
+    void* obj = ((void*(__thiscall*)(void*, DWORD))0x462120)(mgr, QbKey("skatercam0"));
+    if (!obj || IsBadReadPtr(obj, 0x20)) return;
+    BYTE* la = (BYTE*)((void*(__thiscall*)(void*, DWORD))0x45DB90)(obj, 0x81C7122D);
+    if (!la || IsBadReadPtr(la, 0x44) || *(DWORD*)la != 0x64B28C) return;
+    char line[120];
+    _snprintf(line, sizeof line, "cars2: got out, skater camera look lock was %d (override %d), cleared", la[0x18], la[0x19]);
+    line[sizeof line - 1] = 0;
+    ::DebugLog(line);
+    la[0x18] = 0;
+    *(float*)(la + 0x20) = 0.f; *(float*)(la + 0x24) = 0.f;
+}
+
+// THUGRECOMP_CarsDrive on=1|0  -> driving remap heartbeat / off. camfree=1 clears the skater camera look lock. Returns active = 1 when the remap applies now.
 // gta=1|0 sets the GTA 3 steering (any time). Returns horn = 1 when the horn key was pressed since the last call.
 // Test aids: test=1 (forward) or test=-1 (back) reads=N pretends that direction is held for N controller reads;
 // key=<DIK code> reads=N pretends that key is down (57 Space, 14 Backspace, 73 Numpad 9).
@@ -222,9 +561,15 @@ static bool __cdecl CF_CarsDrive(void* params, void* script) {
     if (t) { g_testDir = t; InterlockedExchange(&g_testReads, IntParam(params, "reads", 60)); }
     int k = IntParam(params, "key", 0);
     if (k) { g_testKey = k; InterlockedExchange(&g_testKeyReads, IntParam(params, "reads", 60)); }
+    if (IntParam(params, "camfree", 0) == 1) FreeSkaterCamLook();
+    int bf = IntParam(params, "bonefix", -1);
+    if (bf == 0 || bf == 1) InterlockedExchange(&g_bonefixNext, bf);
+    int bfr = IntParam(params, "bfrot", -1);
+    if (bfr >= 0 && bfr <= 2) InterlockedExchange(&g_bfRot, bfr);
     int gta = IntParam(params, "gta", -1);
     if (gta == 0 || gta == 1) InterlockedExchange(&g_gta, gta);
     RetInt(script, "active", State() == nullptr ? 1 : 0);
+    if (InterlockedExchange(&g_camReset, 0)) RetInt(script, "cam_reset", 1);   // the tracker moved the car: QB resets the camera
     if (InterlockedExchange(&g_horn, 0) > 0 && State() == nullptr) RetInt(script, "horn", 1);
     return true;
 }

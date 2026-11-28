@@ -94,6 +94,10 @@ script thugpro_show_quick_menu
 endscript
 
 script exit_pause_menu
+    dadmod_mk_keeping
+    if ( <mk_keeping> = 1 )
+        return
+    endif
     exit_pause_menu_orig <...>
     if not InNetGame
         if ObjectExists id = Skater
@@ -201,6 +205,13 @@ script load_level
         load_level_orig <...>
     endif
     dadmod_lamplights_level load_script = <load_script> level = <level> game = <game>
+    Change dadmod_upd_front = 0
+    if GotParam frontend_level
+        if (<frontend_level> = 1)
+            Change dadmod_upd_front = 1
+        endif
+    endif
+    dadmod_update_watch_start
     if GotParam frontend_level
         UnloadQB "dadmod_casidle.qb"
         LoadQB "dadmod_casidle.qb" LevelSpecific

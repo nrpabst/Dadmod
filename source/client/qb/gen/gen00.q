@@ -1826,6 +1826,9 @@ script dadmod_homelevel_tick
     if ScreenElementExists id = root_window
         root_window : SetTags dadmod_hl_sticks_was = <dadmod_hl_sticks>
     endif
+    if ObjectExists id = dadmod_lampeditor
+        dadmod_hl_go = 0
+    endif
     if (<dadmod_hl_go> = 1)
         if not LevelIs Load_MainMenu
             KillSpawnedScript Name = dadmod_homelevel_open
@@ -5432,6 +5435,8 @@ dadmod_item_catalog = [
 { name = "gfx_wxamt" b = 1 p = { id = gfx_wxamt key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up." } }
 { name = "gfx_fireworks" b = 1 p = { id = gfx_fireworks key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes." } }
 { name = "gfx_fwnow" b = 1 p = { id = gfx_fwnow key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now." } }
+{ name = "gfx_lamplights" b = 1 p = { id = gfx_lamplights key = "gfx_lamplights" label = "Lamp lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lamplights desc = "Street lamp light at night: bulb glow and light on the ground and walls. Off also saves work." } }
+{ name = "gfx_lampposts" b = 1 p = { id = gfx_lampposts key = "gfx_lampposts" label = "Extra lamp posts" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lampposts desc = "The extra lamp posts added to some maps, with their light. Hide keeps the map's own lamps lit." } }
 { name = "gfx_fps" b = 1 p = { id = gfx_fps key = "gfx_fps" label = "FPS counter" kind = gfxlist min = 0 max = 2 def = 0 list = gfx_fps desc = "Frames per second in the top left corner. Tiny shows just the number, right in the corner. Changes show right away." pdesc = "Frames per second in the top left. Tiny shows just the number." } }
 { name = "gfx_shotkey" b = 1 p = { id = gfx_shotkey key = "gfx_shotkey" label = "Screenshot key (F11)" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_shotkey desc = "F11 saves a PNG screenshot to the dadmod screenshots folder." } }
 { name = "gfx_shothud" b = 1 p = { id = gfx_shothud key = "gfx_shothud" label = "Screenshots show menus" kind = gfxlist min = 0 max = 1 def = 0 list = gfx_shothud desc = "On: F11 screenshots include menus and the HUD. Off: just the game picture." } }
@@ -6370,6 +6375,23 @@ script dadmod_skc_tricks_undo
     dadmod_skc_tricks_back focus_target = dadmod_skc_copy_tricks
 endscript
 
+script dadmod_serverlog_tick
+    net = 0
+    host = 0
+    if InNetGame
+        net = 1
+        if IsHost
+            host = 1
+        endif
+    endif
+    lv = "none"
+    GetLevelStructureName
+    if StructureContains structure = ( <level_structure_name> ) level
+        FormatText TextName = lv "%a" a = ( <level_structure_name> . level )
+    endif
+    THUGRECOMP_ServerLogTick net = <net> host = <host> level = <lv>
+endscript
+
 dadmod_bhra_keep = 0
 
 dadmod_bhra_easy = 0
@@ -6517,7 +6539,7 @@ script dadmod_bhra_cand
     endif
 endscript
 
-script dadmod_bhra_interrupt src = 1
+script dadmod_bhra_interrupt src = 1 zero = 0
     dadmod_bhra_cand
     if GotParam bhra_cand
         SetTags bhra_wait = <src> bhra_hopped = 0
@@ -6525,11 +6547,15 @@ script dadmod_bhra_interrupt src = 1
         if IsTrue dadmod_bhra_keep
             SetTags bhra_pending = 1
             dadmod_bhra_dbg what = "interrupted with the ollie button down: bank deferred"
-            Obj_SpawnScript dadmod_bhra_watch params = { src = <src> }
+            Obj_SpawnScript dadmod_bhra_watch params = { src = <src> zero = <zero> }
             return deferred = 1
         endif
         Obj_SpawnScript dadmod_bhra_watch params = { src = <src> nobank = 1 }
     endif
+endscript
+
+script dadmod_bhra_land2_out_z
+    dadmod_bhra_interrupt src = 1 zero = 1
 endscript
 
 script dadmod_bhra_land2_out
@@ -6600,7 +6626,7 @@ script dadmod_bhra_ollie_mark
     endif
 endscript
 
-script dadmod_bhra_watch src = 1
+script dadmod_bhra_watch src = 1 zero = 0
     wait 1 gameframe
     GetSingleTag bhra_hopped
     SetTags bhra_wait = 0 bhra_hop_now = 0
@@ -6613,6 +6639,11 @@ script dadmod_bhra_watch src = 1
         return
     endif
     if ( <hop> = 0 )
+        if ( <zero> = 1 )
+            SetTags bhra_pending = 0
+            dadmod_bhra_dbg what = "after zero, no ollie followed: not banked"
+            return
+        endif
         dadmod_bhra_dbg what = "no ollie followed: banking"
         dadmod_bhra_flush
         return
@@ -6650,7 +6681,19 @@ script dadmod_bhra_flush
             SetTags bhra_pending = 0 bhra_hop_now = 0
             dadmod_bhra_dbg what = "pending combo banked"
             LandSkaterTricks
+            if GoalManager_GoalShouldExpire
+                Obj_KillSpawnedScript Name = dadmod_bhra_endrun
+                Obj_SpawnScript dadmod_bhra_endrun
+            endif
         endif
+    endif
+endscript
+
+script dadmod_bhra_endrun
+    wait 1 gameframe
+    if not GameIsOver
+        dadmod_bhra_dbg what = "after zero: hop without a revert banked the combo, ending the run"
+        MakeSkaterGoto EndOfRun
     endif
 endscript
 
@@ -8062,6 +8105,8 @@ script dadmod_pause_skywx_menu
     dadmod_ui_item id = gfx_wxamt_pause key = "gfx_wxamt" label = "Intensity" kind = num min = 1 max = 10 def = 5 desc = "How heavy the weather is: light rain to a downpour, a few flakes to a blizzard, thin to thick fog. Thunderstorms strike more often higher up."
     dadmod_ui_item id = gfx_fireworks_pause key = "gfx_fireworks" label = "Fireworks" kind = gfxlist min = 0 max = 5 def = 0 list = gfx_fireworks desc = "Fireworks over the level when someone wins a game, or on wins and every 1, 3, 5 or 10 minutes."
     dadmod_ui_item id = gfx_fwnow_pause key = "gfx_fireworks" label = "Launch fireworks now" kind = gfxfire min = 0 max = 0 def = 0 desc = "Fire a fireworks show right now."
+    dadmod_ui_item id = gfx_lamplights_pause key = "gfx_lamplights" label = "Lamp lights" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lamplights desc = "Street lamp light at night: bulb glow and light on the ground and walls. Off also saves work."
+    dadmod_ui_item id = gfx_lampposts_pause key = "gfx_lampposts" label = "Extra lamp posts" kind = gfxlist min = 0 max = 1 def = 1 list = gfx_lampposts desc = "The extra lamp posts added to some maps, with their light. Hide keeps the map's own lamps lit."
     dadmod_ui_item id = gfx_skydef_pause key = "gfx_galaxy" label = "Default sky" kind = skyreset min = 0 max = 0 def = 0 desc = "Puts everything on this page back to default." pdesc = "Puts everything on this page back to default."
     if GotParam focus_id
         thugpro_menu_finalize focus_target = <focus_id>
@@ -8166,80 +8211,5 @@ script dadmod_pause_graphics
     repeat
     dadmod_layout_item name = "gfx_reset" label = "" grey = 0 dadmod_pause = 1
     thugpro_menu_finalize
-endscript
-
-script dadmod_pause_gfx_group
-    Change dadmod_pause_group_last = <group>
-    g = ( dadmod_pause_gfx_groups [ <group> ] )
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_gfx_group
-    menu_title = ( <g> . title )
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_pause_graphics
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    names = ( <g> . items )
-    GetArraySize <names>
-    i = 0
-    begin
-        if (<i> = <array_size>)
-            break
-        endif
-        dadmod_layout_item name = ( <names> [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
-        i = ( <i> + 1 )
-    repeat
-    thugpro_menu_finalize
-endscript
-
-dadmod_pause_weather_items = [ "gfx_tod" "gfx_galaxy" "gfx_skypop" "gfx_weather" "gfx_wxamt" "gfx_fireworks" "gfx_fwnow" "gfx_skydef" ]
-
-script dadmod_pause_weather
-    dadmod_pause_skywx_menu
-    return
-    dialog_box_exit
-    generic_menu_cleanup
-    thugpro_menu_create {
-    menu_name = dadmod_weather
-    menu_title = "weather"
-    menu_style = MENU_STYLE_LEFT
-    pad_back_script = dadmod_pause_skywx_menu
-    pad_back_params = { focus_id = dadmod_pause_wx }
-    helper_text = generic_helper_text
-    show_description_panel
-    show_gradient
-    boxed
-    }
-    GetArraySize dadmod_pause_weather_items
-    i = 0
-    begin
-        if (<i> = <array_size>)
-            break
-        endif
-        dadmod_layout_item name = ( dadmod_pause_weather_items [ <i> ] ) label = "" grey = 0 dadmod_pause = 1
-        i = ( <i> + 1 )
-    repeat
-    thugpro_menu_finalize
-endscript
-
-script dadmod_free_cam
-    exit_quick_menu
-    SpawnScript dadmod_free_cam_on
-endscript
-
-script dadmod_free_cam_on
-    wait 2 gameframes
-    if IsTrue view_mode
-        if InNetGame
-            ToggleViewMode
-        endif
-    endif
-    if not IsTrue view_mode
-        ToggleViewMode
-    endif
 endscript
 

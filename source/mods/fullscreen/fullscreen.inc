@@ -103,16 +103,47 @@ static bool MonitorSize(HWND h, int* w, int* hh) {
     *w = mi.rcMonitor.right - mi.rcMonitor.left; *hh = mi.rcMonitor.bottom - mi.rcMonitor.top;
     return *w > 0 && *hh > 0;
 }
+// Noah 2026-11-23: "after alt+enter i can't move the window or close it with the x". The window had become a borderless
+// popup over his second monitor while our own state still said "windowed", so the next Alt+Enter went to fullscreen
+// again and saved the popup style as the "framed" one: going back then gave a window with no title bar or X.
+// Now only a style that really has a title bar is ever saved, and Alt+Enter looks at the window itself.
+static bool HasFrame(LONG_PTR st) { return (st & WS_CAPTION) == WS_CAPTION && !(st & WS_POPUP); }
 static void SaveFramed(HWND h) {
-    g_savedStyle = GetWindowLongPtrA(h, GWL_STYLE);
+    LONG_PTR st = GetWindowLongPtrA(h, GWL_STYLE);
+    if (!HasFrame(st)) { fullscreen::Log("window has no title bar (style %08lX): keeping the saved framed style", (unsigned long)st); return; }
+    g_savedStyle = st;
     g_savedEx = GetWindowLongPtrA(h, GWL_EXSTYLE);
     GetWindowRect(h, &g_savedRect);
     g_haveSaved = true;
+}
+// borderless right now: no title bar and covering the whole monitor it is on, whoever made it so
+static bool LooksBorderless(HWND h) {
+    if (!h || HasFrame(GetWindowLongPtrA(h, GWL_STYLE))) return false;
+    MONITORINFO mi = { sizeof mi };
+    RECT r;
+    if (!GetWindowRect(h, &r) || !GetMonitorInfoA(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi)) return false;
+    return r.left <= mi.rcMonitor.left && r.top <= mi.rcMonitor.top && r.right >= mi.rcMonitor.right && r.bottom >= mi.rcMonitor.bottom;
+}
+static volatile LONG g_ourStyle;    // we are changing the window's style ourselves
+// who changed the window when it wasn't us: module+offset of the callers, for the log
+static void LogCallers(const char* what) {
+    void* fr[16]; USHORT n = CaptureStackBackTrace(1, 16, fr, nullptr);
+    std::string s;
+    for (USHORT i = 0; i < n; i++) {
+        HMODULE m = nullptr; char name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)fr[i], &m) && m) {
+            GetModuleFileNameA(m, name, MAX_PATH);
+            char* b = strrchr(name, '\\'); if (b) memmove(name, b + 1, strlen(b));
+        }
+        char one[96]; sprintf(one, " %s+%lX", name, (unsigned long)((DWORD)fr[i] - (DWORD)m)); s += one;
+    }
+    fullscreen::Log("%s, thread %lu, called from%s", what, GetCurrentThreadId(), s.c_str());
 }
 static void GoBorderless(HWND h) {
     if (!g_full) SaveFramed(h);
     MONITORINFO mi = { sizeof mi };
     if (!GetMonitorInfoA(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    InterlockedExchange(&g_ourStyle, 1);
     SetWindowLongPtrA(h, GWL_STYLE, (g_savedStyle & ~(LONG_PTR)(WS_OVERLAPPEDWINDOW)) | WS_POPUP | WS_VISIBLE);
     SetWindowLongPtrA(h, GWL_EXSTYLE, g_savedEx & ~(LONG_PTR)(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_TOPMOST));
     const RECT& r = mi.rcMonitor;
@@ -120,10 +151,11 @@ static void GoBorderless(HWND h) {
     SetWindowPos(h, HWND_NOTOPMOST, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
     MoveWindow(h, r.left, r.top, r.right - r.left, r.bottom - r.top, TRUE);   // thugpro.dll's SetWindowPos detour re-centers
     g_sizing = false;
+    InterlockedExchange(&g_ourStyle, 0);
     g_full = true;
     RECT cr; GetClientRect(h, &cr);
-    if (cr.right != r.right - r.left || cr.bottom != r.bottom - r.top) Log("borderless client is %ldx%ld, not the monitor's size", cr.right, cr.bottom);
-    Log("borderless %ldx%ld at %ld,%ld (game draws %dx%d)", r.right - r.left, r.bottom - r.top, r.left, r.top, CurW(), CurH());
+    if (cr.right != r.right - r.left || cr.bottom != r.bottom - r.top) fullscreen::Log("borderless client is %ldx%ld, not the monitor's size", cr.right, cr.bottom);
+    fullscreen::Log("borderless %ldx%ld at %ld,%ld (game draws %dx%d)", r.right - r.left, r.bottom - r.top, r.left, r.top, CurW(), CurH());
 }
 // framed window whose inside is cw x ch, kept where it was (pulled back onto the screen if it would stick out)
 static void GoWindow(HWND h, int cw, int ch) {
@@ -133,7 +165,8 @@ static void GoWindow(HWND h, int cw, int ch) {
         st = (GetWindowLongPtrA(h, GWL_STYLE) & ~(LONG_PTR)WS_POPUP) | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
         ex = GetWindowLongPtrA(h, GWL_EXSTYLE) & ~(LONG_PTR)WS_EX_TOPMOST;
     }
-    if (st & WS_POPUP && !(st & WS_CAPTION)) st = (st & ~(LONG_PTR)WS_POPUP) | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    if (!HasFrame(st)) st = (st & ~(LONG_PTR)(WS_POPUP | WS_MAXIMIZE)) | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    InterlockedExchange(&g_ourStyle, 1);
     SetWindowLongPtrA(h, GWL_STYLE, st | WS_VISIBLE);
     SetWindowLongPtrA(h, GWL_EXSTYLE, ex & ~(LONG_PTR)WS_EX_TOPMOST);
     RECT r = { 0, 0, cw > 0 ? cw : 1280, ch > 0 ? ch : 720 };
@@ -153,9 +186,26 @@ static void GoWindow(HWND h, int cw, int ch) {
     SetWindowPos(h, HWND_NOTOPMOST, x, y, ww, wh, SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
     MoveWindow(h, x, y, ww, wh, TRUE);
     g_sizing = false;
+    InterlockedExchange(&g_ourStyle, 0);
     g_full = false;
     SaveFramed(h);
-    Log("windowed %dx%d", cw, ch);
+    fullscreen::Log("windowed %dx%d", cw, ch);
+}
+
+// Tested 2026-11-23 (second Dev instance, scripted clicks): after Alt+Enter twice, a press on the title bar or the X
+// only dropped the game's activation (foreground went to nobody; no WM_NCLBUTTONDOWN ever came), so the window
+// couldn't be dragged or closed. Moving the style back from outside (thugpro.dll seeing every WM_SIZE) left it working,
+// and a 1-pixel resize and back, with WM_SIZE reaching thugpro.dll, repaired a broken window. GoWindow hides WM_SIZE
+// from thugpro.dll (it would snap to the old picture size), so once the window is framed and the device is at its new
+// size we give thugpro.dll that resize. Its own WM_SIZE handler snaps to "picture + frame", which is the size it has.
+static void NudgeSize(HWND h) {
+    RECT r;
+    if (!h || g_full || g_sizing || !GetWindowRect(h, &r) || IsIconic(h)) return;
+    int ww = r.right - r.left, wh = r.bottom - r.top;
+    MoveWindow(h, r.left, r.top, ww - 1, wh, TRUE);   // MoveWindow: thugpro.dll's SetWindowPos detour would re-center it
+    MoveWindow(h, r.left, r.top, ww, wh, TRUE);
+    RECT a; GetWindowRect(h, &a);
+    fullscreen::Log("size nudge for thugpro.dll: %ldx%ld at %ld,%ld", a.right - a.left, a.bottom - a.top, a.left, a.top);
 }
 
 // window thread: make it full (borderless) or framed at w x h; resets the device when the size changes or the
@@ -180,11 +230,14 @@ static void ApplyNow(HWND h, bool full, int w, int hh) {
         PP(0x30) = 0;      // FullScreen_RefreshRateInHz must be 0 when windowed
         InterlockedExchange(&g_waitReset, 1);
         *(volatile BYTE*)kResetFlag = 1;
-        Log("device reset asked: %dx%d, %s", w, hh, full ? "fullscreen" : "windowed");
+        fullscreen::Log("device reset asked: %dx%d, %s", w, hh, full ? "fullscreen" : "windowed");
         return;
     }
     if (full) { if (!g_full) GoBorderless(h); }
-    else if (g_full || !g_haveSaved) GoWindow(h, w > 0 ? w : CurW(), hh > 0 ? hh : CurH());
+    else {
+        if (g_full || !g_haveSaved) GoWindow(h, w > 0 ? w : CurW(), hh > 0 ? hh : CurH());
+        NudgeSize(h);
+    }
 }
 // watcher thread, once the engine's reset is done: fix the menu mapping, then the window on its own thread
 static void AfterReset(HWND h) {
@@ -195,22 +248,26 @@ static void AfterReset(HWND h) {
         *(volatile float*)(kMenuXs + 4) = g_oYs * fy;
         *(volatile int*)(kMenuXs + 8) = (int)(g_oXo * fx + 0.5f);
         *(volatile int*)(kMenuXs + 12) = (int)(g_oYo * fy + 0.5f);
-        Log("menu mapping %dx%d -> %dx%d: scale %.4f x %.4f, offset %d,%d", g_oW, g_oH, nw, nh,
+        fullscreen::Log("menu mapping %dx%d -> %dx%d: scale %.4f x %.4f, offset %d,%d", g_oW, g_oH, nw, nh,
             g_oXs * fx, g_oYs * fy, (int)(g_oXo * fx + 0.5f), (int)(g_oYo * fy + 0.5f));
         float* tx = TpScale(kTpXsRef); float* ty = TpScale(kTpYsRef);
         if (tx && ty) {
             float ox = *tx, oy = *ty;
             *tx = ox * fx; *ty = oy * fy;
-            Log("thugpro.dll sprite scale %.4f x %.4f -> %.4f x %.4f", ox, oy, *tx, *ty);
-        } else Log("thugpro.dll sprite scale not found");
+            fullscreen::Log("thugpro.dll sprite scale %.4f x %.4f -> %.4f x %.4f", ox, oy, *tx, *ty);
+        } else fullscreen::Log("thugpro.dll sprite scale not found");
     }
-    Log("device reset done, now %dx%d", nw, nh);
+    fullscreen::Log("device reset done, now %dx%d", nw, nh);
     InterlockedExchange(&g_wantFull, g_afterFull ? 1 : 0);
     InterlockedExchange(&g_wantW, nw); InterlockedExchange(&g_wantH, nh);
     PostMessageA(h, kMsgApply, 0, 0);
 }
 
 static void ToggleAltEnter(HWND h) {
+    if (!g_full && EngineWindowed() && LooksBorderless(h)) {   // made borderless by something else: treat it as fullscreen
+        fullscreen::Log("Alt+Enter: the window is borderless but we had it as windowed; going back to a window");
+        g_full = true;
+    }
     bool full = !(g_full && EngineWindowed());
     if (!EngineWindowed()) full = false;          // out of exclusive fullscreen = a normal window first
     ApplyNow(h, full, 0, 0);                      // fullscreen at the monitor's size, the window at its own
@@ -227,6 +284,52 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if ((m == WM_SYSCHAR || m == WM_CHAR) && (w == '\r' || w == '\n') && (GetKeyState(VK_MENU) & 0x8000)) return 0;   // no beep
     if ((m == WM_SYSKEYUP || m == WM_KEYUP) && w == VK_RETURN && g_holdEnter) return 0;
     if (m == WM_SIZE && (g_full || g_sizing)) return DefWindowProcA(h, m, w, l);
+    if (m == WM_STYLECHANGED && w == (WPARAM)GWL_STYLE && l && !g_ourStyle) {
+        const STYLESTRUCT* ss = (const STYLESTRUCT*)l;
+        if ((ss->styleOld ^ ss->styleNew) & (WS_CAPTION | WS_POPUP | WS_THICKFRAME)) {
+            char what[96]; sprintf(what, "window style changed %08lX -> %08lX (not by us)", ss->styleOld, ss->styleNew);
+            LogCallers(what);
+        }
+    }
+    if (m == WM_WINDOWPOSCHANGED && l && !g_sizing && !g_ourStyle) {
+        const WINDOWPOS* wp = (const WINDOWPOS*)l;
+        if (!(wp->flags & SWP_NOSIZE) && !HasFrame(GetWindowLongPtrA(h, GWL_STYLE))) {   // borderless resizes only (no log spam while dragging a frame)
+            static int s_lastW, s_lastH;
+            if (wp->cx != s_lastW || wp->cy != s_lastH) {
+                s_lastW = wp->cx; s_lastH = wp->cy;
+                char what[96]; sprintf(what, "window resized to %dx%d at %d,%d (not by us)", wp->cx, wp->cy, wp->x, wp->y);
+                LogCallers(what);
+            }
+        }
+    }
+    // Noah 2026-11-23: after Alt+Enter the title bar can't be dragged and the X does nothing, though the window answers
+    // "title bar" / "close button" when asked. Log what happens to those clicks (rare messages, no spam).
+    if (m == WM_NCHITTEST) {   // log only when the answer changes, with where the pointer is
+        WNDPROC prev = g_prev;
+        LRESULT r = !prev ? DefWindowProcA(h, m, w, l)
+                  : IsWindowUnicode(h) ? CallWindowProcW(prev, h, m, w, l) : CallWindowProcA(prev, h, m, w, l);
+        static LRESULT s_last = -99;
+        if (r != s_last) { s_last = r; fullscreen::Log("hit test at %d,%d -> %ld (1 inside, 2 title bar, 20 close)", (short)LOWORD(l), (short)HIWORD(l), (long)r); }
+        return r;
+    }
+    if (m == WM_LBUTTONDOWN || m == WM_MOUSEACTIVATE || m == WM_ACTIVATE) {
+        POINT p; GetCursorPos(&p); RECT wr; GetWindowRect(h, &wr); POINT c = { 0, 0 }; ClientToScreen(h, &c);
+        if (m != WM_LBUTTONDOWN || p.y < c.y)   // a left click above the picture = on the title bar
+            fullscreen::Log("msg %04X w=%08lX at screen %ld,%ld (window top %ld, picture top %ld) capture=%p fg=%s", m, (unsigned long)w, p.x, p.y,
+                wr.top, c.y, GetCapture(), GetForegroundWindow() == h ? "game" : "other");
+    }
+    if (m == WM_NCLBUTTONDOWN || m == WM_NCLBUTTONUP || m == WM_SYSCOMMAND || m == WM_ENTERSIZEMOVE || m == WM_EXITSIZEMOVE
+        || m == WM_CAPTURECHANGED || m == WM_CANCELMODE || m == WM_CLOSE) {
+        HWND fg = GetForegroundWindow(), cap = GetCapture();
+        DWORD t0 = GetTickCount();
+        fullscreen::Log("msg %04X w=%08lX l=%08lX in: fg=%s capture=%p full=%d sizing=%d holdEnter=%d", m, (unsigned long)w, (unsigned long)l,
+            fg == h ? "game" : "other", cap, g_full ? 1 : 0, g_sizing ? 1 : 0, (int)g_holdEnter);
+        WNDPROC prev = g_prev;
+        LRESULT r = !prev ? DefWindowProcA(h, m, w, l)
+                  : IsWindowUnicode(h) ? CallWindowProcW(prev, h, m, w, l) : CallWindowProcA(prev, h, m, w, l);
+        fullscreen::Log("msg %04X out: result %ld after %lu ms", m, (long)r, GetTickCount() - t0);
+        return r;
+    }
     if (m == kMsgApply) {
         ApplyNow(h, g_wantFull != 0, (int)g_wantW, (int)g_wantH);
         return 0;
@@ -282,7 +385,7 @@ static DWORD WINAPI Watch(void*) {
             if (!old) { g_prev = nullptr; continue; }
             g_prev = (WNDPROC)old;
             g_wnd = h; g_full = false; g_haveSaved = false;
-            Log("game window hooked (%s %dx%d)", EngineWindowed() ? "windowed" : "exclusive fullscreen", CurW(), CurH());
+            fullscreen::Log("game window hooked (%s %dx%d)", EngineWindowed() ? "windowed" : "exclusive fullscreen", CurW(), CurH());
             if (EngineWindowed()) { SaveFramed(h); g_winW = CurW(); g_winH = CurH(); if (SavedFull()) PostApply(true, 0, 0); }
             else { g_winW = (int)mmenu::DispGet("window_width", 0); g_winH = (int)mmenu::DispGet("window_height", 0);
                    if (g_winW <= 0 || g_winH <= 0) { g_winW = CurW(); g_winH = CurH(); } }
@@ -294,7 +397,7 @@ static DWORD WINAPI Watch(void*) {
         LONG until = g_confirmUntil;
         if (until && (LONG)(GetTickCount() - (DWORD)until) >= 0 && !g_waitReset) {
             InterlockedExchange(&g_confirmUntil, 0);
-            Log("not kept: going back to %s %dx%d", g_oldFull ? "fullscreen" : "windowed", g_oldW, g_oldH);
+            fullscreen::Log("not kept: going back to %s %dx%d", g_oldFull ? "fullscreen" : "windowed", g_oldW, g_oldH);
             SaveFull(g_oldFull);
             mmenu::DispSetSize(g_oldW, g_oldH);
             g_pendFull = g_oldFull; g_pendW = g_oldW; g_pendH = g_oldH; g_pendInit = true;
@@ -373,20 +476,20 @@ static bool __cdecl CF_DisplayLive(void* params, void* script) {
         if (step && vsChanged && !g_confirmUntil) {
             gfx::SetKey("gfx_vsync", g_pendVs);
             if (!g_waitReset) *(volatile BYTE*)kResetFlag = 1;   // the engine resets its device; AdjustPP sets the interval
-            Log("apply v-sync %d", g_pendVs);
+            fullscreen::Log("apply v-sync %d", g_pendVs);
             vsChanged = false;
         }
         changed = changed || vsChanged;
         if (step) {
             if (g_confirmUntil) {
                 InterlockedExchange(&g_confirmUntil, 0);
-                Log("kept %s %dx%d", NowFull() ? "fullscreen" : "windowed", CurW(), CurH());
+                fullscreen::Log("kept %s %dx%d", NowFull() ? "fullscreen" : "windowed", CurW(), CurH());
             } else if (changed && g_wnd && !g_waitReset) {
                 g_oldFull = NowFull(); g_oldW = g_winW; g_oldH = g_winH;
                 SaveFull(g_pendFull);
                 mmenu::DispSet("windowed_mode", 1);
                 mmenu::DispSetSize(g_pendW, g_pendH);
-                Log("apply %s %dx%d (was %s %dx%d)", g_pendFull ? "fullscreen" : "windowed", g_pendW, g_pendH,
+                fullscreen::Log("apply %s %dx%d (was %s %dx%d)", g_pendFull ? "fullscreen" : "windowed", g_pendW, g_pendH,
                     g_oldFull ? "fullscreen" : "windowed", g_oldW, g_oldH);
                 InterlockedExchange(&g_confirmUntil, (LONG)(GetTickCount() + kConfirmSec * 1000));
                 PostApply(g_pendFull, g_pendW, g_pendH);
@@ -408,8 +511,8 @@ static bool __cdecl CF_DisplayLive(void* params, void* script) {
 }
 
 static void Install() {
-    if (PatchCall(kKbCall, (void*)&KbReadWrap)) Log("keyboard read wrapped (Enter hidden while Alt is held)");
-    else Log("keyboard read not wrapped (unexpected code at 0x5F5BCD)");
+    if (PatchCall(kKbCall, (void*)&KbReadWrap)) fullscreen::Log("keyboard read wrapped (Enter hidden while Alt is held)");
+    else fullscreen::Log("keyboard read not wrapped (unexpected code at 0x5F5BCD)");
     HANDLE t = CreateThread(nullptr, 0, Watch, nullptr, 0, nullptr);
     if (t) CloseHandle(t);
 }

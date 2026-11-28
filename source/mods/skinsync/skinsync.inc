@@ -72,11 +72,10 @@ static const int kSkaterNum   = 0x2B8;  // CSkater heap slot
 static void SLog(const std::string& line) {
     std::string path = ExeDirFile("skinsync.log");
     if (path.empty()) return;
-    FILE* f = fopen(path.c_str(), "a");
-    if (!f) return;
     SYSTEMTIME t; GetLocalTime(&t);
-    fprintf(f, "%02d:%02d:%02d %s\n", t.wHour, t.wMinute, t.wSecond, line.c_str());
-    fclose(f);
+    char stamp[16]; sprintf(stamp, "%02d:%02d:%02d ", t.wHour, t.wMinute, t.wSecond);
+    std::string s = stamp + line + "\r\n";
+    logcap::Append(path.c_str(), s.data(), (DWORD)s.size(), logcap::kSmall);  // trims itself at 256 KB (logcap.inc)
 }
 
 static char* Mgr() { return *(char**)kMgrPtr; }
@@ -312,6 +311,11 @@ static char* PlayerBySkaterId(int id) {
     return found;
 }
 
+// Server build only (throwstock.inc sets them, 2026-11-24): players without dadmod see a new look by a stock
+// drop (0x2D) and re-add (0x22) of that player. Null in the client build.
+static void (*g_stockLook)(char* player) = nullptr;
+static void (*g_stockTick)() = nullptr;
+
 // host: a player has a new look (bytes = packed profile)
 static void HostTakeLook(char* player, const BYTE* bytes, int len) {
     void* tmp = ReadProfile(bytes, len);
@@ -321,6 +325,7 @@ static void HostTakeLook(char* player, const BYTE* bytes, int len) {
     FreeProfile(tmp);
     if (player != LocalPlayerInfo()) Queue(PlayerSkaterId(player), nullptr, 0, true);   // our own view
     Forward(player, bytes, len);
+    if (g_stockLook) g_stockLook(player);
 }
 
 // ---- handlers: ctx[0] data, ctx[2] size, ctx[4] sender connection
@@ -585,6 +590,7 @@ static void Tick() {
     if (client) Register(client, (void*)&ClientHandler, "client");
     if (client) RegisterHorn(client);
     RunHears();
+    if (g_stockTick) g_stockTick();
     if (OnServer()) RunHorns(); else g_hornCount = 0;
     for (int i = 0; i < g_pendingCount; ++i) {
         Pending& p = g_pending[i];

@@ -55,6 +55,11 @@ SERVER_NAMES = re.compile(r'^(thugpro_bang_|thugpro_mapvote_|thugpro_afk_|thugpr
 SERVER_FILES = {'mods/anims/qanims.q', 'mods/anims/pmanims.q'}
 # host parts of client mods that live in the same file as the client part (!ammo is answered by the host)
 SERVER_BLOCKS = {'thugpro_throw_parse', 'thugpro_throw_parse2', 'thugpro_throw_chat', 'thugpro_throw_give', 'thugpro_throw_confirm',
+                 # thrown props for players without dadmod: the host push is server build only (needs throwstock.inc);
+                 # the row/toggle/register also run in the client build (2026-11-24, throwsend.inc: hosts without dadmod)
+                 'dadmod_throw_stock_send',
+                 # cars/props for players without dadmod: host part, server build only (mods/cars2/cars2_stock.q)
+                 'dadmod_cars_stock_tick', 'dadmod_cars_stock_slot', 'dadmod_cars_stock_push', 'dadmod_cars_stock_clear', 'dadmod_cars_stock_rejoin', 'dadmod_cars_stock_row', 'dadmod_cars_stock_toggle',
                  'dadmod_bang_online_level_command',
                  # our THPG Baltimore conversion is Dev only (Noah 2026-11-20: only Larxian's Baltimore in the release)
                  'level_dadmod_thpgbaltimore', 'load_dadmod_thpgbaltimore'}

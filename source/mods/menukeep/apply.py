@@ -7,13 +7,21 @@ below is renamed to <name>_orig, and menukeep.q (our wrappers, which call <name>
 qb/dadmod/dadmod_cars.qb. Files that only exist in the base prx (gamemode.q, keyboard.q) are copied in from the
 decompiled Kali Original first, so no unrenamed copy is left behind.
 client/qb/dadmod/menukeep.q must be the same file (the client build loads it from there).
+menukeep_server.q (server build only) wraps exit_pause_menu; the client build has its own exit_pause_menu wrapper in
+client/qb/dadmod/menus.q, which does the same dadmod_mk_keeping check.
 """
 import os, re, shutil, sys
 
 WRAP = ['create_rankings', 'create_console_message', 'create_onscreen_keyboard', 'enter_kb_chat',
         'launch_chat_keyboard', 'launch_quick_menu_keyboard', 'entered_chat_message', 'cancel_enter_chat_menu',
-        'cancel_chat_menu']
-COPY_IN = ['gamemodes/gamemode.q', 'engine/menu/keyboard.q']
+        'cancel_chat_menu', 'sound_options_exit', 'edit_tricks_menu_exit', 'exit_pause_menu',
+        'destroy_onscreen_keyboard']
+COPY_IN = ['gamemodes/gamemode.q', 'engine/menu/keyboard.q', 'game/menu/soundoptions.q', 'game/menu/edit_tricks_menu.q',
+           'game/menu/gamemenu_pause.q']
+# 2026-11-26 (Noah: pausing free skate left the skater with no input): gamemenu_pause.q was missing above, so its stock
+# exit_pause_menu (base prx, loaded after qb/dadmod/dadmod_cars.qb) replaced our wrapper. That copy never gives input
+# back offline, where freeskate_menu blocks it with NetDisablePlayerInput. Any other base file that defines a wrapped
+# script is now copied in too (see main), so this can't happen again.
 KALI = 'decompiled/thugpro_qb/qb'
 
 
@@ -26,7 +34,18 @@ def main(root):
         print('menukeep: client/qb/dadmod/menukeep.q differs from mods/menukeep/menukeep.q (copy it over)')
         return 1
     qb = os.path.join(root, 'qb')
-    for rel in COPY_IN:
+    pat = re.compile(r'^script (%s)\b' % '|'.join(WRAP), re.M | re.I)
+    extra = []
+    for d, _, fs in os.walk(KALI):
+        for f in fs:
+            p = os.path.join(d, f)
+            rel = os.path.relpath(p, KALI).replace(os.sep, '/')
+            if f.endswith('.q') and rel not in COPY_IN and not os.path.isfile(os.path.join(qb, rel)):
+                if pat.search(open(p, encoding='latin-1').read()):
+                    extra.append(rel)
+    if extra:
+        print('menukeep: also copied in from the base prx (they define wrapped scripts): %s' % ', '.join(extra))
+    for rel in COPY_IN + extra:
         dst = os.path.join(qb, rel)
         if not os.path.isfile(dst):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -53,8 +72,9 @@ def main(root):
     if not os.path.isfile(out):
         print('menukeep: %s missing (cars2 step must run first)' % out)
         return 1
+    srv = open(os.path.join(here, 'menukeep_server.q'), encoding='latin-1').read().replace('\r\n', '\n')
     with open(out, 'a', encoding='latin-1', newline='') as fh:
-        fh.write('\n' + a)
+        fh.write('\n' + a + '\n' + srv)
     print('menukeep: wrapped %s' % ', '.join('%s x%d' % (n, c) for n, c in found.items()))
     return 0
 

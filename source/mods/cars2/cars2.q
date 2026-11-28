@@ -160,6 +160,11 @@ script dadmod_cars_go
     if StructureContains structure = <VehicleSetup> make_skater_visible
         dadmod_c2_hide = 0
     endif
+    dadmod_c2_bf = 0
+    if StructureContains structure = <VehicleSetup> dadmod_bonefix
+        dadmod_c2_bf = 1
+    endif
+    THUGRECOMP_CarsDrive bonefix = <dadmod_c2_bf>
     THUGRECOMP_Log text = "cars2: get in"
     LoadSound "Shared\\Auto\\CarLoop" vol = 100 dropoff = 150 PosUpdateWithDoppler
     LoadSound "Vehicles\\Vehicle_Tire_Loop"

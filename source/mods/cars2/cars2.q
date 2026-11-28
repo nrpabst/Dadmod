@@ -94,6 +94,7 @@ script dadmod_cars_pick
     endif
     exit_pause_menu
     KillSpawnedScript Name = dadmod_cars_go
+    Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
     SpawnScript dadmod_cars_go params = { dadmod_c2_c = <dadmod_c2_c> } NotSessionSpecific = 1
 endscript
 script dadmod_cars_go
@@ -174,6 +175,7 @@ script dadmod_cars_go
             THUGRECOMP_Log text = "cars2: no PlayerVehicleCamera after 30 frames"
             dadmod_cars_msg text = "The car didn't start"
             Change vehicleCameraSetup = { alignment_rate = 3.5 offset_height = 55 offset_distance = 240 angle = 0 }
+            dadmod_cars_start_failed
             return
         endif
         dadmod_c2_k = ( <dadmod_c2_k> + 1 )
@@ -324,6 +326,9 @@ script dadmod_cars_exit_now
         endif
     else
         dadmod_cars_cleanup
+    endif
+    if not ObjectExists id = skater
+        return
     endif
     if GotParam dadmod_c2_pos
         Skater : Obj_SetPosition position = ( <dadmod_c2_pos> + (0.0,10.0,0.0) )
@@ -573,6 +578,11 @@ script dadmod_cars_remote_prop_one
     if ( <dadmod_c2_want> = 0 )
         if ObjectExists id = <dadmod_c2_pv>
             <dadmod_c2_pv> : Die
+            if GotParam dadmod_c2_car
+                if ObjectExists id = <dadmod_c2_car>
+                    <dadmod_c2_car> : unhide
+                endif
+            endif
         endif
         return
     endif
@@ -604,4 +614,23 @@ script dadmod_cars_remote_prop_one
         <dadmod_c2_pv> : Obj_LockToObject id = <dadmod_c2_car> (0.0,0.0,0.0)
         <dadmod_c2_car> : hide
     endif
+endscript
+script dadmod_cars_start_failed
+    dadmod_cars_hint_off
+    dadmod_cars_prop_hide
+    if not ObjectExists id = skater
+        return
+    endif
+    if Skater : Driving
+        dadmod_cars_exit_now
+        return
+    endif
+    if Skater : IsHidden
+        Skater : unhide
+    endif
+    Skater : GetCameraId
+    if ObjectExists id = <CameraId>
+        SetActiveCamera id = <CameraId>
+    endif
+    MakeSkaterGoto Switch_OnGroundAi params = { NewScript = OnGroundAi }
 endscript

@@ -151,6 +151,7 @@ script ClientLaunchProjectile
         endif
         <projectilecollision> = [ { component = projectilecollision projectile_type = tomato } ]
         RemoveParameter dadmod_tm
+        dadmod_throw_cstock_send <...>
         dadmod_throw_next_car <...>
         ClientLaunchProjectileReal <...>
         return
@@ -213,6 +214,7 @@ script dadmod_throw_go
         dadmod_throw_msg_clear
         return
     endif
+    dadmod_throw_stock_register
     dadmod_throw_random_go a = <a>
     skater : SetAmmo 0
     skater : give_skater_ammo Type = <a> num = 99

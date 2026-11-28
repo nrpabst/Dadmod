@@ -29,7 +29,7 @@ script dadmod_cars_menu
     }
     make_thugpro_menu_item {
     text = "More Cars  >"
-    description_text = "20 more cars. DadMod players see them, others see a green car"
+    description_text = "20 more cars. DadMod players see them, others see them on a dadmod server"
     pad_choose_script = dadmod_cars_menu_extra
     }
     make_thugpro_menu_item {
@@ -54,6 +54,9 @@ script dadmod_cars_menu
     dadmod_cars_item t = "Sports Car" c = SportsCar
     dadmod_cars_item t = "Forklift" c = Forklift
     dadmod_cars_item t = "Blimp" c = Blimp
+    if ScriptExists dadmod_cars_stock_row
+        dadmod_cars_stock_row
+    endif
     thugpro_menu_finalize
 endscript
 script dadmod_cars_item
@@ -126,10 +129,8 @@ script dadmod_cars_go
     endif
     dadmod_cars_boot
     GetVehicleSetup control_type = <dadmod_c2_c>
-    if not StructureContains structure = ( VehicleSetupMapping ) <dadmod_c2_c>
-        if StructureContains structure = ( dadmod_c2_extra_map ) <dadmod_c2_c>
-            VehicleSetup = ( dadmod_c2_extra_map . <dadmod_c2_c> )
-        endif
+    if StructureContains structure = ( dadmod_c2_extra_map ) <dadmod_c2_c>
+        VehicleSetup = ( dadmod_c2_extra_map . <dadmod_c2_c> )
     endif
     Skater : Obj_GetPosition
     VehicleSetup = { <VehicleSetup> control_type = <dadmod_c2_c> Pos = ( <Pos> + (0.0,20.0,0.0) ) }
@@ -184,6 +185,7 @@ script dadmod_cars_go
     dadmod_cars_prop_show VehicleSetup = <VehicleSetup>
     if ObjectExists id = skater
         Skater : SetTags dadmod_c2_hide = <dadmod_c2_hide>
+        Skater : SetTags dadmod_c2_ct = <dadmod_c2_c>
         if ( <dadmod_c2_hide> = 1 )
             Skater : hide
         endif
